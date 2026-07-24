@@ -4,7 +4,7 @@ const router = express.Router();
 
 
 
-router.post("/createStudent", createStudent);
-router.get("/getStudent", getStudents);
+router.post("/students", createStudent);
+router.get("/students", getStudents);
 
 module.exports = router;
