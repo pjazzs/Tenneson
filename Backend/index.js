@@ -25,7 +25,7 @@ app.use(express.json())
 
 app.get("/", (req, res) => { 
   res.json({
-    message: "TCC Student ID API is running",
+    message: "TCC Student ID API is running well!!!",
   });
 });
 
