@@ -1,8 +1,7 @@
 const rateLimit = require("express-rate-limit");
 
-// General API limiter
 exports.apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 300,
   message: {
     success: false,
@@ -12,14 +11,18 @@ exports.apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Strict limiter for authentication
+
 exports.authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: {
-    success: false,
-    message: "Too many login attempts. Please try again in 15 minutes.",
-  },
+
   standardHeaders: true,
   legacyHeaders: false,
+
+  message: {
+    message:
+      "Too many login attempts. Please try again in 15 minutes.",
+  },
+
+  skip: () => process.env.NODE_ENV === "test",
 });

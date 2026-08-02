@@ -24,7 +24,7 @@ describe("Student API", () => {
     token = loginResponse.body.token;
   });
 
-  console.log("TOKEN:", token);
+  
 
   test("Should create a student", async () => {
     const response = await request(app)
@@ -60,8 +60,7 @@ describe("Student API", () => {
         session: "2025/2026",
       });
 
-    console.log(createResponse.statusCode);
-    console.log(createResponse.body);
+   
     const studentId = createResponse.body.student.studentId;
 
     const response = await request(app)

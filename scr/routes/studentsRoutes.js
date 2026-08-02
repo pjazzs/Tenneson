@@ -26,7 +26,7 @@ router.post(
   upload.single("file"),
   bulkImportStudents,
 );
-router.get("/dashboard", protect, dashboard);
+router.get("/students/dashboard", protect, dashboard);
 router.get("/activity-logs", protect, getActivityLogs);
 router.get("/students/export", protect, exportStudents);
 router.post("/students", protect, validate(studentSchema), createStudent);

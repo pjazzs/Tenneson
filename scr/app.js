@@ -20,7 +20,17 @@ app.use(express.json());
 app.use(helmet());
 app.use(compression());
 app.use(morgan("dev"));
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API is healthy",
+    timestamp: new Date()
+  });
+});
+
 app.use("/api/v1", apiLimiter);
+
 
 readdirSync("routes").map((r) => {
   app.use("/api/v1", require(`./routes/${r}`));

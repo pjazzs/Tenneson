@@ -1,4 +1,4 @@
-const Counter = require("../models/Counter");
+const Counter = require("../models/counter");
 
 const generateStudentId = async () => {
   const counter = await Counter.findOneAndUpdate(

@@ -8,7 +8,6 @@ const router = express.Router();
 router.post(
   "/auth/register",
   protect,
-  process.env.NODE_ENV === "test" ? authorize("super_admin") : authLimiter,
   authorize("super_admin"),
   registerAdmin,
 );
@@ -43,7 +42,8 @@ router.post(
  */
 router.post(
   "/auth/login",
-  process.env.NODE_ENV === "test" ? loginAdmin : authLimiter,
+  ...(process.env.NODE_ENV === "test" ? [] : [authLimiter]),
+  loginAdmin
 );
 
 module.exports = router;
