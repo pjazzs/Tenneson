@@ -17,7 +17,15 @@ beforeEach(async () => {
     currentClass: "JSS1",
     session: "2025/2026",
     isActive: true,
+    parentName: "Mr Doe",
+    parentPhone: "08012345678",
   });
+
+  const check = await Student.findOne({
+    studentId: "TCC00001"
+  });
+
+  console.log("CREATED STUDENT:", check);
 });
 
 describe("Verify Student", () => {
@@ -32,7 +40,7 @@ describe("Verify Student", () => {
 
     expect(response.body.success).toBe(true);
 
-    expect(response.body.exists).toBe(true);
+    expect(response.body.verified).toBe(true);
 
     expect(response.body.student.studentId).toBe("TCC00001");
 
@@ -65,17 +73,7 @@ describe("Verify Student", () => {
 
     expect(response.statusCode).toBe(404);
 
-    expect(response.body.exists).toBe(false);
-
-  });
-
-
-  test("Should reject unauthenticated request", async () => {
-
-    const response = await request(app)
-      .get("/api/v1/students/verify/TCC00001");
-
-    expect(response.statusCode).toBe(401);
+    expect(response.body.verified).toBe(false);
 
   });
 

@@ -5,6 +5,7 @@ const Student = require("../models/student");
 const generateStudentId = require("../utils/generateStudentId");
 const logActivity = require("../utils/logActivity");
 const ActivityLog = require("../models/activityLog");
+const generateStudentSlip = require("../utils/generateStudentSlip");
 
 exports.createStudent = asyncHandler(async (req, res) => {
   const {
@@ -47,6 +48,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
     dateOfBirth,
     currentClass,
     session,
+    admissionDate: new Date(),
     parentName,
     parentPhone,
     createdBy: req.admin._id,
@@ -221,31 +223,37 @@ exports.getArchivedStudents = asyncHandler(async (req, res) => {
   });
 });
 
-exports.verifyStudent = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+exports.verifyStudent = async (req, res) => {
+  console.log("VERIFY ID:", req.params.studentId);
 
   const student = await Student.findOne({
-    studentId,
-    isActive: true,
-  }).select(
-    "studentId firstName lastName otherName gender currentClass session",
-  );
+    studentId: req.params.studentId,
+  });
 
-  if (!student) {
+  console.log("FOUND STUDENT:", student);
+
+  if (!student || student.isActive === false) {
     return res.status(404).json({
       success: false,
+      verified: false,
       exists: false,
-      message: "Invalid Student ID.",
+      message: "Student not found",
     });
   }
 
   res.status(200).json({
     success: true,
-    exists: true,
-    message: "Student verified successfully.",
-    student,
+    verified: true,
+    student: {
+      studentId: student.studentId,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      gender: student.gender,
+      currentClass: student.currentClass,
+      session: student.session,
+    },
   });
-});
+};
 
 exports.dashboard = asyncHandler(async (req, res) => {
   const totalStudents = await Student.countDocuments();
@@ -475,5 +483,51 @@ exports.getActivityLogs = asyncHandler(async (req, res) => {
     success: true,
     count: logs.length,
     logs,
+  });
+});
+
+
+
+exports.downloadStudentSlip = asyncHandler(async (req, res) => {
+  const student = await Student.findOne({
+    studentId: req.params.studentId,
+  });
+
+  if (!student) {
+    return res.status(404).json({
+      success: false,
+      message: "Student not found",
+    });
+  }
+
+  await generateStudentSlip(student, res);
+});
+
+
+
+exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
+  const student = await Student.findOne({
+    studentId: req.params.studentId,
+    isArchived: false,
+  });
+
+  if (!student) {
+    return res.status(404).json({
+      success: false,
+      verified: false,
+      message: "Invalid student ID",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    verified: true,
+    student: {
+      studentId: student.studentId,
+      name: `${student.firstName} ${student.lastName}`,
+      gender: student.gender,
+      class: student.currentClass,
+      session: student.session,
+    },
   });
 });

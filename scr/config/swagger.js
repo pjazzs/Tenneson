@@ -1,8 +1,11 @@
 const swaggerJsDoc = require("swagger-jsdoc");
 
+
+
 const options = {
   definition: {
     openapi: "3.0.0",
+
     info: {
       title: "Student ID Generation API",
       version: "1.0.0",
@@ -12,9 +15,24 @@ const options = {
 
     servers: [
       {
-        url: "http://localhost:4050/api/v1",
+        url: "http://localhost:4050",
       },
     ],
+
+    tags: [
+  {
+    name: "Students",
+    description: "Student management endpoints",
+  },
+  {
+    name: "Authentication",
+    description: "Admin authentication endpoints",
+  },
+  {
+    name: "Activity Logs",
+    description: "Admin action tracking endpoints",
+  },
+],
 
     components: {
       securitySchemes: {
@@ -22,6 +40,38 @@ const options = {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+        },
+      },
+
+      schemas: {
+        Student: {
+          type: "object",
+          properties: {
+            studentId: {
+              type: "string",
+              example: "TCC00023",
+            },
+            firstName: {
+              type: "string",
+              example: "John",
+            },
+            lastName: {
+              type: "string",
+              example: "Doe",
+            },
+            gender: {
+              type: "string",
+              example: "Male",
+            },
+            currentClass: {
+              type: "string",
+              example: "JSS1",
+            },
+            session: {
+              type: "string",
+              example: "2026/2027",
+            },
+          },
         },
       },
     },

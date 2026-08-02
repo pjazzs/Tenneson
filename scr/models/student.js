@@ -78,6 +78,10 @@ const studentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
     },
+    admissionDate:{
+ type:Date,
+ default:Date.now
+},
   },
   {
     timestamps: true,
