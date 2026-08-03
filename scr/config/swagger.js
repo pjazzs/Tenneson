@@ -15,7 +15,7 @@ const options = {
 
     servers: [
       {
-        url: "http://localhost:4050",
+        url: "https://tenneson.onrender.com",
       },
     ],
 
