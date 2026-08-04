@@ -1,11 +1,9 @@
 const QRCode = require("qrcode");
 
-const generateQRCode = async (studentId) => {
-
-  return await QRCode.toDataURL(
-    `${process.env.FRONTEND_URL}/verify/${studentId}`
-  );
-
+const generateQRCode = async(studentId)=>{
+ return await QRCode.toDataURL(
+   `${process.env.FRONTEND_URL}/api/v1/students/qrcode/verify/${studentId}`
+ );
 };
 
-module.exports = generateQRCode;
+module.exports = generateQRCode; 
