@@ -5,6 +5,7 @@ const Student = require("../models/student");
 const generateStudentId = require("../utils/generateStudentID");
 const logActivity = require("../utils/logActivity");
 const ActivityLog = require("../models/activityLog");
+const generateQRCode = require("../utils/generateQRCode");
 const generateStudentSlip = require("../utils/generateStudentSlip");
 
 exports.createStudent = asyncHandler(async (req, res) => {
@@ -600,7 +601,7 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
 exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
   const student = await Student.findOne({
     studentId: req.params.studentId,
-    isArchived: false,
+    isArchived: true,
   });
 
   if (!student) {
@@ -622,4 +623,43 @@ exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
       session: student.session,
     },
   });
+});
+
+
+exports.generateStudentQRCode = asyncHandler(async (req, res) => {
+
+  const { studentId } = req.params;
+
+
+  const student = await Student.findOne({
+    studentId,
+    isActive: true,
+  });
+
+
+  if (!student) {
+
+    res.status(404);
+
+    throw new Error("Student not found.");
+
+  }
+
+
+
+  const qrCode = await generateQRCode(
+    student.studentId
+  );
+
+
+
+  res.status(200).json({
+
+    success:true,
+
+    qrCode,
+
+  });
+
+
 });

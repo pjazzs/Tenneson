@@ -14,6 +14,7 @@ const {
   getActivityLogs,
   downloadStudentSlip,
   verifyStudentQrcode,
+  generateStudentQRCode,
 } = require("../controllers/studentcontroller");
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
@@ -80,6 +81,11 @@ router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
 router.get("/students/export", protect, exportStudents);
 router.post("/students", protect, validate(studentSchema), createStudent);
 router.get("/students/:studentId/slip", protect, downloadStudentSlip);
+router.get(
+  "/students/:studentId/qrcode",
+  protect,
+  generateStudentQRCode,
+);
 
 /**
  * @swagger
