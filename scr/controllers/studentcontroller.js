@@ -199,32 +199,54 @@ exports.updateStudent = asyncHandler(async (req, res) => {
 });
 
 exports.deleteStudent = asyncHandler(async (req, res) => {
+
   const { studentId } = req.params;
 
+
   const student = await Student.findOneAndUpdate(
+
     { studentId },
+
     { isActive: false },
-    { returnDocument: "after" },
+
+     { returnDocument: "after" } 
+
   );
 
+
   if (!student) {
+
     res.status(404);
+
     throw new Error("Student not found.");
+
   }
 
+
+
   await logActivity({
+
     adminId: req.admin._id,
+
     action: "DELETE_STUDENT",
+
     studentId: student.studentId,
+
     details: `${student.firstName} ${student.lastName}`,
+
   });
 
-  await student.deleteOne();
+
 
   res.status(200).json({
+
     success: true,
-    message: "Student deleted successfully",
+
+    message: "Student archived successfully",
+
   });
+
+
 });
 
 exports.restoreStudent = asyncHandler(async (req, res) => {
