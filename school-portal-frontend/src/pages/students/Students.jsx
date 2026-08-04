@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import api from "../../api/axios";
+import { useNavigate } from "react-router-dom";
 
 function Students() {
+const navigate = useNavigate();
 
-  const [students, setStudents] = useState([]);
+const [students, setStudents] = useState([]);
 const [pagination, setPagination] = useState(null);
 const [loading, setLoading] = useState(true);
 const [page, setPage] = useState(1);
@@ -78,18 +80,17 @@ useEffect(() => {
 
 
         <button
-          className="
-            bg-blue-600
-            text-white
-            px-5
-            py-2
-            rounded-lg
-            hover:bg-blue-700
-          "
-        >
-          Add Student
-        </button>
-
+  onClick={() => navigate("/students/add")}
+  className="
+    bg-blue-600
+    text-white
+    px-5
+    py-2
+    rounded-lg
+  "
+>
+  Add Student
+</button>
       </div>
 
 
@@ -201,13 +202,16 @@ useEffect(() => {
               <td className="p-4">
 
                 <button
-                  className="
-                    text-blue-600
-                    hover:underline
-                  "
-                >
-                  View
-                </button>
+  onClick={() =>
+    navigate(`/students/${student.studentId}`)
+  }
+  className="
+    text-blue-600
+    hover:underline
+  "
+>
+  View
+</button>
 
               </td>
 

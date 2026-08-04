@@ -125,6 +125,8 @@ router.get("/students/:studentId/slip", protect, downloadStudentSlip);
  */
 router.get("/students", protect, getStudents);
 router.get("/students/verify/:studentId", protect, verifyStudent);
+router.get("/students/archived", protect, getArchivedStudents);
+router.patch("/students/:studentId/restore", protect, restoreStudent);
 
 /**
  * @swagger
@@ -216,7 +218,7 @@ router.put("/students/:studentId", protect, updateStudent);
  *         description: Unauthorized
  */
 router.delete("/students/:studentId", protect, deleteStudent);
-router.patch("/students/:studentId/restore", protect, restoreStudent);
-router.get("/students/archived", protect, getArchivedStudents);
+
+
 
 module.exports = router;

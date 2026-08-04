@@ -7,7 +7,10 @@ import Dashboard from "../pages/dashboard/Dashboard";
 import Students from "../pages/students/Students";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
-
+import AddStudent from "../pages/students/AddStudent";
+import StudentDetails from "../pages/students/StudentDetails";
+import EditStudent from "../pages/students/EditStudent";
+import ArchivedStudents from "../pages/students/ArchivedStudents";
 
 function AppRoutes() {
   return (
@@ -32,8 +35,26 @@ function AppRoutes() {
         element={<Students />} 
       />
 
-    </Route>
+      <Route
+  path="/students/:studentId"
+  element={<StudentDetails />}
+/>
 
+      <Route
+  path="/students/add"
+  element={<AddStudent />}
+/>
+
+    </Route>
+<Route
+  path="/students/:studentId/edit"
+  element={<EditStudent />}
+/>
+
+<Route
+  path="/students/archived"
+  element={<ArchivedStudents />}
+/>
   </Route>
 
 

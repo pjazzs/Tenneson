@@ -1,10 +1,14 @@
 import {
   FaHome,
   FaUserGraduate,
+  FaArchive,
 } from "react-icons/fa";
 
 import { Link } from "react-router-dom";
+
+
 function Sidebar() {
+
   return (
     <aside
       className="
@@ -22,28 +26,67 @@ function Sidebar() {
         School Portal
       </h1>
 
+
       <nav className="space-y-4">
+
 
         <Link
           to="/dashboard"
-          className="flex items-center gap-3 hover:bg-blue-600 p-3 rounded"
+          className="
+            flex
+            items-center
+            gap-3
+            hover:bg-blue-600
+            p-3
+            rounded
+          "
         >
           <FaHome />
           Dashboard
         </Link>
 
+
+
         <Link
           to="/students"
-          className="flex items-center gap-3 hover:bg-blue-600 p-3 rounded"
+          className="
+            flex
+            items-center
+            gap-3
+            hover:bg-blue-600
+            p-3
+            rounded
+          "
         >
           <FaUserGraduate />
           Students
         </Link>
 
+
+
+        <Link
+          to="/students/archived"
+          className="
+            flex
+            items-center
+            gap-3
+            hover:bg-blue-600
+            p-3
+            rounded
+          "
+        >
+          <FaArchive />
+          Archived Students
+        </Link>
+
+
       </nav>
+
 
     </aside>
   );
+
 }
+
 
 export default Sidebar;
