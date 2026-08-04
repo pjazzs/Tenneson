@@ -5,52 +5,77 @@ import api from "../../api/axios";
 
 function StudentDetails() {
 
+
   const { studentId } = useParams();
+
   const navigate = useNavigate();
 
 
+
   const [student, setStudent] = useState(null);
+
   const [loading, setLoading] = useState(true);
+
+  const [qrCode, setQrCode] = useState("");
+
+
 
 
 
   useEffect(() => {
 
+
     const fetchStudent = async () => {
 
+
       try {
+
 
         const response = await api.get(
           `/students/${studentId}`
         );
 
+
         setStudent(response.data.student);
 
 
+
       } catch (error) {
+
 
         console.log(
           "Student details error:",
           error.response?.data || error.message
         );
 
+
       } finally {
+
 
         setLoading(false);
 
+
       }
+
 
     };
 
 
+
     fetchStudent();
+
+
 
   }, [studentId]);
 
 
 
 
+
+
+
   const handleDelete = async () => {
+
 
     const confirmDelete = window.confirm(
       "Are you sure you want to archive this student?"
@@ -60,7 +85,9 @@ function StudentDetails() {
     if (!confirmDelete) return;
 
 
+
     try {
+
 
       await api.delete(
         `/students/${student.studentId}`
@@ -70,70 +97,143 @@ function StudentDetails() {
       navigate("/students");
 
 
+
     } catch(error) {
+
 
       console.log(
         "Delete error:",
         error.response?.data || error.message
       );
 
+
     }
+
 
   };
 
 
 
 
+
+
+
+  const generateQR = async () => {
+
+
+    try {
+
+
+      const response = await api.get(
+        `/students/${student.studentId}/qrcode`
+      );
+
+
+      setQrCode(response.data.qrCode);
+
+
+
+    } catch(error) {
+
+
+      console.log(
+        "QR error:",
+        error.response?.data || error.message
+      );
+
+
+    }
+
+
+  };
+
+
+
+
+
+
+
+
   if (loading) {
 
+
     return (
+
       <div className="text-center mt-10">
+
         Loading student details...
+
       </div>
+
     );
 
+
   }
+
+
+
 
 
 
 
   if (!student) {
 
+
     return (
+
       <div className="text-center mt-10">
+
         Student not found
+
       </div>
+
     );
+
 
   }
 
 
 
 
+
+
+
   return (
+
 
     <div>
 
 
-      <div className="
-        flex
-        justify-between
-        items-center
-        mb-6
-      ">
+
+      <div
+        className="
+          flex
+          justify-between
+          items-center
+          mb-6
+        "
+      >
 
 
-        <h1 className="
-          text-3xl
-          font-bold
-          text-gray-800
-        ">
+
+        <h1
+          className="
+            text-3xl
+            font-bold
+            text-gray-800
+          "
+        >
+
           Student Details
+
         </h1>
 
 
 
+
+
         <div className="flex gap-3">
+
 
 
           <button
@@ -151,9 +251,11 @@ function StudentDetails() {
             "
 
           >
+
             Edit
 
           </button>
+
 
 
 
@@ -171,9 +273,33 @@ function StudentDetails() {
             "
 
           >
+
             Delete
 
           </button>
+
+
+
+
+
+          <button
+
+            onClick={generateQR}
+
+            className="
+              bg-purple-600
+              text-white
+              px-5
+              py-2
+              rounded
+            "
+
+          >
+
+            Generate QR
+
+          </button>
+
 
 
 
@@ -191,6 +317,7 @@ function StudentDetails() {
             "
 
           >
+
             Back
 
           </button>
@@ -200,23 +327,27 @@ function StudentDetails() {
         </div>
 
 
+
       </div>
 
 
 
 
 
-      <div className="
-        bg-white
-        shadow
-        rounded-xl
-        p-6
-        grid
-        grid-cols-1
-        md:grid-cols-2
-        gap-6
-      ">
 
+
+      <div
+        className="
+          bg-white
+          shadow
+          rounded-xl
+          p-6
+          grid
+          grid-cols-1
+          md:grid-cols-2
+          gap-6
+        "
+      >
 
 
         <Info
@@ -225,12 +356,10 @@ function StudentDetails() {
         />
 
 
-
         <Info
           label="First Name"
           value={student.firstName}
         />
-
 
 
         <Info
@@ -239,19 +368,16 @@ function StudentDetails() {
         />
 
 
-
         <Info
           label="Other Name"
           value={student.otherName || "N/A"}
         />
 
 
-
         <Info
           label="Gender"
           value={student.gender}
         />
-
 
 
         <Info
@@ -264,12 +390,10 @@ function StudentDetails() {
         />
 
 
-
         <Info
           label="Class"
           value={student.currentClass}
         />
-
 
 
         <Info
@@ -278,19 +402,16 @@ function StudentDetails() {
         />
 
 
-
         <Info
           label="Parent Name"
           value={student.parentName}
         />
 
 
-
         <Info
           label="Parent Phone"
           value={student.parentPhone}
         />
-
 
 
         <Info
@@ -303,15 +424,91 @@ function StudentDetails() {
         />
 
 
-
       </div>
+
+
+
+
+
+
+
+      {qrCode && (
+
+        <div
+          className="
+            bg-white
+            shadow
+            rounded-xl
+            p-6
+            mt-6
+            text-center
+          "
+        >
+
+
+          <h2 className="text-xl font-bold mb-4">
+
+            Student QR Code
+
+          </h2>
+
+
+
+
+          <img
+
+            src={qrCode}
+
+            alt="Student QR Code"
+
+            className="mx-auto w-52"
+
+          />
+
+
+
+
+
+          <a
+
+            href={qrCode}
+
+            download={`${student.studentId}-qrcode.png`}
+
+            className="
+              inline-block
+              mt-5
+              bg-green-600
+              text-white
+              px-5
+              py-2
+              rounded
+            "
+
+          >
+
+            Download QR
+
+          </a>
+
+
+
+        </div>
+
+
+      )}
+
 
 
     </div>
 
+
   );
 
+
 }
+
+
 
 
 
@@ -319,17 +516,23 @@ function StudentDetails() {
 
 function Info({ label, value }) {
 
+
   return (
 
     <div>
 
+
       <p className="text-gray-500">
+
         {label}
+
       </p>
 
 
       <p className="font-semibold text-gray-800">
+
         {value}
+
       </p>
 
 
@@ -337,7 +540,10 @@ function Info({ label, value }) {
 
   );
 
+
 }
+
+
 
 
 
