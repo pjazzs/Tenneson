@@ -76,7 +76,7 @@ router.get("/students/dashboard", protect, dashboard);
  *       401:
  *         description: Unauthorized
  */
-router.get("/activity-logs", protect, getActivityLogs);
+router.get("/students/activity-logs", protect, getActivityLogs);
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
 router.get("/students/export", protect, exportStudents);
 router.post("/students", protect, validate(studentSchema), createStudent);

@@ -105,6 +105,59 @@ function StudentDetails() {
 
   };
 
+  const downloadSlip = async () => {
+
+  try {
+
+    const response = await api.get(
+      `/students/${student.studentId}/slip`,
+      {
+        responseType: "blob",
+      }
+    );
+
+
+    const file = new Blob(
+      [response.data],
+      {
+        type: "application/pdf",
+      }
+    );
+
+
+    const url = window.URL.createObjectURL(file);
+
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.download = `${student.studentId}-slip.pdf`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+
+
+  } catch(error) {
+
+
+    console.log(
+      "Slip download error:",
+      error.response?.data || error.message
+    );
+
+
+  }
+
+};
+
 
 
   if (loading) {
@@ -211,6 +264,24 @@ function StudentDetails() {
           >
             Generate QR
           </button>
+
+          <button
+
+  onClick={downloadSlip}
+
+  className="
+    bg-orange-600
+    text-white
+    px-5
+    py-2
+    rounded
+    hover:bg-orange-700
+  "
+
+>
+  Download Slip
+
+</button>
 
 
           <button

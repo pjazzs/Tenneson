@@ -5,6 +5,7 @@ import {
 } from "react-icons/fa";
 
 import { Link } from "react-router-dom";
+import { FaHistory } from "react-icons/fa";
 
 
 function Sidebar() {
@@ -61,6 +62,23 @@ function Sidebar() {
           <FaUserGraduate />
           Students
         </Link>
+
+    <Link
+  to="/activity-logs"
+  className="
+    flex
+    items-center
+    gap-3
+    hover:bg-blue-600
+    p-3
+    rounded
+  "
+>
+  <FaHistory />
+
+  Activity Logs
+
+</Link>
 
 
 

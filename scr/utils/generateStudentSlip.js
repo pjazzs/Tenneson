@@ -61,7 +61,7 @@ const generateStudentSlip = async (student, res) => {
   doc
     .font("Helvetica-Bold")
     .fontSize(22)
-    .text("TENNESON COLLEGE", {
+    .text("TENNESON COMPREHENSIVE COLLEGE", {
       align: "center",
     });
 
@@ -182,7 +182,7 @@ const generateStudentSlip = async (student, res) => {
     });
 
 
-    const verifyUrl = `${process.env.APP_URL}/api/v1/students/verify/${student.studentId}`;
+    const verifyUrl = `${process.env.FRONTEND_URL}/verify/${student.studentId}`;
 
 const qrCode = await QRCode.toDataURL(verifyUrl);
 

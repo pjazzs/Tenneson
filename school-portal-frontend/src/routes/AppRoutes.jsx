@@ -11,6 +11,7 @@ import AddStudent from "../pages/students/AddStudent";
 import StudentDetails from "../pages/students/StudentDetails";
 import EditStudent from "../pages/students/EditStudent";
 import ArchivedStudents from "../pages/students/ArchivedStudents";
+import ActivityLogs from "../pages/activity/ActivityLogs";
 
 function AppRoutes() {
   return (
@@ -62,6 +63,12 @@ function AppRoutes() {
     path="/verify/:studentId"
     element={<VerifyStudent />}
   />
+  
+  <Route
+  path="/activity-logs"
+  element={<ActivityLogs />}
+/>
+
 <Route path="*" element={<Login />} />
 </Routes>
   );
