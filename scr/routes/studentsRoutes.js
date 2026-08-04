@@ -177,6 +177,8 @@ router.get("/students/:studentId", protect, getStudent);
  *                 type: string
  *                 example: Michael
  *               currentClass:
+ * 
+ * 
  *                 type: string
  *                 example: JSS2
  *               parentPhone:

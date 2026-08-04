@@ -70,29 +70,75 @@ exports.createStudent = asyncHandler(async (req, res) => {
 });
 
 exports.getStudents = asyncHandler(async (req, res) => {
+
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
+  const search = req.query.search || "";
 
   const skip = (page - 1) * limit;
 
-  const students = await Student.find({ isActive: true })
+
+  const query = {
+    isActive: true,
+  };
+
+
+  if (search) {
+
+    query.$or = [
+      {
+        firstName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+      {
+        lastName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+      {
+        studentId: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+    ];
+
+  }
+
+
+  const students = await Student.find(query)
     .skip(skip)
     .limit(limit);
 
-  const totalStudents = await Student.countDocuments({
-    isActive: true,
-  });
+
+  const totalStudents = await Student.countDocuments(query);
+
 
   res.status(200).json({
+
     success: true,
+
     students,
+
     pagination: {
+
       currentPage: page,
+
       limit,
+
       totalStudents,
+
       totalPages: Math.ceil(totalStudents / limit),
+
     },
-  });
+
+  }); 
+
 });
 
 exports.getStudent = asyncHandler(async (req, res) => {
