@@ -9,17 +9,16 @@ function ArchivedStudents() {
 
   const [loading, setLoading] = useState(true);
 
+  const [message, setMessage] = useState("");
+
+
 
 
 
   useEffect(() => {
 
 
-    let ignore = false;
-
-
-
-    const loadStudents = async () => {
+    const fetchStudents = async () => {
 
 
       try {
@@ -30,12 +29,7 @@ function ArchivedStudents() {
         );
 
 
-
-        if (!ignore) {
-
-          setStudents(response.data.students);
-
-        }
+        setStudents(response.data.students);
 
 
 
@@ -48,15 +42,10 @@ function ArchivedStudents() {
         );
 
 
-
       } finally {
 
 
-        if (!ignore) {
-
-          setLoading(false);
-
-        }
+        setLoading(false);
 
 
       }
@@ -66,15 +55,7 @@ function ArchivedStudents() {
 
 
 
-    loadStudents();
-
-
-
-    return () => {
-
-      ignore = true;
-
-    };
+    fetchStudents();
 
 
   }, []);
@@ -93,7 +74,6 @@ function ArchivedStudents() {
     );
 
 
-
     if (!confirmRestore) return;
 
 
@@ -109,7 +89,18 @@ function ArchivedStudents() {
 
 
 
-      window.location.reload();
+      setMessage(
+        "Student restored successfully"
+      );
+
+
+
+      setStudents((prevStudents) =>
+        prevStudents.filter(
+          (student) =>
+            student.studentId !== studentId
+        )
+      );
 
 
 
@@ -161,7 +152,6 @@ function ArchivedStudents() {
     <div>
 
 
-
       <h1
         className="
           text-3xl
@@ -170,10 +160,28 @@ function ArchivedStudents() {
           mb-6
         "
       >
-
         Archived Students
-
       </h1>
+
+
+
+
+
+      {message && (
+
+        <div
+          className="
+            bg-green-100
+            text-green-700
+            p-3
+            rounded
+            mb-5
+          "
+        >
+          {message}
+        </div>
+
+      )}
 
 
 
@@ -194,7 +202,6 @@ function ArchivedStudents() {
         <table className="w-full">
 
 
-
           <thead>
 
 
@@ -205,11 +212,9 @@ function ArchivedStudents() {
               "
             >
 
-
               <th className="p-4 text-left">
                 Student ID
               </th>
-
 
 
               <th className="p-4 text-left">
@@ -217,17 +222,14 @@ function ArchivedStudents() {
               </th>
 
 
-
               <th className="p-4 text-left">
                 Class
               </th>
 
 
-
               <th className="p-4 text-left">
                 Action
               </th>
-
 
 
             </tr>
@@ -239,16 +241,13 @@ function ArchivedStudents() {
 
 
 
-
           <tbody>
-
 
 
             {students.length === 0 ? (
 
 
               <tr>
-
 
                 <td
                   colSpan="4"
@@ -258,11 +257,8 @@ function ArchivedStudents() {
                     text-gray-500
                   "
                 >
-
                   No archived students found
-
                 </td>
-
 
               </tr>
 
@@ -271,9 +267,7 @@ function ArchivedStudents() {
             ) : (
 
 
-
               students.map((student) => (
-
 
 
                 <tr
@@ -282,34 +276,21 @@ function ArchivedStudents() {
                 >
 
 
-
                   <td className="p-4">
-
                     {student.studentId}
-
                   </td>
 
 
 
-
-
                   <td className="p-4">
-
                     {student.firstName} {student.lastName}
-
                   </td>
-
-
 
 
 
                   <td className="p-4">
-
                     {student.currentClass}
-
                   </td>
-
-
 
 
 
@@ -318,11 +299,9 @@ function ArchivedStudents() {
 
                     <button
 
-
                       onClick={() =>
                         restoreStudent(student.studentId)
                       }
-
 
 
                       className="
@@ -334,19 +313,12 @@ function ArchivedStudents() {
                         hover:bg-green-700
                       "
 
-
                     >
-
                       Restore
-
-
                     </button>
 
 
-
                   </td>
-
-
 
 
                 </tr>
@@ -354,32 +326,23 @@ function ArchivedStudents() {
 
               ))
 
-
             )}
-
 
 
           </tbody>
 
 
-
-
         </table>
 
 
-
-
       </div>
-
 
 
     </div>
 
   );
 
-
 }
-
 
 
 export default ArchivedStudents;

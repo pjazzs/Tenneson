@@ -250,31 +250,55 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
 });
 
 exports.restoreStudent = asyncHandler(async (req, res) => {
+
   const { studentId } = req.params;
 
+
   const student = await Student.findOneAndUpdate(
-    {
-      studentId,
-      isActive: false,
-    },
-    {
-      isActive: true,
-    },
-    {
-      returnDocument: "after",
-    },
+
+    { studentId },
+
+    { isActive: true },
+
+    { returnDocument: "after" }
+
   );
 
-  await logActivity({
-    adminId: req.admin._id,
-    action: "Restored Student",
-    studentId: student.studentId,
-    details: `${student.firstName} ${student.lastName}`,
-  });
+
+
   if (!student) {
+
     res.status(404);
-    throw new Error("Student not found or already active.");
+
+    throw new Error("Student not found.");
+
   }
+
+
+
+  await logActivity({
+
+    adminId: req.admin._id,
+
+    action: "RESTORE_STUDENT",
+
+    studentId: student.studentId,
+
+    details: `${student.firstName} ${student.lastName}`,
+
+  });
+
+
+
+  res.status(200).json({
+
+    success: true,
+
+    message: "Student restored successfully",
+
+  });
+
+
 });
 
 exports.getArchivedStudents = asyncHandler(async (req, res) => {
