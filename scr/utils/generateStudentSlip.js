@@ -91,24 +91,36 @@ const generateStudentSlip = async (student, res) => {
 // ==========================
 
 if (student.photo?.url) {
+
   try {
-    const response = await axios.get(student.photo.url, {
-      responseType: "arraybuffer",
-    });
 
-    const imageBuffer = Buffer.from(response.data, "binary");
+    const response = await fetch(student.photo.url);
 
-    doc.image(imageBuffer, 420, 170, {
+    const arrayBuffer = await response.arrayBuffer();
+
+    const imageBuffer = Buffer.from(arrayBuffer);
+
+
+    doc.image(imageBuffer, 420, detailsStartY, {
       width: 90,
       height: 110,
     });
 
+
     doc
-      .rect(420, 170, 90, 110)
+      .rect(420, detailsStartY, 90, 110)
       .stroke();
-  } catch (err) {
-    console.log("Unable to load student photo.");
+
+
+  } catch (error) {
+
+    console.log(
+      "Photo loading error:",
+      error.message
+    );
+
   }
+
 }
 
   // ==========================
@@ -152,6 +164,8 @@ addRow("Parent Name: ", student.parentName);
 
 doc.x = startX;
 addRow("Parent Phone: ", student.parentPhone);
+
+const detailsStartY = doc.y;
 
   // ==========================
   // Important Notice
