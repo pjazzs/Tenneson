@@ -3,12 +3,15 @@ const path = require("path");
 const QRCode = require("qrcode");
 const axios = require("axios");
 
+
 const generateStudentSlip = async (student, res) => {
+
 
   const doc = new PDFDocument({
     size: "A4",
     margin: 50,
   });
+
 
 
   res.setHeader(
@@ -27,13 +30,18 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
+
   // ==========================
-  // Helper Functions
+  // Helpers
   // ==========================
 
 
-  const formatDate = (date) =>
-    new Date(date).toLocaleDateString(
+  const formatDate = (date) => {
+
+    if (!date) return "N/A";
+
+    return new Date(date).toLocaleDateString(
       "en-GB",
       {
         day: "2-digit",
@@ -42,32 +50,45 @@ const generateStudentSlip = async (student, res) => {
       }
     );
 
+  };
+
+
+
 
 
   const addRow = (label, value) => {
 
+
     doc
       .font("Helvetica-Bold")
       .fontSize(12)
-      .text(label, {
-        continued: true,
-      });
+      .text(
+        label,
+        {
+          continued: true,
+        }
+      );
 
 
     doc
       .font("Helvetica")
-      .text(value || "N/A");
+      .text(
+        value || "N/A"
+      );
 
 
     doc.moveDown(0.5);
+
 
   };
 
 
 
 
+
+
   // ==========================
-  // School Logo
+  // Logo
   // ==========================
 
 
@@ -92,6 +113,9 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
+
+
   // ==========================
   // Header
   // ==========================
@@ -108,6 +132,7 @@ const generateStudentSlip = async (student, res) => {
     );
 
 
+
   doc
     .fontSize(16)
     .text(
@@ -118,7 +143,10 @@ const generateStudentSlip = async (student, res) => {
     );
 
 
+
   doc.moveDown();
+
+
 
 
 
@@ -134,19 +162,25 @@ const generateStudentSlip = async (student, res) => {
     .stroke();
 
 
+
   doc.moveDown();
 
 
 
 
+
+
+
   // ==========================
-  // Student Details Position
+  // Student Details Area
   // ==========================
 
+
+  const detailsStartY = doc.y;
 
   const startX = 50;
 
-  const detailsStartY = doc.y;
+
 
 
 
@@ -162,17 +196,18 @@ const generateStudentSlip = async (student, res) => {
     try {
 
 
-      const response = await axios.get(student.photo.url, {
-        responseType: "arraybuffer",
-      });
+      const response = await axios.get(
+        student.photo.url,
+        {
+          responseType: "arraybuffer",
+        }
+      );
 
 
-      const arrayBuffer =
-        await response.arrayBuffer();
 
-
-      const imageBuffer =
-        Buffer.from(arrayBuffer);
+      const imageBuffer = Buffer.from(
+        response.data
+      );
 
 
 
@@ -223,12 +258,16 @@ const generateStudentSlip = async (student, res) => {
   // ==========================
 
 
+  doc.y = detailsStartY;
+
+
   doc.x = startX;
 
   addRow(
     "Student ID: ",
     student.studentId
   );
+
 
 
   doc.x = startX;
@@ -239,12 +278,14 @@ const generateStudentSlip = async (student, res) => {
   );
 
 
+
   doc.x = startX;
 
   addRow(
     "Gender: ",
     student.gender
   );
+
 
 
   doc.x = startX;
@@ -255,12 +296,14 @@ const generateStudentSlip = async (student, res) => {
   );
 
 
+
   doc.x = startX;
 
   addRow(
     "Admission Date: ",
     formatDate(student.admissionDate)
   );
+
 
 
   doc.x = startX;
@@ -271,6 +314,7 @@ const generateStudentSlip = async (student, res) => {
   );
 
 
+
   doc.x = startX;
 
   addRow(
@@ -279,12 +323,14 @@ const generateStudentSlip = async (student, res) => {
   );
 
 
+
   doc.x = startX;
 
   addRow(
     "Parent Name: ",
     student.parentName
   );
+
 
 
   doc.x = startX;
@@ -299,6 +345,8 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
+
   // ==========================
   // Divider
   // ==========================
@@ -307,13 +355,17 @@ const generateStudentSlip = async (student, res) => {
   doc.moveDown();
 
 
+
   doc
     .moveTo(50, doc.y)
     .lineTo(545, doc.y)
     .stroke();
 
 
+
   doc.moveDown();
+
+
 
 
 
@@ -354,6 +406,9 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
+
+
   doc.moveDown(3);
 
 
@@ -361,8 +416,9 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
   // ==========================
-  // Signature Section
+  // Signature
   // ==========================
 
 
@@ -400,7 +456,9 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
   doc.moveDown(4);
+
 
 
 
@@ -421,6 +479,7 @@ const generateStudentSlip = async (student, res) => {
         align: "center",
       }
     );
+
 
 
 
@@ -472,7 +531,9 @@ const generateStudentSlip = async (student, res) => {
 
 
 
+
   doc.end();
+
 
 };
 
