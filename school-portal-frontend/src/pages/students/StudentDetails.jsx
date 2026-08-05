@@ -10,6 +10,8 @@ function StudentDetails() {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   const qrRef = useRef(null);
 
@@ -45,6 +47,57 @@ function StudentDetails() {
   }, [studentId]);
 
 
+  const uploadPhoto = async (event) => {
+
+  const file = event.target.files[0];
+
+  if (!file) return;
+
+
+  const formData = new FormData();
+
+  formData.append(
+    "photo",
+    file
+  );
+
+
+  try {
+
+    setUploading(true);
+
+
+    const response = await api.patch(
+      `/students/${student.studentId}/photo`,
+      formData,
+      {
+        headers:{
+          "Content-Type":"multipart/form-data",
+        },
+      }
+    );
+
+
+    setStudent((prev) => ({
+  ...prev,
+  photo: response.data.photo,
+}));
+
+
+  } catch(error){
+
+    console.log(
+      "Upload photo error:",
+      error.response?.data || error.message
+    );
+
+  } finally {
+
+    setUploading(false);
+
+  }
+
+};
 
   const handleDelete = async () => {
 
@@ -72,6 +125,7 @@ function StudentDetails() {
     }
 
   };
+
 
 
 
@@ -188,6 +242,7 @@ function StudentDetails() {
 
     <div>
 
+
       <div
         className="
           flex
@@ -209,6 +264,36 @@ function StudentDetails() {
 
 
         <div className="flex gap-3 flex-wrap">
+
+          <input
+  type="file"
+  accept="image/*"
+  ref={fileRef}
+  onChange={uploadPhoto}
+  className="hidden"
+/>
+
+
+<button
+  onClick={() => fileRef.current.click()}
+
+  className="
+    bg-purple-600
+    text-white
+    px-5
+    py-2
+    rounded
+  "
+>
+  {
+    uploading
+      ? "Uploading..."
+      : "Upload Photo"
+  }
+
+</button>
+
+          
 
           <button
 
@@ -319,6 +404,31 @@ function StudentDetails() {
           gap-6
         "
       >
+
+        {
+student.photo?.url && (
+
+<div className="text-center md:col-span-2">
+
+<img
+  src={student.photo.url}
+  alt="Student"
+  className="
+    w-40
+    h-40
+    rounded-full
+    object-cover
+    mx-auto
+    shadow
+  "
+/>
+
+</div>
+
+)
+}
+
+        
 
         <Info
           label="Student ID"

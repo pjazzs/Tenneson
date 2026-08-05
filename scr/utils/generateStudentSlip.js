@@ -1,6 +1,7 @@
 const PDFDocument = require("pdfkit");
 const path = require("path");
 const QRCode = require("qrcode");
+const axios = require("axios");
 
 const generateStudentSlip = async (student, res) => {
   const doc = new PDFDocument({
@@ -84,49 +85,73 @@ const generateStudentSlip = async (student, res) => {
 
   doc.moveDown();
 
+
+  // ==========================
+// Student Photo
+// ==========================
+
+if (student.photo?.url) {
+  try {
+    const response = await axios.get(student.photo.url, {
+      responseType: "arraybuffer",
+    });
+
+    const imageBuffer = Buffer.from(response.data, "binary");
+
+    doc.image(imageBuffer, 420, 170, {
+      width: 90,
+      height: 110,
+    });
+
+    doc
+      .rect(420, 170, 90, 110)
+      .stroke();
+  } catch (err) {
+    console.log("Unable to load student photo.");
+  }
+}
+
   // ==========================
   // Student Details
   // ==========================
 
-  addRow("Student ID: ", student.studentId);
+  const startX = 50;
 
-  addRow(
-    "Name: ",
-    `${student.firstName} ${student.otherName || ""} ${student.lastName}`
-  );
+doc.x = startX;
+addRow("Student ID: ", student.studentId);
 
-  addRow("Gender: ", student.gender);
+doc.x = startX;
+addRow(
+  "Name: ",
+  `${student.firstName} ${student.otherName || ""} ${student.lastName}`
+);
 
-  addRow(
-    "Date of Birth: ",
-    formatDate(student.dateOfBirth)
-  );
+doc.x = startX;
+addRow("Gender: ", student.gender);
 
-  addRow(
-    "Admission Date: ",
-    formatDate(student.admissionDate)
-  );
+doc.x = startX;
+addRow(
+  "Date of Birth: ",
+  formatDate(student.dateOfBirth)
+);
 
-  addRow("Class: ", student.currentClass);
+doc.x = startX;
+addRow(
+  "Admission Date: ",
+  formatDate(student.admissionDate)
+);
 
-  addRow("Session: ", student.session);
+doc.x = startX;
+addRow("Class: ", student.currentClass);
 
-  addRow("Parent Name: ", student.parentName);
+doc.x = startX;
+addRow("Session: ", student.session);
 
-  addRow("Parent Phone: ", student.parentPhone);
+doc.x = startX;
+addRow("Parent Name: ", student.parentName);
 
-  // ==========================
-  // Divider
-  // ==========================
-
-  doc.moveDown();
-
-  doc
-    .moveTo(50, doc.y)
-    .lineTo(545, doc.y)
-    .stroke();
-
-  doc.moveDown();
+doc.x = startX;
+addRow("Parent Phone: ", student.parentPhone);
 
   // ==========================
   // Important Notice
