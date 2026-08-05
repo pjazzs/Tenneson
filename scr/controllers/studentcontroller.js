@@ -7,6 +7,7 @@ const logActivity = require("../utils/logActivity");
 const ActivityLog = require("../models/activityLog");
 const generateQRCode = require("../utils/generateQRCode");
 const generateStudentSlip = require("../utils/generateStudentSlip");
+const cloudinary = require("../config/cloudinary");
 
 exports.createStudent = asyncHandler(async (req, res) => {
   const {
@@ -666,72 +667,56 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
 
 
 exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
-
   const { studentId } = req.params;
 
-
   if (!req.file) {
-
     res.status(400);
-
     throw new Error("Please upload a photo.");
-
   }
 
-
-
-  const student = await Student.findOne({
-    studentId,
-  });
-
-
+  const student = await Student.findOne({ studentId });
 
   if (!student) {
-
     res.status(404);
-
     throw new Error("Student not found.");
-
   }
 
+  // ===========================
+  // Delete previous Cloudinary image
+  // ===========================
 
+  if (student.photo?.publicId) {
+    try {
+      await cloudinary.uploader.destroy(student.photo.publicId);
+    } catch (error) {
+      console.log(
+        "Cloudinary delete error:",
+        error.message
+      );
+    }
+  }
+
+  // ===========================
+  // Save new image
+  // ===========================
 
   student.photo = {
-
     url: req.file.path,
-
     publicId: req.file.filename,
-
   };
-
 
   await student.save();
 
-
-
   await logActivity({
-
     adminId: req.admin._id,
-
     action: "UPLOAD_STUDENT_PHOTO",
-
     studentId: student.studentId,
-
     details: `${student.firstName} ${student.lastName}`,
-
   });
-
-
 
   res.status(200).json({
-
     success: true,
-
     message: "Student photo uploaded successfully.",
-
     photo: student.photo,
-
   });
-
-
 });
