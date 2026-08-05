@@ -187,7 +187,7 @@ exports.updateStudent = asyncHandler(async (req, res) => {
 
   await logActivity({
     adminId: req.admin._id,
-    action: "Updated Student",
+    action: "UPDATE_STUDENT",
     studentId: student.studentId,
     details: `${student.firstName} ${student.lastName}`,
   });
@@ -658,6 +658,78 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
     success:true,
 
     qrCode,
+
+  });
+
+
+});
+
+
+exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
+
+  const { studentId } = req.params;
+
+
+  if (!req.file) {
+
+    res.status(400);
+
+    throw new Error("Please upload a photo.");
+
+  }
+
+
+
+  const student = await Student.findOne({
+    studentId,
+  });
+
+
+
+  if (!student) {
+
+    res.status(404);
+
+    throw new Error("Student not found.");
+
+  }
+
+
+
+  student.photo = {
+
+    url: req.file.path,
+
+    publicId: req.file.filename,
+
+  };
+
+
+  await student.save();
+
+
+
+  await logActivity({
+
+    adminId: req.admin._id,
+
+    action: "UPLOAD_STUDENT_PHOTO",
+
+    studentId: student.studentId,
+
+    details: `${student.firstName} ${student.lastName}`,
+
+  });
+
+
+
+  res.status(200).json({
+
+    success: true,
+
+    message: "Student photo uploaded successfully.",
+
+    photo: student.photo,
 
   });
 

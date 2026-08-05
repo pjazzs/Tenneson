@@ -15,11 +15,14 @@ const {
   downloadStudentSlip,
   verifyStudentQrcode,
   generateStudentQRCode,
+  uploadStudentPhoto,
 } = require("../controllers/studentcontroller");
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
 const { studentSchema } = require("../validators/studentValidator");
 const upload = require("../middleware/uploadMiddlewear");
+const uploadPhoto = require("../middleware/photoUpload");
+
 
 const router = express.Router();
 
@@ -133,6 +136,12 @@ router.get("/students", protect, getStudents);
 router.get("/students/verify/:studentId", protect, verifyStudent);
 router.get("/students/archived", protect, getArchivedStudents);
 router.patch("/students/:studentId/restore", protect, restoreStudent);
+router.patch(
+  "/students/:studentId/photo",
+  protect,
+  uploadPhoto.single("photo"),
+  uploadStudentPhoto
+);
 
 /**
  * @swagger

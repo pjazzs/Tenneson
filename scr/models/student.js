@@ -82,6 +82,19 @@ const studentSchema = new mongoose.Schema(
  type:Date,
  default:Date.now
 },
+photo: {
+
+  url: {
+    type: String,
+    default: "",
+  },
+
+  publicId: {
+    type: String,
+    default: "",
+  },
+
+},
   },
   {
     timestamps: true,
