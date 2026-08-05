@@ -4,31 +4,48 @@ const QRCode = require("qrcode");
 const axios = require("axios");
 
 const generateStudentSlip = async (student, res) => {
+
   const doc = new PDFDocument({
     size: "A4",
     margin: 50,
   });
 
-  res.setHeader("Content-Type", "application/pdf");
+
+  res.setHeader(
+    "Content-Type",
+    "application/pdf"
+  );
+
+
   res.setHeader(
     "Content-Disposition",
     `attachment; filename=${student.studentId}-registration-slip.pdf`
   );
 
+
   doc.pipe(res);
 
+
+
   // ==========================
-  // Helper function
+  // Helper Functions
   // ==========================
+
 
   const formatDate = (date) =>
-    new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
+    new Date(date).toLocaleDateString(
+      "en-GB",
+      {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }
+    );
+
+
 
   const addRow = (label, value) => {
+
     doc
       .font("Helvetica-Bold")
       .fontSize(12)
@@ -36,140 +53,277 @@ const generateStudentSlip = async (student, res) => {
         continued: true,
       });
 
+
     doc
       .font("Helvetica")
       .text(value || "N/A");
 
+
     doc.moveDown(0.5);
+
   };
+
+
+
 
   // ==========================
   // School Logo
   // ==========================
 
-  const logoPath = path.join(__dirname, "../assets/logo.jpeg");
 
-  doc.image(logoPath, 245, 30, {
-    width: 100,
-  });
+  const logoPath = path.join(
+    __dirname,
+    "../assets/logo.jpeg"
+  );
+
+
+  doc.image(
+    logoPath,
+    245,
+    30,
+    {
+      width: 100,
+    }
+  );
+
 
   doc.moveDown(7);
+
+
+
 
   // ==========================
   // Header
   // ==========================
 
+
   doc
     .font("Helvetica-Bold")
     .fontSize(22)
-    .text("TENNESON COMPREHENSIVE COLLEGE", {
-      align: "center",
-    });
+    .text(
+      "TENNESON COMPREHENSIVE COLLEGE",
+      {
+        align: "center",
+      }
+    );
+
 
   doc
     .fontSize(16)
-    .text("STUDENT REGISTRATION SLIP", {
-      align: "center",
-    });
+    .text(
+      "STUDENT REGISTRATION SLIP",
+      {
+        align: "center",
+      }
+    );
+
 
   doc.moveDown();
+
+
+
 
   // ==========================
   // Divider
   // ==========================
+
 
   doc
     .moveTo(50, doc.y)
     .lineTo(545, doc.y)
     .stroke();
 
+
   doc.moveDown();
 
 
-  // ==========================
-// Student Photo
-// ==========================
 
-if (student.photo?.url) {
-
-  try {
-
-    const response = await fetch(student.photo.url);
-
-    const arrayBuffer = await response.arrayBuffer();
-
-    const imageBuffer = Buffer.from(arrayBuffer);
-
-
-    doc.image(imageBuffer, 420, detailsStartY, {
-      width: 90,
-      height: 110,
-    });
-
-
-    doc
-      .rect(420, detailsStartY, 90, 110)
-      .stroke();
-
-
-  } catch (error) {
-
-    console.log(
-      "Photo loading error:",
-      error.message
-    );
-
-  }
-
-}
 
   // ==========================
-  // Student Details
+  // Student Details Position
   // ==========================
+
 
   const startX = 50;
 
-doc.x = startX;
-addRow("Student ID: ", student.studentId);
+  const detailsStartY = doc.y;
 
-doc.x = startX;
-addRow(
-  "Name: ",
-  `${student.firstName} ${student.otherName || ""} ${student.lastName}`
-);
 
-doc.x = startX;
-addRow("Gender: ", student.gender);
 
-doc.x = startX;
-addRow(
-  "Date of Birth: ",
-  formatDate(student.dateOfBirth)
-);
-
-doc.x = startX;
-addRow(
-  "Admission Date: ",
-  formatDate(student.admissionDate)
-);
-
-doc.x = startX;
-addRow("Class: ", student.currentClass);
-
-doc.x = startX;
-addRow("Session: ", student.session);
-
-doc.x = startX;
-addRow("Parent Name: ", student.parentName);
-
-doc.x = startX;
-addRow("Parent Phone: ", student.parentPhone);
-
-const detailsStartY = doc.y;
 
   // ==========================
-  // Important Notice
+  // Student Photo
   // ==========================
+
+
+  if (student.photo?.url) {
+
+
+    try {
+
+
+      const response = await axios.get(student.photo.url, {
+        responseType: "arraybuffer",
+      });
+
+
+      const arrayBuffer =
+        await response.arrayBuffer();
+
+
+      const imageBuffer =
+        Buffer.from(arrayBuffer);
+
+
+
+      doc.image(
+        imageBuffer,
+        420,
+        detailsStartY,
+        {
+          width: 90,
+          height: 110,
+        }
+      );
+
+
+
+      doc
+        .rect(
+          420,
+          detailsStartY,
+          90,
+          110
+        )
+        .stroke();
+
+
+
+    } catch(error) {
+
+
+      console.log(
+        "Photo loading error:",
+        error.message
+      );
+
+
+    }
+
+
+  }
+
+
+
+
+
+
+  // ==========================
+  // Student Information
+  // ==========================
+
+
+  doc.x = startX;
+
+  addRow(
+    "Student ID: ",
+    student.studentId
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Name: ",
+    `${student.firstName} ${student.otherName || ""} ${student.lastName}`
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Gender: ",
+    student.gender
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Date of Birth: ",
+    formatDate(student.dateOfBirth)
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Admission Date: ",
+    formatDate(student.admissionDate)
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Class: ",
+    student.currentClass
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Session: ",
+    student.session
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Parent Name: ",
+    student.parentName
+  );
+
+
+  doc.x = startX;
+
+  addRow(
+    "Parent Phone: ",
+    student.parentPhone
+  );
+
+
+
+
+
+
+  // ==========================
+  // Divider
+  // ==========================
+
+
+  doc.moveDown();
+
+
+  doc
+    .moveTo(50, doc.y)
+    .lineTo(545, doc.y)
+    .stroke();
+
+
+  doc.moveDown();
+
+
+
+
+
+
+  // ==========================
+  // Notice
+  // ==========================
+
 
   doc
     .font("Helvetica-Bold")
@@ -181,7 +335,11 @@ const detailsStartY = doc.y;
       }
     );
 
+
+
   doc.moveDown();
+
+
 
   doc
     .font("Helvetica")
@@ -193,52 +351,131 @@ const detailsStartY = doc.y;
       }
     );
 
+
+
+
   doc.moveDown(3);
+
+
+
+
+
 
   // ==========================
   // Signature Section
   // ==========================
 
+
   const signatureY = doc.y;
 
-  doc.text("________________________", 60, signatureY);
-  doc.text("Principal's Signature", 75);
 
-  doc.text("________________________", 330, signatureY);
-  doc.text("School Stamp", 380);
+
+  doc.text(
+    "________________________",
+    60,
+    signatureY
+  );
+
+
+  doc.text(
+    "Principal's Signature",
+    75
+  );
+
+
+
+  doc.text(
+    "________________________",
+    330,
+    signatureY
+  );
+
+
+  doc.text(
+    "School Stamp",
+    380
+  );
+
+
+
+
 
   doc.moveDown(4);
+
+
+
+
+
 
   // ==========================
   // Footer
   // ==========================
 
+
   doc
     .fontSize(10)
     .fillColor("gray")
-    .text("Generated by Tenneson School Portal", {
+    .text(
+      "Generated by Tenneson School Portal",
+      {
+        align: "center",
+      }
+    );
+
+
+
+
+
+
+  // ==========================
+  // QR Code
+  // ==========================
+
+
+  const verifyUrl =
+    `${process.env.FRONTEND_URL}/verify/${student.studentId}`;
+
+
+
+  const qrCode =
+    await QRCode.toDataURL(
+      verifyUrl
+    );
+
+
+
+  doc.moveDown(2);
+
+
+
+  doc
+    .fontSize(12)
+    .fillColor("black")
+    .text(
+      "Scan to verify student",
+      {
+        align: "center",
+      }
+    );
+
+
+
+  doc.image(
+    qrCode,
+    {
+      fit: [120,120],
       align: "center",
-    });
+    }
+  );
 
 
-    const verifyUrl = `${process.env.FRONTEND_URL}/verify/${student.studentId}`;
 
-const qrCode = await QRCode.toDataURL(verifyUrl);
 
-doc.moveDown(2);
-
-doc
-  .fontSize(12)
-  .text("Scan to verify student", {
-    align: "center",
-  });
-
-doc.image(qrCode, {
-  fit: [120, 120],
-  align: "center",
-});
 
   doc.end();
+
 };
+
+
 
 module.exports = generateStudentSlip;
