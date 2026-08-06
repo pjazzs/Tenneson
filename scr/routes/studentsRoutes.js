@@ -24,6 +24,7 @@ const { validate } = require("../middleware/validateRequest");
 const { studentSchema } = require("../validators/studentValidator");
 const upload = require("../middleware/uploadMiddlewear");
 const uploadPhoto = require("../middleware/photoUpload");
+const { authorizePermission } = require("../middleware/permissionMiddleware");
 
 
 const router = express.Router();
@@ -95,7 +96,13 @@ router.get(
 router.get("/students/activity-logs", protect, getActivityLogs);
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
 router.get("/students/export", protect, exportStudents);
-router.post("/students", protect, validate(studentSchema), createStudent);
+router.post(
+  "/students",
+  protect,
+  authorizePermission("students.create"),
+  validate(studentSchema),
+  createStudent
+);
 router.get("/students/:studentId/slip", protect, downloadStudentSlip);
 router.get(
   "/students/:studentId/qrcode",

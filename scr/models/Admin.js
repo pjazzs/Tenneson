@@ -27,13 +27,31 @@ const adminSchema = new mongoose.Schema(
       enum: ["super_admin", "admin"],
       default: "admin",
     },
+
+
+    // =========================
+    // Permission Control
+    // =========================
+
+    permissions: {
+      type: [
+        {
+          type: String,
+        },
+      ],
+      default: [],
+    },
+
+
   },
   {
     timestamps: true,
   },
 );
 
+
 const Admin =
   mongoose.models.Admin || mongoose.model("Admin", adminSchema);
+
 
 module.exports = Admin;
