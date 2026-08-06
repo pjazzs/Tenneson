@@ -1,4 +1,5 @@
 const Admin = require("../models/Admin");
+const asyncHandler = require("express-async-handler");
 
 
 // ===============================
@@ -47,3 +48,25 @@ exports.getAdmins = async (req, res) => {
   }
 
 };
+
+exports.updatePermissions = asyncHandler(async(req,res)=>{
+
+ const admin = await Admin.findByIdAndUpdate(
+   req.params.id,
+   {
+     permissions:req.body.permissions
+   },
+   {
+     new:true
+   }
+ );
+
+
+ res.json({
+   success:true,
+   message:"Permissions updated successfully",
+   admin
+ });
+
+
+});

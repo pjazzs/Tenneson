@@ -3,7 +3,7 @@ import api from "../../api/axios";
 
 import {
   FaUserShield,
-  FaEdit,
+  FaTimes,
 } from "react-icons/fa";
 
 
@@ -14,45 +14,155 @@ function AdminManagement() {
 
   const [loading, setLoading] = useState(true);
 
+  const [selectedAdmin, setSelectedAdmin] = useState(null);
+
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+
+  const [permissions, setPermissions] = useState([]);
+
+
+
+  const availablePermissions = [
+
+    "students.view",
+    "students.create",
+    "students.update",
+    "students.delete",
+    "students.export",
+
+    "admins.view",
+    "admins.create",
+    "admins.update",
+    "admins.delete",
+
+  ];
+
 
 
   useEffect(() => {
 
+
+    const fetchAdmins = async () => {
+
+
+      try {
+
+
+        const response = await api.get(
+          "/admins"
+        );
+
+
+        setAdmins(
+          response.data.admins
+        );
+
+
+      } catch(error) {
+
+
+        console.log(
+          "Admin fetch error:",
+          error.response?.data || error.message
+        );
+
+
+      } finally {
+
+
+        setLoading(false);
+
+
+      }
+
+
+    };
+
+
     fetchAdmins();
+
 
   }, []);
 
 
 
 
-  const fetchAdmins = async () => {
-
-    try {
-
-      const response = await api.get(
-        "/admins"
-      );
+  const openPermissionModal = (admin) => {
 
 
-      setAdmins(
-        response.data.admins
-      );
+    setSelectedAdmin(admin);
 
 
-    } catch(error) {
-
-      console.log(
-        error.response?.data || error.message
-      );
+    setPermissions(
+      admin.permissions || []
+    );
 
 
-    } finally {
+    setShowPermissionModal(true);
 
-      setLoading(false);
-
-    }
 
   };
+
+
+
+
+  const togglePermission = (permission) => {
+
+
+    setPermissions(prev =>
+
+
+      prev.includes(permission)
+
+      ? prev.filter(item => item !== permission)
+
+      : [...prev, permission]
+
+
+    );
+
+
+  };
+
+
+  const savePermissions = async () => {
+
+  try {
+
+    await api.patch(
+      `/admins/${selectedAdmin._id}/permissions`,
+      {
+        permissions,
+      }
+    );
+
+
+    // update table immediately
+    setAdmins(prev =>
+      prev.map(admin =>
+        admin._id === selectedAdmin._id
+          ? {
+              ...admin,
+              permissions,
+            }
+          : admin
+      )
+    );
+
+
+    setShowPermissionModal(false);
+
+
+  } catch(error) {
+
+    console.log(
+      "Permission update error:",
+      error.response?.data || error.message
+    );
+
+  }
+
+};
 
 
 
@@ -60,12 +170,15 @@ function AdminManagement() {
 
   if(loading){
 
+
     return (
 
       <div className="
+        flex
+        justify-center
+        items-center
+        h-60
         text-white
-        text-center
-        mt-10
       ">
 
         Loading admins...
@@ -73,6 +186,7 @@ function AdminManagement() {
       </div>
 
     );
+
 
   }
 
@@ -90,9 +204,8 @@ function AdminManagement() {
     ">
 
 
-      <div className="
-        mb-8
-      ">
+      <div className="mb-8">
+
 
         <h1 className="
           text-3xl
@@ -109,12 +222,13 @@ function AdminManagement() {
         </h1>
 
 
+
         <p className="
           text-gray-400
           mt-2
         ">
 
-          Manage administrator accounts and permissions.
+          Manage administrators and their permissions.
 
         </p>
 
@@ -125,75 +239,72 @@ function AdminManagement() {
 
 
 
-
       <div className="
         bg-white/10
-        rounded-2xl
         border
         border-white/10
+        rounded-2xl
         overflow-hidden
       ">
 
 
-        <table className="
-          w-full
+        <div className="
+          overflow-x-auto
         ">
 
 
-          <thead>
+          <table className="
+            w-full
+          ">
 
-            <tr className="
-              border-b
-              border-white/10
-              text-gray-300
-            ">
 
-              <th className="
-                p-4
-                text-left
+            <thead>
+
+
+              <tr className="
+                border-b
+                border-white/10
+                text-gray-300
               ">
-                Name
-              </th>
 
 
-              <th className="
-                p-4
-                text-left
-              ">
-                Email
-              </th>
+                <th className="p-4 text-left">
+                  Name
+                </th>
 
 
-              <th className="
-                p-4
-                text-left
-              ">
-                Role
-              </th>
+                <th className="p-4 text-left">
+                  Email
+                </th>
 
 
-              <th className="
-                p-4
-                text-left
-              ">
-                Action
-              </th>
+                <th className="p-4 text-left">
+                  Role
+                </th>
 
 
-            </tr>
+                <th className="p-4 text-left">
+                  Permissions
+                </th>
 
 
-          </thead>
+                <th className="p-4 text-left">
+                  Action
+                </th>
 
 
+              </tr>
+
+
+            </thead>
 
 
 
-          <tbody>
+            <tbody>
 
 
             {
-              admins.map(admin=>(
+              admins.map(admin => (
 
 
                 <tr
@@ -233,6 +344,7 @@ function AdminManagement() {
                       rounded-full
                       bg-green-600/20
                       text-green-400
+                      text-sm
                     ">
 
                       {admin.role}
@@ -244,18 +356,54 @@ function AdminManagement() {
 
 
 
+                  <td className="p-4">
+
+
+                    <span className="
+                      bg-blue-600/20
+                      text-blue-400
+                      px-3
+                      py-1
+                      rounded-full
+                      text-sm
+                    ">
+
+
+                      {admin.permissions?.length || 0}
+
+                      {" "}
+
+                      permissions
+
+
+                    </span>
+
+
+                  </td>
+
+
 
                   <td className="p-4">
 
 
                     <button
 
+                      onClick={() =>
+                        openPermissionModal(admin)
+                      }
+
+                      disabled={
+                        admin.role === "super_admin"
+                      }
+
                       className="
                         flex
                         items-center
                         gap-2
-                        bg-blue-600
-                        hover:bg-blue-700
+                        bg-purple-600
+                        hover:bg-purple-700
+                        disabled:bg-gray-600
+                        disabled:cursor-not-allowed
                         px-4
                         py-2
                         rounded-xl
@@ -263,9 +411,10 @@ function AdminManagement() {
 
                     >
 
-                      <FaEdit/>
+                      <FaUserShield/>
 
-                      Permissions
+                      Manage
+
 
                     </button>
 
@@ -281,19 +430,193 @@ function AdminManagement() {
             }
 
 
-          </tbody>
+            </tbody>
 
 
-        </table>
+          </table>
+
+
+        </div>
 
 
       </div>
 
 
 
+
+
+
+      {
+        showPermissionModal && (
+
+          <div className="
+            fixed
+            inset-0
+            bg-black/60
+            flex
+            items-center
+            justify-center
+            z-50
+          ">
+
+
+            <div className="
+              bg-slate-900
+              border
+              border-white/10
+              rounded-2xl
+              p-6
+              w-full
+              max-w-lg
+            ">
+
+
+              <div className="
+                flex
+                justify-between
+                items-center
+                mb-6
+              ">
+
+
+                <div>
+
+                  <h2 className="
+                    text-xl
+                    font-bold
+                  ">
+
+                    Manage Permissions
+
+                  </h2>
+
+
+                  <p className="
+                    text-gray-400
+                    text-sm
+                  ">
+
+                    {selectedAdmin?.fullName}
+
+                  </p>
+
+
+                </div>
+
+
+
+                <button
+
+                  onClick={() =>
+                    setShowPermissionModal(false)
+                  }
+
+                >
+
+                  <FaTimes/>
+
+                </button>
+
+
+              </div>
+
+
+
+
+              <div className="
+                space-y-3
+                max-h-80
+                overflow-y-auto
+              ">
+
+
+              {
+                availablePermissions.map(permission => (
+
+
+                  <label
+
+                    key={permission}
+
+                    className="
+                      flex
+                      items-center
+                      gap-3
+                      bg-white/5
+                      p-3
+                      rounded-lg
+                      cursor-pointer
+                    "
+
+                  >
+
+
+                    <input
+
+                      type="checkbox"
+
+                      checked={
+                        permissions.includes(permission)
+                      }
+
+                      onChange={() =>
+                        togglePermission(permission)
+                      }
+
+                    />
+
+
+                    {permission}
+
+
+                  </label>
+
+
+                ))
+              }
+
+
+              </div>
+
+
+
+
+              <button
+              onClick={savePermissions}
+
+                className="
+                  mt-6
+                  w-full
+                  bg-green-600
+                  hover:bg-green-700
+                  py-3
+                  rounded-xl
+                  font-semibold
+                "
+
+              >
+
+                Save Permissions
+
+              </button>
+
+
+
+            </div>
+
+
+          </div>
+
+        )
+      }
+
+
+
+
     </div>
 
   );
+
 
 }
 

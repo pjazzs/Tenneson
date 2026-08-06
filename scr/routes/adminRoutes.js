@@ -18,7 +18,7 @@ const {
 } = require("../middleware/permissionMiddleware");
 
 
-
+const {updatePermissions} = require("../controllers/adminController")
 
 
 router.get(
@@ -28,6 +28,12 @@ router.get(
   getAdmins
 );
 
+router.patch(
+  "/admins/:id/permissions",
+  protect,
+  authorizePermission("admins.update"),
+  updatePermissions
+);
 
 
 module.exports = router;
