@@ -74,7 +74,7 @@ req,
 });
 
   await logActivity({
-    adminId: req.user._id,
+    adminId: req.admin._id,
     action: "CREATE_STUDENT",
     studentId: student.studentId,
     details: `Created student ${student.firstName} ${student.lastName}`,
@@ -373,7 +373,7 @@ req,
 });
 
   await logActivity({
-    adminId: req.user._id,
+    adminId: req.admin._id,
     action: "UPDATE_STUDENT",
     studentId: student.studentId,
     details: `${student.firstName} ${student.lastName}`,
@@ -429,7 +429,7 @@ req,
 
   await logActivity({
 
-    adminId: req.user._id,
+    adminId: req.admin._id,
 
     action: "DELETE_STUDENT",
 
@@ -481,7 +481,7 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
 
   await logActivity({
 
-    adminId: req.user._id,
+    adminId: req.admin._id,
 
     action: "RESTORE_STUDENT",
 
@@ -704,7 +704,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     });
   }
   await logActivity({
-    adminId: req.user._id,
+    adminId: req.admin._id,
     action: "Bulk Import",
     details: `${importedStudents.length} students imported`,
   });
@@ -911,7 +911,7 @@ exports.exportStudents = asyncHandler(async (req, res) => {
 
   await logActivity({
 
-    adminId:req.user._id,
+    adminId:req.admin._id,
 
     action:"Export Students",
 
@@ -1069,7 +1069,7 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   await student.save();
 
   await logActivity({
-    adminId: req.user._id,
+    adminId: req.admin._id,
     action: "UPLOAD_STUDENT_PHOTO",
     studentId: student.studentId,
     details: `${student.firstName} ${student.lastName}`,
