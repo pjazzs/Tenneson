@@ -155,6 +155,7 @@ exports.loginAdmin = async (req, res) => {
         fullName: admin.fullName,
         email: admin.email,
         role: admin.role,
+        permissions: admin.permissions,
       },
     });
   } catch (error) {

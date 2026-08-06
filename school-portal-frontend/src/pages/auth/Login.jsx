@@ -5,7 +5,7 @@ import {
   FaSchool,
 } from "react-icons/fa";
 import api from "../../api/axios";
-
+import useAuth from "../../hooks/useAuth";
 
 function Login() {
 
@@ -20,6 +20,7 @@ function Login() {
   const [error,setError] = useState("");
 
   const [loading,setLoading] = useState(false);
+  const { setAdmin } = useAuth();
 
 
 
@@ -51,14 +52,19 @@ function Login() {
 
 
 
-      localStorage.setItem(
-        "token",
-        response.data.token
-      );
+     localStorage.setItem(
+  "token",
+  response.data.token
+);
 
+localStorage.setItem(
+  "admin",
+  JSON.stringify(response.data.admin)
+);
 
+setAdmin(response.data.admin);
 
-      navigate("/dashboard");
+navigate("/dashboard");
 
 
 

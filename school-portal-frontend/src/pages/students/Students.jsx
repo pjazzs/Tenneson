@@ -6,6 +6,7 @@ import {
 import {
   useNavigate,
 } from "react-router-dom";
+import useAuth from "../../hooks/useAuth";
 
 import {
   FaPlus,
@@ -24,7 +25,7 @@ import api from "../../api/axios";
 function Students() {
 
   const navigate = useNavigate();
-
+const { hasPermission } = useAuth();
 
   /* -----------------------------
       STATE
@@ -498,7 +499,13 @@ const exportStudents = async () => {
 
 
 
-        <button
+const {hasPermission}=useAuth();
+
+
+{
+hasPermission("students.create") && (
+
+<button
 
 
           onClick={() =>
@@ -534,6 +541,11 @@ const exportStudents = async () => {
 
 
         </button>
+
+)
+}
+
+        
 
 
 

@@ -5,6 +5,7 @@ const generateToken = (admin) => {
     {
       id: admin._id,
       role: admin.role,
+      permissions: admin.permissions,
     },
     process.env.JWT_SECRET,
     {
