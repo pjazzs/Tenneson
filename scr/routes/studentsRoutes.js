@@ -32,8 +32,9 @@ const router = express.Router();
 router.post(
   "/students/import",
   protect,
+  authorizePermission("students.import"),
   upload.single("file"),
-  bulkImportStudents,
+  bulkImportStudents
 );
 router.get("/students/dashboard", protect, dashboard);
 router.get(
@@ -93,9 +94,9 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.get("/students/activity-logs", protect, getActivityLogs);
+router.get("/students/activity-logs", protect, authorizePermission("students.view"), getActivityLogs);
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
-router.get("/students/export", protect, authorizePermission("students.view"), exportStudents);
+router.get("/students/export", protect, authorizePermission("students.export"), exportStudents);
 router.post(
   "/students",
   protect,
@@ -109,7 +110,7 @@ router.get(
   protect,
   generateStudentQRCode,
 );
-router.get("/students/archived", protect, getArchivedStudents);
+router.get("/students/archived", protect, authorizePermission("students.view"), getArchivedStudents);
 
 /**
  * @swagger
@@ -155,10 +156,11 @@ router.get("/students/archived", protect, getArchivedStudents);
  */
 router.get("/students", protect, authorizePermission("students.view"), getStudents);
 router.get("/students/verify/:studentId", protect, verifyStudent);
-router.patch("/students/:studentId/restore", protect, restoreStudent);
+router.patch("/students/:studentId/restore", protect, authorizePermission("students.restore"), restoreStudent);
 router.patch(
   "/students/:studentId/photo",
   protect,
+  authorizePermission("students.update"),
   uploadPhoto.single("photo"),
   uploadStudentPhoto
 );
@@ -186,7 +188,12 @@ router.patch(
  *       401:
  *         description: Unauthorized
  */
-router.get("/students/:studentId", protect, getStudent);
+router.get(
+  "/students/:studentId",
+  protect,
+  authorizePermission("students.view"),
+  getStudent
+);
 
 /**
  * @swagger
@@ -227,7 +234,12 @@ router.get("/students/:studentId", protect, getStudent);
  *       404:
  *         description: Student not found
  */
-router.put("/students/:studentId", protect, updateStudent);
+router.put(
+  "/students/:studentId",
+  protect,
+  authorizePermission("students.update"),
+  updateStudent
+);
 
 /**
  * @swagger
@@ -252,7 +264,12 @@ router.put("/students/:studentId", protect, updateStudent);
  *       401:
  *         description: Unauthorized
  */
-router.delete("/students/:studentId", protect, deleteStudent);
+router.delete(
+  "/students/:studentId",
+  protect,
+  authorizePermission("students.delete"),
+  deleteStudent
+);
 
 
 
