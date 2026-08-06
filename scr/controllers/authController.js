@@ -5,7 +5,15 @@ const generateToken = require("../utils/generateToken");
 
 exports.registerAdmin = async (req, res) => {
   try {
-    const { fullName, email, password } = req.body;
+
+    const {
+      fullName,
+      email,
+      password,
+      role,
+      permissions,
+    } = req.body;
+
 
     if (!fullName || !email || !password) {
       return res.status(400).json({
@@ -14,7 +22,9 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
+
     const existingAdmin = await Admin.findOne({ email });
+
 
     if (existingAdmin) {
       return res.status(409).json({
@@ -23,42 +33,80 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
+
     const hashedPassword = await bcrypt.hash(password, 12);
 
+
     const admin = await Admin.create({
+
       fullName,
+
       email: email.toLowerCase(),
+
       password: hashedPassword,
+
+      role: role || "admin",
+
+      permissions: permissions || [],
+
     });
 
+
+
     const token = jwt.sign(
+
       {
         id: admin._id,
         email: admin.email,
         role: admin.role,
+        permissions: admin.permissions,
       },
+
       process.env.JWT_SECRET,
+
       {
         expiresIn: process.env.JWT_EXPIRES_IN,
       },
+
     );
 
+
+
     res.status(201).json({
+
       success: true,
+
       message: "Admin registered successfully.",
+
       token,
+
       admin: {
+
         id: admin._id,
+
         fullName: admin.fullName,
+
         email: admin.email,
+
         role: admin.role,
+
+        permissions: admin.permissions,
+
       },
+
     });
+
+
   } catch (error) {
+
     res.status(500).json({
+
       success: false,
+
       message: error.message,
+
     });
+
   }
 };
 
