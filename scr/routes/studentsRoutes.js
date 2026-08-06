@@ -17,6 +17,7 @@ const {
   generateStudentQRCode,
   uploadStudentPhoto,
   monthlyRegistrationAnalytics,
+  classAnalytics,
 } = require("../controllers/studentcontroller");
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
@@ -38,6 +39,12 @@ router.get(
   "/students/analytics/monthly",
   protect,
   monthlyRegistrationAnalytics
+);
+
+router.get(
+  "/students/analytics/classes",
+  protect,
+  classAnalytics
 );
 
 /**
