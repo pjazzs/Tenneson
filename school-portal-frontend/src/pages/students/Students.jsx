@@ -14,6 +14,7 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaTimes,
+  FaFileExcel,
 } from "react-icons/fa";
 
 import api from "../../api/axios";
@@ -312,7 +313,66 @@ function Students() {
   ]);
 
 
+const exportStudents = async () => {
 
+  try {
+
+    const response = await api.get(
+      "/students/export",
+      {
+        responseType: "blob",
+      }
+    );
+
+
+    const blob = new Blob(
+      [response.data],
+      {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }
+    );
+
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+
+    const link =
+      document.createElement("a");
+
+
+    link.href = url;
+
+
+    link.download =
+      "Students.xlsx";
+
+
+    document.body.appendChild(link);
+
+
+    link.click();
+
+
+    link.remove();
+
+
+    window.URL.revokeObjectURL(url);
+
+
+  } catch(error) {
+
+
+    console.log(
+      "Export error:",
+      error.response?.data || error.message
+    );
+
+
+  }
+
+};
 
 
 
@@ -382,6 +442,34 @@ function Students() {
 
 
         </div>
+
+
+        <button
+
+  onClick={exportStudents}
+
+  className="
+    flex
+    items-center
+    gap-2
+    bg-emerald-600
+    hover:bg-emerald-700
+    active:scale-95
+    transition-all
+    duration-200
+    px-5
+    py-3
+    rounded-xl
+    shadow-lg
+  "
+
+>
+
+  <FaFileExcel />
+
+  Export
+
+</button>
 
 
 

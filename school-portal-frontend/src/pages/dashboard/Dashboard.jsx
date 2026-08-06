@@ -27,6 +27,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LabelList,
 } from "recharts";
 
 
@@ -35,6 +36,7 @@ function Dashboard() {
 
 
   const [stats, setStats] = useState(null);
+  const [classData, setClassData] = useState([]);
 
   const [monthlyRegistration, setMonthlyRegistration] = useState([]);
 
@@ -46,73 +48,85 @@ function Dashboard() {
 
   useEffect(() => {
 
+  const fetchDashboard = async () => {
 
-    const fetchDashboard = async () => {
+    try {
 
-
-      try {
-
-
-        const [
-          dashboardResponse,
-          analyticsResponse
-        ] = await Promise.all([
+      const [
+        dashboardResponse,
+        analyticsResponse,
+        classResponse
+      ] = await Promise.all([
 
 
-          api.get(
-            "/students/dashboard"
-          ),
+        api.get(
+          "/students/dashboard"
+        ),
 
 
-          api.get(
-            "/students/analytics/monthly"
-          )
+        api.get(
+          "/students/analytics/monthly"
+        ),
 
 
-        ]);
+        api.get(
+          "/students/analytics/classes"
+        )
 
 
-
-
-        setStats(
-          dashboardResponse.data.data
-        );
+      ]);
 
 
 
-        setMonthlyRegistration(
-          analyticsResponse.data.data || []
-        );
+
+      setStats(
+        dashboardResponse.data.data
+      );
 
 
 
-        setAnalyticsYear(
-          analyticsResponse.data.year
-        );
+      setMonthlyRegistration(
+        analyticsResponse.data.data || []
+      );
 
 
 
-      } catch(error) {
-
-
-        console.log(
-          "Dashboard error:",
-          error.response?.data || error.message
-        );
-
-
-      }
-
-
-    };
+      setAnalyticsYear(
+        analyticsResponse.data.year
+      );
 
 
 
-    fetchDashboard();
+      setClassData(
+        classResponse.data.data.map((item) => ({
+          class: item._id,
+          students: item.count,
+        }))
+      );
 
 
 
-  }, []);
+    } catch(error) {
+
+
+      console.log(
+        "Dashboard error:",
+        error.response?.data || error.message
+      );
+
+
+    }
+
+
+  };
+
+
+
+  fetchDashboard();
+
+
+
+}, []);
 
 
 
@@ -595,7 +609,6 @@ function Dashboard() {
           >
 
 
-
             <BarChart
 
               data={monthlyRegistration}
@@ -653,6 +666,148 @@ function Dashboard() {
 
 
           </ChartCard>
+
+          {/* Class Distribution */}
+
+{/* Class Distribution */}
+
+<div
+  className="
+    mt-8
+    bg-white/10
+    backdrop-blur
+    border
+    border-white/10
+    rounded-2xl
+    p-6
+    text-white
+  "
+>
+
+  <div
+    className="
+      flex
+      justify-between
+      items-center
+      mb-5
+    "
+  >
+
+    <div>
+
+      <h2
+        className="
+          text-xl
+          font-bold
+        "
+      >
+        Class Distribution
+      </h2>
+
+
+      <p
+        className="
+          text-gray-400
+          text-sm
+          mt-1
+        "
+      >
+        Current active students by class
+      </p>
+
+    </div>
+
+
+  </div>
+
+
+
+  <ResponsiveContainer
+    width="100%"
+    height={350}
+  >
+
+    <BarChart
+      data={classData}
+      margin={{
+        top: 20,
+        right: 20,
+        left: 0,
+        bottom: 10,
+      }}
+    >
+
+
+      <CartesianGrid
+        strokeDasharray="3 3"
+        strokeOpacity={0.2}
+      />
+
+
+
+      <XAxis
+        dataKey="class"
+        tick={{
+          fill:"#9ca3af",
+        }}
+      />
+
+
+
+      <YAxis
+        allowDecimals={false}
+        tick={{
+          fill:"#9ca3af",
+        }}
+      />
+
+
+
+      <Tooltip
+        contentStyle={{
+          background:"#0f172a",
+          border:"1px solid rgba(255,255,255,0.1)",
+          borderRadius:"12px",
+        }}
+
+        formatter={(value)=>[
+          `${value} Students`,
+          "Total"
+        ]}
+
+      />
+
+
+
+      <Bar
+        dataKey="students"
+        name="Students"
+        fill="#16a34a"
+        radius={[
+          8,
+          8,
+          0,
+          0
+        ]}
+      >
+
+        <LabelList
+          dataKey="students"
+          position="top"
+          fill="#ffffff"
+        />
+
+      </Bar>
+
+
+
+    </BarChart>
+
+
+  </ResponsiveContainer>
+
+
+</div>
 
 
 

@@ -677,52 +677,212 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 });
 
 exports.exportStudents = asyncHandler(async (req, res) => {
-  // Get all active students
-  const students = await Student.find({ isActive: true })
-    .select(
-      "studentId firstName lastName otherName gender dateOfBirth currentClass session parentName parentPhone admissionDate",
-    )
-    .sort({ createdAt: -1 });
 
-  // Convert MongoDB documents to plain objects
+  const {
+    search,
+    class: currentClass,
+    gender,
+    session,
+    status,
+  } = req.query;
+
+
+
+  const query = {};
+
+
+
+  /*
+    Default:
+    export active students only
+  */
+
+  if (!status) {
+
+    query.isActive = true;
+
+  }
+
+
+
+  if (status === "active") {
+
+    query.isActive = true;
+
+  }
+
+
+
+  if (status === "archived") {
+
+    query.isActive = false;
+
+  }
+
+
+
+
+
+  // Search filter
+
+  if (search) {
+
+    query.$or = [
+
+      {
+        firstName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+      {
+        lastName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+      {
+        otherName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+      {
+        studentId: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+    ];
+
+  }
+
+
+
+
+
+  if (currentClass) {
+
+    query.currentClass = currentClass;
+
+  }
+
+
+
+  if (gender) {
+
+    query.gender = gender;
+
+  }
+
+
+
+  if (session) {
+
+    query.session = session;
+
+  }
+
+
+
+
+
+  const students = await Student.find(query)
+
+    .select(
+      "studentId firstName lastName otherName gender dateOfBirth currentClass session parentName parentPhone admissionDate"
+    )
+
+    .sort({
+      createdAt: -1,
+    });
+
+
+
+
+
   const data = students.map((student) => ({
+
     StudentID: student.studentId,
+
     FirstName: student.firstName,
+
     LastName: student.lastName,
+
     OtherName: student.otherName,
+
     Gender: student.gender,
+
     DateOfBirth: student.dateOfBirth,
+
     CurrentClass: student.currentClass,
+
     Session: student.session,
+
     ParentName: student.parentName,
+
     ParentPhone: student.parentPhone,
+
     AdmissionDate: student.admissionDate,
+
   }));
 
-  // Create workbook
+
+
+
+
   const workbook = XLSX.utils.book_new();
 
-  // Create worksheet
-  const worksheet = XLSX.utils.json_to_sheet(data);
 
-  // Add worksheet
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+  const worksheet =
+    XLSX.utils.json_to_sheet(data);
 
-  // Generate Excel file
-  const filePath = "uploads/Students.xlsx";
 
-  XLSX.writeFile(workbook, filePath);
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Students"
+  );
+
+
+
+  const filePath =
+    "uploads/Students.xlsx";
+
+
+
+  XLSX.writeFile(
+    workbook,
+    filePath
+  );
+
+
 
   await logActivity({
-    adminId: req.admin._id,
-    action: "Export Students",
-    details: `${students.length} students exported`,
+
+    adminId:req.admin._id,
+
+    action:"Export Students",
+
+    details:`${students.length} students exported`
+
   });
 
-  // Download file
-  res.download(filePath, "Students.xlsx");
-});
 
+
+
+  res.download(
+    filePath,
+    "Students.xlsx"
+  );
+
+
+});
 exports.getActivityLogs = asyncHandler(async (req, res) => {
   const logs = await ActivityLog.find()
     .populate("admin", "fullName email -_id")
