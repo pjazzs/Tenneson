@@ -22,20 +22,54 @@ function AdminManagement() {
 
 
 
-  const availablePermissions = [
+ const permissionGroups = {
+  Students: [
+    {
+      key: "students.view",
+      label: "View Students",
+    },
+    {
+      key: "students.create",
+      label: "Create Student",
+    },
+    {
+      key: "students.update",
+      label: "Update Student",
+    },
+    {
+      key: "students.delete",
+      label: "Delete Student",
+    },
+    {
+      key: "students.export",
+      label: "Export Students",
+    },
+    {
+      key: "students.photo",
+      label: "Upload Student Photo",
+    },
+  ],
 
-    "students.view",
-    "students.create",
-    "students.update",
-    "students.delete",
-    "students.export",
 
-    "admins.view",
-    "admins.create",
-    "admins.update",
-    "admins.delete",
-
-  ];
+  Admins: [
+    {
+      key: "admins.view",
+      label: "View Admins",
+    },
+    {
+      key: "admins.create",
+      label: "Create Admin",
+    },
+    {
+      key: "admins.update",
+      label: "Update Admin",
+    },
+    {
+      key: "admins.delete",
+      label: "Delete Admin",
+    },
+  ],
+};
 
 
 
@@ -123,6 +157,74 @@ function AdminManagement() {
 
 
   };
+
+
+  const allPermissions = Object.values(permissionGroups)
+.flat()
+.map(permission => permission.key);
+
+
+
+const toggleAllPermissions = () => {
+
+  if(
+    permissions.length === allPermissions.length
+  ){
+
+    setPermissions([]);
+
+  }else{
+
+    setPermissions(allPermissions);
+
+  }
+
+};
+
+
+
+const toggleGroupPermissions = (group) => {
+
+
+  const groupPermissions = permissionGroups[group]
+  .map(permission => permission.key);
+
+
+
+  const hasAll = groupPermissions.every(
+    permission =>
+    permissions.includes(permission)
+  );
+
+
+
+  if(hasAll){
+
+    setPermissions(prev =>
+      prev.filter(
+        item =>
+        !groupPermissions.includes(item)
+      )
+    );
+
+
+  }else{
+
+
+    setPermissions(prev =>
+      [
+        ...new Set([
+          ...prev,
+          ...groupPermissions
+        ])
+      ]
+    );
+
+
+  }
+
+
+};
 
 
   const savePermissions = async () => {
@@ -531,48 +633,189 @@ function AdminManagement() {
 
 
               {
-                availablePermissions.map(permission => (
+                <div className="space-y-5">
 
 
-                  <label
+{/* SELECT ALL */}
 
-                    key={permission}
+<label
+className="
+flex
+items-center
+gap-3
+bg-green-600/20
+p-3
+rounded-lg
+cursor-pointer
+"
+>
 
-                    className="
-                      flex
-                      items-center
-                      gap-3
-                      bg-white/5
-                      p-3
-                      rounded-lg
-                      cursor-pointer
-                    "
+<input
 
-                  >
+type="checkbox"
 
+checked={
+permissions.length === allPermissions.length
+}
 
-                    <input
+onChange={toggleAllPermissions}
 
-                      type="checkbox"
-
-                      checked={
-                        permissions.includes(permission)
-                      }
-
-                      onChange={() =>
-                        togglePermission(permission)
-                      }
-
-                    />
+/>
 
 
-                    {permission}
+<span className="font-semibold">
+Select All Permissions
+</span>
 
 
-                  </label>
+</label>
 
 
-                ))
+
+
+
+{
+Object.keys(permissionGroups).map(group => (
+
+
+<div
+key={group}
+className="
+bg-white/5
+rounded-xl
+p-4
+"
+>
+
+
+<div
+className="
+flex
+justify-between
+items-center
+mb-3
+"
+>
+
+
+<h3
+className="
+font-bold
+text-green-400
+"
+>
+
+{group}
+
+</h3>
+
+
+
+<label
+className="
+text-sm
+flex
+items-center
+gap-2
+"
+>
+
+
+<input
+
+type="checkbox"
+
+checked={
+permissionGroups[group]
+.every(
+item =>
+permissions.includes(item.key)
+)
+}
+
+onChange={() =>
+toggleGroupPermissions(group)
+}
+
+/>
+
+
+Select All
+
+</label>
+
+
+</div>
+
+
+
+
+
+<div className="space-y-2">
+
+
+{
+permissionGroups[group].map(permission => (
+
+
+<label
+
+key={permission.key}
+
+className="
+flex
+items-center
+gap-3
+bg-slate-800
+p-3
+rounded-lg
+cursor-pointer
+"
+
+>
+
+
+<input
+
+type="checkbox"
+
+checked={
+permissions.includes(permission.key)
+}
+
+onChange={() =>
+togglePermission(permission.key)
+}
+
+/>
+
+
+
+<span>
+
+{permission.label}
+
+</span>
+
+
+</label>
+
+
+))
+}
+
+
+</div>
+
+
+</div>
+
+
+))
+}
+
+
+</div>
               }
 
 

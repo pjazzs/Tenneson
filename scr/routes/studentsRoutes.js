@@ -160,7 +160,7 @@ router.patch("/students/:studentId/restore", protect, authorizePermission("stude
 router.patch(
   "/students/:studentId/photo",
   protect,
-  authorizePermission("students.update"),
+  authorizePermission("students.photo"),
   uploadPhoto.single("photo"),
   uploadStudentPhoto
 );

@@ -4,6 +4,7 @@ import {
 } from "react";
 
 import api from "../../api/axios";
+import QuickActions from "../../components/dashboard/QuickActions";
 
 
 import {
@@ -351,6 +352,7 @@ function Dashboard() {
           sm:grid-cols-2
           lg:grid-cols-5
           gap-5
+          mb-8
         "
       >
 
@@ -446,6 +448,9 @@ function Dashboard() {
 
 
       </div>
+
+
+      <QuickActions />
       
 
 

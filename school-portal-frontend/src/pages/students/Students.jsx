@@ -455,7 +455,11 @@ const exportStudents = async () => {
         </div>
 
 
-<button
+
+
+{
+  hasPermission("students.export") && (
+    <button
   onClick={exportStudents}
   disabled={exporting}
   className="
@@ -494,6 +498,9 @@ const exportStudents = async () => {
 
 
 </button>
+  )
+}
+
 
 
 

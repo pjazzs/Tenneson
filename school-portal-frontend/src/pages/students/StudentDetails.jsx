@@ -20,7 +20,7 @@ import {
   FaCalendarAlt,
   FaSchool,
 } from "react-icons/fa";
-
+import useAuth from "../../hooks/useAuth";
 import api from "../../api/axios";
 
 
@@ -31,7 +31,7 @@ function StudentDetails() {
   const { studentId } = useParams();
 
   const navigate = useNavigate();
-
+const { hasPermission } = useAuth();
 
   const [student, setStudent] = useState(null);
 
@@ -481,6 +481,7 @@ function StudentDetails() {
               text-3xl
               font-bold
               tracking-tight
+              text-gray-900
             "
           >
 
@@ -491,7 +492,7 @@ function StudentDetails() {
 
           <p
             className="
-              text-gray-400
+              text-gray-600
               mt-2
             "
           >
@@ -536,7 +537,12 @@ function StudentDetails() {
 
 
 
-          <ActionButton
+
+
+                 {
+  hasPermission("students.update") && (
+
+    <ActionButton
 
             onClick={() =>
               fileRef.current.click()
@@ -560,37 +566,56 @@ function StudentDetails() {
 
           />
 
-
-
-          <ActionButton
-
-            onClick={() =>
-              navigate(
-                `/students/${student.studentId}/edit`
-              )
-            }
-
-            color="blue"
-
-            icon={<FaEdit />}
-
-            text="Edit"
-
-          />
+  )
+}
 
 
 
-          <ActionButton
+         
 
-            onClick={handleDelete}
 
-            color="red"
 
-            icon={<FaTrash />}
+         {
+  hasPermission("students.update") && (
 
-            text="Archive"
+    <ActionButton
 
-          />
+      onClick={() =>
+        navigate(
+          `/students/${student.studentId}/edit`
+        )
+      }
+
+      color="blue"
+
+      icon={<FaEdit />}
+
+      text="Edit"
+
+    />
+
+  )
+}
+
+
+
+         {
+  hasPermission("students.delete") && (
+
+    <ActionButton
+
+      onClick={handleDelete}
+
+      color="red"
+
+      icon={<FaTrash />}
+
+      text="Archive"
+
+    />
+
+  )
+}
 
 
 
