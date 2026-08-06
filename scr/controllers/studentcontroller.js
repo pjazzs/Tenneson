@@ -8,6 +8,7 @@ const ActivityLog = require("../models/activityLog");
 const generateQRCode = require("../utils/generateQRCode");
 const generateStudentSlip = require("../utils/generateStudentSlip");
 const cloudinary = require("../config/cloudinary");
+const createAuditLog = require("../utils/createAuditLog");
 
 exports.createStudent = asyncHandler(async (req, res) => {
   const {
@@ -57,8 +58,23 @@ exports.createStudent = asyncHandler(async (req, res) => {
     updatedBy: req.admin._id,
   });
 
+  await createAuditLog({
+
+user:req.user._id,
+
+action:"CREATE",
+
+module:"STUDENT",
+
+description:
+`${req.user.fullName} created student ${student.firstName} ${student.lastName}`,
+
+req,
+
+});
+
   await logActivity({
-    adminId: req.admin._id,
+    adminId: req.user._id,
     action: "CREATE_STUDENT",
     studentId: student.studentId,
     details: `Created student ${student.firstName} ${student.lastName}`,
@@ -341,8 +357,23 @@ exports.updateStudent = asyncHandler(async (req, res) => {
     throw new Error("Student not found.");
   }
 
+  await createAuditLog({
+
+user:req.user._id,
+
+action:"UPDATE",
+
+module:"STUDENT",
+
+description:
+`${req.user.fullName} updated student ${student.firstName} ${student.lastName}`,
+
+req,
+
+});
+
   await logActivity({
-    adminId: req.admin._id,
+    adminId: req.user._id,
     action: "UPDATE_STUDENT",
     studentId: student.studentId,
     details: `${student.firstName} ${student.lastName}`,
@@ -379,11 +410,26 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
 
   }
 
+  await createAuditLog({
+
+user:req.user._id,
+
+action:"ARCHIVE",
+
+module:"STUDENT",
+
+description:
+`${req.user.fullName} archived student ${student.firstName} ${student.lastName}`,
+
+req,
+
+});
+
 
 
   await logActivity({
 
-    adminId: req.admin._id,
+    adminId: req.user._id,
 
     action: "DELETE_STUDENT",
 
@@ -435,7 +481,7 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
 
   await logActivity({
 
-    adminId: req.admin._id,
+    adminId: req.user._id,
 
     action: "RESTORE_STUDENT",
 
@@ -658,7 +704,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     });
   }
   await logActivity({
-    adminId: req.admin._id,
+    adminId: req.user._id,
     action: "Bulk Import",
     details: `${importedStudents.length} students imported`,
   });
@@ -865,7 +911,7 @@ exports.exportStudents = asyncHandler(async (req, res) => {
 
   await logActivity({
 
-    adminId:req.admin._id,
+    adminId:req.user._id,
 
     action:"Export Students",
 
@@ -1023,7 +1069,7 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   await student.save();
 
   await logActivity({
-    adminId: req.admin._id,
+    adminId: req.user._id,
     action: "UPLOAD_STUDENT_PHOTO",
     studentId: student.studentId,
     details: `${student.firstName} ${student.lastName}`,

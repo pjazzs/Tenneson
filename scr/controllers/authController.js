@@ -146,6 +146,22 @@ exports.loginAdmin = async (req, res) => {
 
     const token = generateToken(admin);
 
+    const createAuditLog = require("../utils/createAuditLog");
+    await createAuditLog({
+
+user:user._id,
+
+action:"LOGIN",
+
+module:"AUTH",
+
+description:
+`${user.fullName} logged into the system`,
+
+req,
+
+});
+
     res.status(200).json({
       success: true,
       message: "Login successful.",

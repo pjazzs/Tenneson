@@ -13,6 +13,7 @@ import EditStudent from "../pages/students/EditStudent";
 import ArchivedStudents from "../pages/students/ArchivedStudents";
 import ActivityLogs from "../pages/activity/ActivityLogs";
 import AdminManagement from "../pages/admin/AdminManagement";
+import AuditLog from "../pages/admin/AuditLog";
 
 function AppRoutes() {
   return (
@@ -21,6 +22,7 @@ function AppRoutes() {
   
     <Routes>
       <Route path="/admins" element={<AdminManagement />} />
+      <Route path="/audit-logs" element={<AuditLog />} />
 
 
   <Route path="/login" element={<Login />} />
