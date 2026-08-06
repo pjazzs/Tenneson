@@ -89,6 +89,7 @@ router.get(
   protect,
   generateStudentQRCode,
 );
+router.get("/students/archived", protect, getArchivedStudents);
 
 /**
  * @swagger
@@ -134,7 +135,6 @@ router.get(
  */
 router.get("/students", protect, getStudents);
 router.get("/students/verify/:studentId", protect, verifyStudent);
-router.get("/students/archived", protect, getArchivedStudents);
 router.patch("/students/:studentId/restore", protect, restoreStudent);
 router.patch(
   "/students/:studentId/photo",

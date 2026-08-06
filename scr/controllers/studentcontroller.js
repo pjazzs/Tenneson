@@ -74,26 +74,90 @@ exports.createStudent = asyncHandler(async (req, res) => {
 exports.getStudents = asyncHandler(async (req, res) => {
 
   const page = Number(req.query.page) || 1;
+
   const limit = Number(req.query.limit) || 10;
+
+
   const search = req.query.search || "";
+
+  const currentClass = req.query.class || "";
+
+  const gender = req.query.gender || "";
+
+  const session = req.query.session || "";
+
+  const status = req.query.status || "";
+
+
 
   const skip = (page - 1) * limit;
 
 
-  const query = {
-    isActive: true,
-  };
 
+
+  const query = {};
+
+
+
+
+  /*
+    Default behaviour:
+    If no status filter is provided,
+    show only active students
+  */
+
+  if (!status) {
+
+    query.isActive = true;
+
+  }
+
+
+
+
+  /*
+    Status Filter
+  */
+
+  if (status === "active") {
+
+    query.isActive = true;
+
+  }
+
+
+  if (status === "archived") {
+
+    query.isActive = false;
+
+  }
+
+
+
+
+
+
+  /*
+    Search by:
+    - First Name
+    - Last Name
+    - Other Name
+    - Student ID
+  */
 
   if (search) {
 
+
     query.$or = [
+
+
       {
         firstName: {
           $regex: search,
           $options: "i",
         },
       },
+
 
       {
         lastName: {
@@ -102,44 +166,135 @@ exports.getStudents = asyncHandler(async (req, res) => {
         },
       },
 
+
+      {
+        otherName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+
+
       {
         studentId: {
           $regex: search,
           $options: "i",
         },
       },
+
+
     ];
+
 
   }
 
 
+
+
+
+
+
+  /*
+    Class Filter
+  */
+
+  if (currentClass) {
+
+    query.currentClass = currentClass;
+
+  }
+
+
+
+
+
+  /*
+    Gender Filter
+  */
+
+  if (gender) {
+
+    query.gender = gender;
+
+  }
+
+
+
+
+
+
+  /*
+    Session Filter
+  */
+
+  if (session) {
+
+    query.session = session;
+
+  }
+
+
+
+
+
+
+
   const students = await Student.find(query)
+
     .skip(skip)
-    .limit(limit);
+
+    .limit(limit)
+
+    .sort({
+      createdAt: -1,
+    });
+
+
+
+
+
 
 
   const totalStudents = await Student.countDocuments(query);
 
 
+
+
+
+
   res.status(200).json({
+
 
     success: true,
 
+
     students,
+
+
 
     pagination: {
 
+
       currentPage: page,
+
 
       limit,
 
+
       totalStudents,
 
-      totalPages: Math.ceil(totalStudents / limit),
+
+      totalPages: Math.ceil(
+        totalStudents / limit
+      ),
+
 
     },
 
-  }); 
+
+  });
+
+
 
 });
 

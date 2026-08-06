@@ -1,28 +1,54 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  FaLock,
+  FaSchool,
+} from "react-icons/fa";
 import api from "../../api/axios";
 
 
 function Login() {
 
+
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
-  const [error, setError] = useState("");
+  const [email,setEmail] = useState("");
+
+  const [password,setPassword] = useState("");
+
+  const [error,setError] = useState("");
+
+  const [loading,setLoading] = useState(false);
 
 
-  const handleSubmit = async (e) => {
+
+
+
+
+  const handleSubmit = async(e)=>{
+
 
     e.preventDefault();
 
-    try {
 
-      const response = await api.post("/auth/login", {
-        email,
-        password,
-      });
+    setError("");
+
+    setLoading(true);
+
+
+
+    try{
+
+
+      const response = await api.post(
+        "/auth/login",
+        {
+          email,
+          password,
+        }
+      );
+
 
 
       localStorage.setItem(
@@ -31,110 +57,335 @@ function Login() {
       );
 
 
+
       navigate("/dashboard");
 
 
-    } catch (error) {
+
+    }catch(error){
+
 
       setError(
+
         error.response?.data?.message ||
         "Login failed"
+
       );
 
+
+
+    }finally{
+
+
+      setLoading(false);
+
+
     }
+
 
   };
 
 
+
+
+
+
+
+
+  const inputStyle = `
+    w-full
+    bg-slate-800
+    border
+    border-white/10
+    text-white
+    rounded-xl
+    px-4
+    py-3
+    outline-none
+    focus:border-green-500
+  `;
+
+
+
+
+
+
+
   return (
+
 
     <div className="
       min-h-screen
       flex
       items-center
       justify-center
-      bg-gray-100
+      bg-linear-to-br
+      from-slate-950
+      via-slate-900
+      to-green-950
       px-4
     ">
 
+
+
+
+
+
       <form
+
         onSubmit={handleSubmit}
+
         className="
-          bg-white
-          shadow
-          rounded-xl
-          p-8
           w-full
           max-w-md
+          bg-slate-900/80
+          backdrop-blur-xl
+          border
+          border-white/10
+          shadow-2xl
+          rounded-3xl
+          p-8
         "
+
       >
 
-        <h1 className="
-          text-2xl
-          font-bold
-          mb-6
-          text-center
+
+
+
+
+        <div className="
+          flex
+          flex-col
+          items-center
+          mb-8
         ">
-          Admin Login
-        </h1>
 
 
-        {error && (
-          <p className="text-red-500 mb-4">
-            {error}
-          </p>
-        )}
-
-
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-          className="
-            w-full
-            border
-            p-3
-            rounded
+          <div className="
+            w-20
+            h-20
+            rounded-full
+            bg-green-600
+            flex
+            items-center
+            justify-center
+            text-white
+            text-3xl
+            shadow-lg
             mb-4
-          "
-        />
+          ">
+
+            <FaSchool/>
+
+          </div>
 
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-          className="
-            w-full
-            border
-            p-3
-            rounded
-            mb-6
-          "
-        />
+
+
+
+          <h1 className="
+            text-3xl
+            font-bold
+            text-white
+          ">
+
+            Tenneson Portal
+
+          </h1>
+
+
+
+
+          <p className="
+            text-gray-400
+            mt-2
+          ">
+
+            Admin Dashboard Login
+
+          </p>
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+        {
+          error && (
+
+            <div className="
+              bg-red-600/20
+              text-red-400
+              border
+              border-red-500/20
+              p-3
+              rounded-xl
+              mb-5
+            ">
+
+              {error}
+
+            </div>
+
+          )
+        }
+
+
+
+
+
+
+
+
+
+        <div className="mb-5">
+
+
+          <label className="
+            text-gray-300
+            text-sm
+            block
+            mb-2
+          ">
+
+            Email
+
+          </label>
+
+
+
+          <input
+
+            type="email"
+
+            placeholder="admin@example.com"
+
+            value={email}
+
+            onChange={(e)=>setEmail(e.target.value)}
+
+            className={inputStyle}
+
+            required
+
+          />
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+        <div className="mb-6">
+
+
+          <label className="
+            text-gray-300
+            text-sm
+            block
+            mb-2
+          ">
+
+            Password
+
+          </label>
+
+
+
+
+          <input
+
+            type="password"
+
+            placeholder="Enter password"
+
+            value={password}
+
+            onChange={(e)=>setPassword(e.target.value)}
+
+            className={inputStyle}
+
+            required
+
+          />
+
+
+        </div>
+
+
+
+
+
+
 
 
         <button
+
+          disabled={loading}
+
           className="
             w-full
-            bg-blue-600
+            flex
+            items-center
+            justify-center
+            gap-3
+            bg-green-600
+            hover:bg-green-700
             text-white
-            p-3
-            rounded
-            hover:bg-blue-700
+            py-3
+            rounded-xl
+            font-semibold
+            transition
+            disabled:opacity-50
           "
+
         >
-          Login
+
+
+          <FaLock/>
+
+
+          {
+            loading
+            ?
+            "Logging in..."
+            :
+            "Login"
+          }
+
+
+
         </button>
+
+
+
+
 
 
       </form>
 
+
+
+
+
     </div>
 
+
   );
+
+
 }
 
 
