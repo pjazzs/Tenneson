@@ -13,7 +13,7 @@ exports.apiLimiter = rateLimit({
 
 
 exports.authLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
+  windowMs: 15 * 60 * 1000,
   max: 5,
 
   standardHeaders: true,
@@ -21,7 +21,7 @@ exports.authLimiter = rateLimit({
 
   message: {
     message:
-      "Too many login attempts. Please try again in 1 minute.",
+      "Too many login attempts. Please try again in 15 minutes.",
   },
 
   skip: () => process.env.NODE_ENV === "test",

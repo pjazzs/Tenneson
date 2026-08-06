@@ -95,7 +95,7 @@ router.get(
  */
 router.get("/students/activity-logs", protect, getActivityLogs);
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
-router.get("/students/export", protect, exportStudents);
+router.get("/students/export", protect, authorizePermission("students.view"), exportStudents);
 router.post(
   "/students",
   protect,
@@ -153,7 +153,7 @@ router.get("/students/archived", protect, getArchivedStudents);
  *       401:
  *         description: Unauthorized
  */
-router.get("/students", protect, getStudents);
+router.get("/students", protect, authorizePermission("students.view"), getStudents);
 router.get("/students/verify/:studentId", protect, verifyStudent);
 router.patch("/students/:studentId/restore", protect, restoreStudent);
 router.patch(
