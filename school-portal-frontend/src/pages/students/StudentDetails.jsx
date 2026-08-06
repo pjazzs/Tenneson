@@ -16,6 +16,9 @@ import {
   FaQrcode,
   FaDownload,
   FaArrowLeft,
+  FaUserGraduate,
+  FaCalendarAlt,
+  FaSchool,
 } from "react-icons/fa";
 
 import api from "../../api/axios";
@@ -47,6 +50,10 @@ function StudentDetails() {
 
 
 
+  /*
+      FETCH STUDENT
+  */
+
 
   useEffect(() => {
 
@@ -62,7 +69,9 @@ function StudentDetails() {
         );
 
 
-        setStudent(response.data.student);
+        setStudent(
+          response.data.student
+        );
 
 
       } catch(error) {
@@ -95,8 +104,9 @@ function StudentDetails() {
 
 
 
-
-
+  /*
+      UPLOAD PHOTO
+  */
 
 
   const uploadPhoto = async (event) => {
@@ -134,7 +144,8 @@ function StudentDetails() {
 
         {
           headers:{
-            "Content-Type":"multipart/form-data",
+            "Content-Type":
+            "multipart/form-data",
           },
         }
 
@@ -146,7 +157,8 @@ function StudentDetails() {
 
         ...prev,
 
-        photo: response.data.photo,
+        photo:
+        response.data.photo,
 
       }));
 
@@ -178,6 +190,9 @@ function StudentDetails() {
 
 
 
+  /*
+      ARCHIVE STUDENT
+  */
 
 
   const handleDelete = async () => {
@@ -190,7 +205,6 @@ function StudentDetails() {
 
 
     if(!confirmDelete) return;
-
 
 
 
@@ -211,7 +225,7 @@ function StudentDetails() {
 
 
       console.log(
-        "Delete error:",
+        "Archive error:",
         error.response?.data || error.message
       );
 
@@ -227,6 +241,9 @@ function StudentDetails() {
 
 
 
+  /*
+      GENERATE QR
+  */
 
 
   const generateQR = async () => {
@@ -285,6 +302,9 @@ function StudentDetails() {
 
 
 
+  /*
+      DOWNLOAD SLIP
+  */
 
 
   const downloadSlip = async () => {
@@ -307,7 +327,9 @@ function StudentDetails() {
 
       const file = new Blob(
 
-        [response.data],
+        [
+          response.data
+        ],
 
         {
           type:"application/pdf",
@@ -327,7 +349,7 @@ function StudentDetails() {
 
 
 
-      link.href=url;
+      link.href = url;
 
 
       link.download =
@@ -348,7 +370,7 @@ function StudentDetails() {
 
 
 
-    } catch(error){
+    } catch(error) {
 
 
       console.log(
@@ -368,6 +390,9 @@ function StudentDetails() {
 
 
 
+  /*
+      LOADING STATE
+  */
 
 
   if(loading){
@@ -375,11 +400,15 @@ function StudentDetails() {
 
     return (
 
-      <div className="
-        text-center
-        mt-10
-        text-white
-      ">
+      <div
+        className="
+          flex
+          justify-center
+          items-center
+          h-64
+          text-white
+        "
+      >
 
         Loading student details...
 
@@ -400,11 +429,13 @@ function StudentDetails() {
 
     return (
 
-      <div className="
-        text-center
-        mt-10
-        text-white
-      ">
+      <div
+        className="
+          text-center
+          mt-10
+          text-white
+        "
+      >
 
         Student not found
 
@@ -420,39 +451,50 @@ function StudentDetails() {
 
 
 
-
   return (
 
-    <div className="
-      text-white
-    ">
+    <div className="text-white">
+
+      
+      {/* ============================
+            PAGE HEADER
+      ============================= */}
 
 
-      <div className="
-        flex
-        justify-between
-        items-center
-        flex-wrap
-        gap-4
-        mb-8
-      ">
+      <div
+        className="
+          flex
+          justify-between
+          items-center
+          flex-wrap
+          gap-5
+          mb-8
+        "
+      >
 
 
         <div>
 
-          <h1 className="
-            text-3xl
-            font-bold
-          ">
+
+          <h1
+            className="
+              text-3xl
+              font-bold
+              tracking-tight
+            "
+          >
 
             Student Profile
 
           </h1>
 
 
-          <p className="
-            text-gray-400
-          ">
+          <p
+            className="
+              text-gray-400
+              mt-2
+            "
+          >
 
             View and manage student information
 
@@ -463,11 +505,19 @@ function StudentDetails() {
 
 
 
-        <div className="
-          flex
-          flex-wrap
-          gap-3
-        ">
+
+
+        {/* ACTION BUTTONS */}
+
+
+        <div
+          className="
+            flex
+            flex-wrap
+            gap-3
+          "
+        >
+
 
 
           <input
@@ -488,11 +538,13 @@ function StudentDetails() {
 
           <ActionButton
 
-            onClick={()=>fileRef.current.click()}
+            onClick={() =>
+              fileRef.current.click()
+            }
 
             color="green"
 
-            icon={<FaUpload/>}
+            icon={<FaUpload />}
 
             text={
               uploading
@@ -505,8 +557,12 @@ function StudentDetails() {
               :
               "Upload Photo"
             }
+
           />
-           <ActionButton
+
+
+
+          <ActionButton
 
             onClick={() =>
               navigate(
@@ -516,7 +572,7 @@ function StudentDetails() {
 
             color="blue"
 
-            icon={<FaEdit/>}
+            icon={<FaEdit />}
 
             text="Edit"
 
@@ -530,7 +586,7 @@ function StudentDetails() {
 
             color="red"
 
-            icon={<FaTrash/>}
+            icon={<FaTrash />}
 
             text="Archive"
 
@@ -544,7 +600,7 @@ function StudentDetails() {
 
             color="purple"
 
-            icon={<FaQrcode/>}
+            icon={<FaQrcode />}
 
             text="QR Code"
 
@@ -558,7 +614,7 @@ function StudentDetails() {
 
             color="orange"
 
-            icon={<FaDownload/>}
+            icon={<FaDownload />}
 
             text="Slip"
 
@@ -574,11 +630,12 @@ function StudentDetails() {
 
             color="gray"
 
-            icon={<FaArrowLeft/>}
+            icon={<FaArrowLeft />}
 
             text="Back"
 
           />
+
 
 
         </div>
@@ -591,164 +648,300 @@ function StudentDetails() {
 
 
 
+      {/* ============================
+          PROFILE SUMMARY CARD
+      ============================= */}
 
 
-      {/* Student Profile Card */}
 
-
-      <div className="
-        bg-slate-900
-        border
-        border-white/10
-        shadow-xl
-        rounded-2xl
-        p-8
-      ">
-
-
-        {/* Avatar */}
-
-
-        <div className="
-          text-center
+      <div
+        className="
+          bg-slate-900
+          border
+          border-white/10
+          rounded-2xl
+          shadow-xl
+          p-6
           mb-8
-        ">
-
-
-          {
-            student.photo?.url ? (
-
-              <img
-
-                src={student.photo.url}
-
-                alt="Student"
-
-                className="
-                  w-44
-                  h-44
-                  rounded-full
-                  object-cover
-                  mx-auto
-                  border-4
-                  border-green-500
-                  shadow-xl
-                "
-
-              />
-
-
-            ) : (
-
-
-              <div
-
-                className="
-                  w-44
-                  h-44
-                  rounded-full
-                  bg-green-600
-                  flex
-                  items-center
-                  justify-center
-                  mx-auto
-                  text-5xl
-                  font-bold
-                  shadow-xl
-                "
-
-              >
-
-                {
-                  student.firstName?.charAt(0)
-                }
-
-                {
-                  student.lastName?.charAt(0)
-                }
-
-
-              </div>
-
-
-            )
-
-
-          }
+        "
+      >
 
 
 
-          <h2 className="
-            mt-5
-            text-2xl
-            font-bold
-          ">
-
-
-            {student.firstName}
-
-            {" "}
-
-            {student.lastName}
-
-
-          </h2>
+        <div
+          className="
+            flex
+            flex-col
+            lg:flex-row
+            gap-8
+            items-center
+          "
+        >
 
 
 
+          {/* AVATAR */}
 
-          <span className="
-            inline-block
-            mt-3
-            px-4
-            py-1
-            rounded-full
-            text-sm
-            bg-green-600/20
-            text-green-400
-          ">
+
+          <div>
 
 
             {
-              student.isActive
-              ?
-              "Active Student"
-              :
-              "Archived Student"
+              student.photo?.url ? (
+
+
+                <img
+
+                  src={student.photo.url}
+
+                  alt="Student"
+
+                  className="
+                    w-40
+                    h-40
+                    rounded-full
+                    object-cover
+                    border-4
+                    border-green-500
+                    shadow-xl
+                  "
+
+                />
+
+
+              ) : (
+
+
+                <div
+
+                  className="
+                    w-40
+                    h-40
+                    rounded-full
+                    bg-green-600
+                    flex
+                    items-center
+                    justify-center
+                    text-5xl
+                    font-bold
+                    shadow-xl
+                  "
+
+                >
+
+                  {student.firstName?.[0]}
+
+                  {student.lastName?.[0]}
+
+
+                </div>
+
+
+              )
+
             }
 
 
-          </span>
+          </div>
+
+
+
+
+
+
+
+          {/* STUDENT BASIC INFO */}
+
+
+
+          <div
+            className="
+              flex-1
+              text-center
+              lg:text-left
+            "
+          >
+
+
+
+            <h2
+              className="
+                text-3xl
+                font-bold
+              "
+            >
+
+              {student.firstName}
+
+              {" "}
+
+              {student.lastName}
+
+
+            </h2>
+
+
+
+
+            <p
+              className="
+                text-gray-400
+                mt-2
+                text-lg
+              "
+            >
+
+              {student.studentId}
+
+            </p>
+
+
+
+
+
+            <div
+              className="
+                flex
+                flex-wrap
+                justify-center
+                lg:justify-start
+                gap-3
+                mt-5
+              "
+            >
+
+
+              <Badge>
+
+                <FaSchool/>
+
+                {student.currentClass}
+
+              </Badge>
+
+
+
+              <Badge>
+
+                <FaCalendarAlt/>
+
+                {student.session}
+
+              </Badge>
+
+
+
+              <Badge>
+
+                <FaUserGraduate/>
+
+                {student.gender}
+
+              </Badge>
+
+
+
+
+              <span
+
+                className={`
+
+                  inline-flex
+
+                  items-center
+
+                  gap-2
+
+                  px-4
+
+                  py-2
+
+                  rounded-full
+
+                  text-sm
+
+                  font-medium
+
+
+                  ${
+                    student.isActive
+
+                    ?
+
+                    "bg-green-500/20 text-green-400"
+
+                    :
+
+                    "bg-red-500/20 text-red-400"
+
+                  }
+
+                `}
+
+              >
+
+                {student.isActive
+                  ?
+                  "Active Student"
+                  :
+                  "Archived Student"
+                }
+
+
+              </span>
+
+
+
+            </div>
+
+
+
+          </div>
+
+
 
 
         </div>
 
 
 
+      </div>
 
 
 
 
 
-        {/* Details */}
 
 
-        <div className="
+
+      {/* ============================
+            INFORMATION SECTIONS
+      ============================= */}
+
+
+
+      <div
+        className="
           grid
           grid-cols-1
-          md:grid-cols-2
+          lg:grid-cols-3
           gap-6
-        ">
+        "
+      >
 
 
-          <Info
 
-            label="Student ID"
 
-            value={student.studentId}
 
-          />
+        {/* PERSONAL */}
 
+
+
+        <InfoSection
+
+          title="Personal Information"
+
+        >
 
 
           <Info
@@ -760,7 +953,6 @@ function StudentDetails() {
           />
 
 
-
           <Info
 
             label="Last Name"
@@ -768,7 +960,6 @@ function StudentDetails() {
             value={student.lastName}
 
           />
-
 
 
           <Info
@@ -782,7 +973,6 @@ function StudentDetails() {
           />
 
 
-
           <Info
 
             label="Gender"
@@ -790,7 +980,6 @@ function StudentDetails() {
             value={student.gender}
 
           />
-
 
 
           <Info
@@ -810,6 +999,34 @@ function StudentDetails() {
           />
 
 
+        </InfoSection>
+
+
+
+
+
+
+
+
+        {/* ACADEMIC */}
+
+
+
+        <InfoSection
+
+          title="Academic Information"
+
+        >
+
+
+          <Info
+
+            label="Student ID"
+
+            value={student.studentId}
+
+          />
+
 
           <Info
 
@@ -818,7 +1035,6 @@ function StudentDetails() {
             value={student.currentClass}
 
           />
-
 
 
           <Info
@@ -831,40 +1047,61 @@ function StudentDetails() {
 
 
 
+        </InfoSection>
+
+
+
+
+
+
+
+
+        {/* PARENT */}
+
+
+
+        <InfoSection
+
+          title="Parent Information"
+
+        >
+
+
           <Info
 
             label="Parent Name"
 
-            value={student.parentName}
+            value={
+              student.parentName
+            }
 
           />
-
 
 
           <Info
 
             label="Parent Phone"
 
-            value={student.parentPhone}
+            value={
+              student.parentPhone
+            }
 
           />
 
 
+        </InfoSection>
 
-        </div>
 
 
       </div>
+      
 
 
 
 
-
-
-
-
-
-      {/* QR Section */}
+      {/* ============================
+            QR VERIFICATION SECTION
+      ============================= */}
 
 
 
@@ -890,35 +1127,97 @@ function StudentDetails() {
           >
 
 
-            <h2 className="
-              text-2xl
-              font-bold
-              mb-6
-            ">
 
+            <h2
+              className="
+                text-2xl
+                font-bold
+                mb-3
+              "
+            >
 
               Student Verification QR
-
 
             </h2>
 
 
 
-            <img
 
-              src={qrCode}
-
-              alt="QR Code"
-
+            <p
               className="
-                w-60
-                mx-auto
-                bg-white
-                p-4
-                rounded-xl
+                text-gray-400
+                mb-6
               "
+            >
 
-            />
+              Scan this QR code to verify student information.
+
+            </p>
+
+
+
+
+
+            <div
+              className="
+                inline-block
+                bg-white
+                p-5
+                rounded-2xl
+                shadow-lg
+              "
+            >
+
+              <img
+
+                src={qrCode}
+
+                alt="Student QR Code"
+
+                className="
+                  w-60
+                  h-60
+                "
+
+              />
+
+            </div>
+
+
+
+
+
+            <div
+              className="
+                mt-6
+                text-gray-300
+              "
+            >
+
+              <p>
+
+                Verification ID:
+
+              </p>
+
+
+              <p
+                className="
+                  font-bold
+                  text-green-400
+                  mt-1
+                "
+              >
+
+                {student.studentId}
+
+              </p>
+
+
+            </div>
+
+
+
 
 
 
@@ -931,7 +1230,9 @@ function StudentDetails() {
               }
 
               className="
-                inline-block
+                inline-flex
+                items-center
+                gap-2
                 mt-6
                 bg-green-600
                 hover:bg-green-700
@@ -939,14 +1240,19 @@ function StudentDetails() {
                 py-3
                 rounded-xl
                 font-semibold
+                transition
               "
 
             >
+
+              <FaDownload/>
 
               Download QR
 
 
             </a>
+
+
 
 
           </div>
@@ -958,10 +1264,10 @@ function StudentDetails() {
 
 
 
+
     </div>
 
   );
-
 
 }
 
@@ -970,6 +1276,11 @@ function StudentDetails() {
 
 
 
+
+
+/*
+    ACTION BUTTON COMPONENT
+*/
 
 
 function ActionButton({
@@ -1019,14 +1330,26 @@ function ActionButton({
 
       className={`
         ${colors[color]}
+
         flex
+
         items-center
+
         gap-2
+
         px-4
+
         py-2
+
         rounded-xl
+
+        text-sm
+
         transition
+
         shadow-lg
+
+        active:scale-95
       `}
 
     >
@@ -1038,8 +1361,8 @@ function ActionButton({
 
     </button>
 
-
   );
+
 
 }
 
@@ -1047,6 +1370,136 @@ function ActionButton({
 
 
 
+
+
+
+/*
+    SMALL BADGE COMPONENT
+*/
+
+
+function Badge({
+  children
+}) {
+
+
+  return (
+
+    <span
+
+      className="
+        inline-flex
+        items-center
+        gap-2
+        px-4
+        py-2
+        rounded-full
+        bg-white/5
+        border
+        border-white/10
+        text-sm
+        text-gray-300
+      "
+
+    >
+
+      {children}
+
+
+    </span>
+
+
+  );
+
+
+}
+
+
+
+
+
+
+
+
+/*
+    INFORMATION SECTION
+*/
+
+
+function InfoSection({
+  title,
+  children
+}) {
+
+
+  return (
+
+    <div
+
+      className="
+        bg-slate-900
+        border
+        border-white/10
+        rounded-2xl
+        p-5
+        shadow-xl
+      "
+
+    >
+
+
+
+      <h3
+
+        className="
+          text-lg
+          font-bold
+          mb-5
+        "
+
+      >
+
+        {title}
+
+
+      </h3>
+
+
+
+
+      <div
+
+        className="
+          space-y-3
+        "
+
+      >
+
+        {children}
+
+
+      </div>
+
+
+
+    </div>
+
+
+  );
+
+
+}
+
+
+
+
+
+
+
+
+/*
+    INFORMATION ITEM
+*/
 
 
 function Info({
@@ -1064,34 +1517,51 @@ function Info({
         border
         border-white/10
         rounded-xl
-        p-4
+        p-3
       "
 
     >
 
 
-      <p className="
-        text-gray-400
-        text-sm
-      ">
+
+      <p
+
+        className="
+          text-gray-400
+          text-xs
+        "
+
+      >
 
         {label}
 
+
+      </p>
+
+
+
+
+      <p
+
+        className="
+          font-semibold
+          mt-1
+          text-sm
+          truncate
+        "
+
+      >
+
+        {value || "N/A"}
+
+
       </p>
 
 
-
-      <p className="
-        font-semibold
-        mt-1
-      ">
-
-        {value}
-
-      </p>
 
 
     </div>
+
 
   );
 
@@ -1104,7 +1574,5 @@ function Info({
 
 
 export default StudentDetails;
-        
-          
-          
-          
+
+

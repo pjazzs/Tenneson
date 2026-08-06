@@ -875,3 +875,102 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
     photo: student.photo,
   });
 });
+
+
+exports.monthlyRegistrationAnalytics = asyncHandler(async (req, res) => {
+
+  const currentYear = new Date().getFullYear();
+
+
+  const analytics = await Student.aggregate([
+
+    {
+      $match: {
+        createdAt: {
+          $gte: new Date(`${currentYear}-01-01`),
+          $lte: new Date(`${currentYear}-12-31`),
+        },
+      },
+    },
+
+
+    {
+      $group: {
+
+        _id: {
+          month: {
+            $month: "$createdAt",
+          },
+        },
+
+        count: {
+          $sum: 1,
+        },
+
+      },
+    },
+
+
+    {
+      $sort: {
+        "_id.month": 1,
+      },
+    },
+
+  ]);
+
+
+
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+
+
+  const formattedData = months.map(
+    (month, index) => {
+
+      const found = analytics.find(
+        (item) =>
+          item._id.month === index + 1
+      );
+
+
+      return {
+
+        month,
+
+        count: found
+          ? found.count
+          : 0,
+
+      };
+
+    }
+  );
+
+
+
+  res.status(200).json({
+
+    success: true,
+
+    year: currentYear,
+
+    data: formattedData,
+
+  });
+
+
+});

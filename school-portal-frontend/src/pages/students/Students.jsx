@@ -9,135 +9,276 @@ import {
 
 import {
   FaPlus,
-  FaEye,
   FaSearch,
+  FaEye,
   FaChevronLeft,
   FaChevronRight,
+  FaTimes,
 } from "react-icons/fa";
 
 import api from "../../api/axios";
 
 
-
 function Students() {
-
 
   const navigate = useNavigate();
 
 
-
-  const [students,setStudents] = useState([]);
-
-  const [pagination,setPagination] = useState(null);
-
-  const [loading,setLoading] = useState(true);
-
-  const [page,setPage] = useState(1);
+  /* -----------------------------
+      STATE
+  ------------------------------ */
 
 
+  const [students, setStudents] = useState([]);
 
-  const [search,setSearch] = useState("");
+  const [pagination, setPagination] = useState(null);
 
-  const [searchInput,setSearchInput] = useState("");
-
-
-
-  const [classFilter,setClassFilter] = useState("");
-
-  const [genderFilter,setGenderFilter] = useState("");
-
-  const [sessionFilter,setSessionFilter] = useState("");
-
-  const [statusFilter,setStatusFilter] = useState("");
+  const [loading, setLoading] = useState(true);
 
 
+  const [page, setPage] = useState(1);
 
 
+  const [searchInput, setSearchInput] = useState("");
+
+  const [search, setSearch] = useState("");
 
 
-  // Debounce search
+  const [classFilter, setClassFilter] = useState("");
 
-  useEffect(()=>{
+  const [genderFilter, setGenderFilter] = useState("");
 
+  const [sessionFilter, setSessionFilter] = useState("");
 
-    const timer = setTimeout(()=>{
-
-
-      setSearch(searchInput);
-
-      setPage(1);
-
-
-    },500);
-
-
-
-    return ()=>clearTimeout(timer);
-
-
-  },[searchInput]);
+  const [statusFilter, setStatusFilter] = useState("");
 
 
 
 
+  /* -----------------------------
+      HELPERS
+  ------------------------------ */
+
+
+  const clearAllFilters = () => {
+
+    setSearch("");
+
+    setSearchInput("");
+
+    setClassFilter("");
+
+    setGenderFilter("");
+
+    setSessionFilter("");
+
+    setStatusFilter("");
+
+    setPage(1);
+
+  };
 
 
 
-  // Fetch students
+
+  const removeFilter = (filter) => {
+
+    switch (filter) {
 
 
-  useEffect(()=>{
+      case "search":
+
+        setSearch("");
+
+        setSearchInput("");
+
+        break;
 
 
-    const fetchStudents = async()=>{
+
+      case "class":
+
+        setClassFilter("");
+
+        break;
 
 
-      try{
+
+      case "gender":
+
+        setGenderFilter("");
+
+        break;
+
+
+
+      case "session":
+
+        setSessionFilter("");
+
+        break;
+
+
+
+      case "status":
+
+        setStatusFilter("");
+
+        break;
+
+
+
+      default:
+
+        break;
+
+    }
+
+
+    setPage(1);
+
+  };
+
+
+
+
+
+  const hasActiveFilters =
+    search ||
+    classFilter ||
+    genderFilter ||
+    sessionFilter ||
+    statusFilter;
+
+
+
+
+
+  /* -----------------------------
+      SEARCH DEBOUNCE
+  ------------------------------ */
+
+
+  useEffect(() => {
+
+
+    const timer = setTimeout(() => {
+
+
+      setSearch(searchInput.trim());
+
+
+    }, 500);
+
+
+
+    return () => clearTimeout(timer);
+
+
+
+  }, [searchInput]);
+
+
+
+
+
+
+  /* -----------------------------
+      FETCH STUDENTS
+  ------------------------------ */
+
+
+  useEffect(() => {
+
+
+    const fetchStudents = async () => {
+
+
+      try {
 
 
         setLoading(true);
 
 
 
+        const params = {
+
+          page,
+
+          limit: 10,
+
+        };
+
+
+
+
+        if (search)
+          params.search = search;
+
+
+        if (classFilter)
+          params.class = classFilter;
+
+
+        if (genderFilter)
+          params.gender = genderFilter;
+
+
+        if (sessionFilter)
+          params.session = sessionFilter;
+
+
+        if (statusFilter)
+          params.status = statusFilter;
+
+
+
+
         const response = await api.get(
+
           "/students",
+
           {
-            params:{
-              page,
-              limit:10,
-              search,
-              class:classFilter,
-              gender:genderFilter,
-              session:sessionFilter,
-              status:statusFilter
-            }
+
+            params,
+
           }
+
         );
+
 
 
 
         setStudents(
-          response.data.students
+
+          response.data.students || []
+
         );
+
 
 
 
         setPagination(
+
           response.data.pagination
+
         );
 
 
 
-      }catch(error){
+
+      } catch (error) {
 
 
         console.log(
-          "Students error:",
+
           error.response?.data || error.message
+
         );
 
 
-      }finally{
+
+      } finally {
 
 
         setLoading(false);
@@ -153,13 +294,21 @@ function Students() {
     fetchStudents();
 
 
-  },[
+
+  }, [
+
     page,
+
     search,
+
     classFilter,
+
     genderFilter,
+
     sessionFilter,
-    statusFilter
+
+    statusFilter,
+
   ]);
 
 
@@ -167,574 +316,1102 @@ function Students() {
 
 
 
+  return (
 
 
-return (
+    <div className="text-white">
 
-<div className="text-white">
 
 
+      {/* HEADER */}
 
-{/* HEADER */}
 
 
-<div
-className="
-flex
-justify-between
-items-center
-flex-wrap
-gap-4
-mb-8
-"
->
+      <div
 
+        className="
+          flex
+          justify-between
+          items-center
+          flex-wrap
+          gap-5
+          mb-8
+        "
 
-<div>
+      >
 
-<h1
-className="
-text-3xl
-font-bold
-text-white
-"
->
-Students
-</h1>
 
 
-<p
-className="
-text-gray-400
-"
->
-Manage registered students
-</p>
+        <div>
 
 
-</div>
+          <h1
 
+            className="
+              text-3xl
+              font-bold
+              tracking-tight
+              text-gray-900
+            "
 
+          >
 
+            Students
 
-<button
 
-onClick={()=>navigate("/students/add")}
+          </h1>
 
-className="
-flex
-items-center
-gap-2
-bg-green-600
-hover:bg-green-700
-px-5
-py-3
-rounded-xl
-shadow-lg
-transition
-"
 
->
 
-<FaPlus/>
 
-Add Student
+          <p
 
-</button>
+            className="
+              text-gray-600
+              mt-2
+            "
 
+          >
 
-</div>
+            Manage registered students and monitor
+            student records.
 
 
+          </p>
 
 
 
+        </div>
 
 
-{/* FILTER AREA */}
 
 
-<div
-className="
-grid
-grid-cols-1
-md:grid-cols-5
-gap-3
-mb-6
-"
->
 
+        <button
 
 
+          onClick={() =>
+            navigate("/students/add")
+          }
 
 
-{/* Search */}
+          className="
+            flex
+            items-center
+            gap-2
+            bg-green-600
+            hover:bg-green-700
+            active:scale-95
+            transition-all
+            duration-200
+            px-5
+            py-3
+            rounded-xl
+            shadow-lg
+          "
 
-<div
-className="
-relative
-md:col-span-2
-"
->
 
+        >
 
-<FaSearch
 
-className="
-absolute
-left-4
-top-1/2
--transform
--y-1/2
-text-gray-400
-"
-/>
 
+          <FaPlus />
 
-<input
 
-type="text"
+          Add Student
 
-placeholder="Search name or student ID..."
 
-value={searchInput}
 
-onChange={(e)=>
-setSearchInput(e.target.value)
-}
+        </button>
 
 
-className="
-w-full
-bg-slate-800
-border
-border-white/10
-rounded-xl
-py-3
-pl-12
-pr-4
-text-white
-placeholder-gray-400
-outline-none
-"
 
-/>
 
+      </div>
 
-</div>
 
 
 
 
 
+      {/* ============================
+            FILTERS
+      ============================= */}
 
-{/* Class */}
 
-<select
+      <div
 
-value={classFilter}
+        className="
+          bg-slate-900
+          border
+          border-white/10
+          rounded-2xl
+          p-5
+          shadow-xl
+          mb-6
+        "
 
-onChange={(e)=>{
+      >
 
-setClassFilter(e.target.value);
 
-setPage(1);
 
-}}
+        <div
 
-className="
-bg-slate-800
-border
-border-white/10
-rounded-xl
-px-4
-text-white
-"
+          className="
+            grid
+            grid-cols-1
+            sm:grid-cols-2
+            lg:grid-cols-6
+            gap-4
+            items-center
+          "
 
->
+        >
 
 
-<option value="">
-All Classes
-</option>
 
+          {/* SEARCH */}
 
-<option value="JSS1">
-JSS1
-</option>
 
 
-<option value="JSS2">
-JSS2
-</option>
+          <div
 
+            className="
+              relative
+              lg:col-span-2
+            "
 
-<option value="JSS3">
-JSS3
-</option>
+          >
 
 
-<option value="SS1">
-SS1
-</option>
 
+            <FaSearch
 
-<option value="SS2">
-SS2
-</option>
+              className="
+                absolute
+                left-4
+                top-1/2
+                -translate-y-1/2
+                text-gray-400
+              "
 
+            />
 
-<option value="SS3">
-SS3
-</option>
 
 
-</select>
+            <input
 
+              type="text"
 
+              placeholder="Search student..."
 
+              value={searchInput}
 
 
+              onChange={(e)=>{
 
+                setSearchInput(e.target.value);
 
-{/* Gender */}
+                setPage(1);
 
+              }}
 
-<select
 
-value={genderFilter}
+              className="
+                w-full
+                h-12
+                bg-slate-800
+                border
+                border-white/10
+                rounded-xl
+                pl-12
+                pr-4
+                text-white
+                placeholder-gray-400
+                focus:outline-none
+                focus:border-green-500
+              "
 
-onChange={(e)=>{
 
-setGenderFilter(e.target.value);
+            />
 
-setPage(1);
 
-}}
 
-className="
-bg-slate-800
-border
-border-white/10
-rounded-xl
-px-4
-text-white
-"
+          </div>
+                    {/* CLASS */}
 
->
 
+          <select
 
-<option value="">
-All Gender
-</option>
+            value={classFilter}
 
+            onChange={(e)=>{
 
-<option value="Male">
-Male
-</option>
+              setClassFilter(e.target.value);
 
+              setPage(1);
 
-<option value="Female">
-Female
-</option>
+            }}
 
+            className="
+              h-12
+              w-full
+              min-w-0
+              bg-slate-800
+              border
+              border-white/10
+              rounded-xl
+              px-3
+              text-sm
+              text-white
+              truncate
+              focus:outline-none
+              focus:border-green-500
+            "
 
-</select>
+          >
 
+            <option value="">
+              All Classes
+            </option>
 
+            <option value="JSS1">
+              JSS1
+            </option>
 
+            <option value="JSS2">
+              JSS2
+            </option>
 
+            <option value="JSS3">
+              JSS3
+            </option>
 
+            <option value="SS1">
+              SS1
+            </option>
 
-{/* Status */}
+            <option value="SS2">
+              SS2
+            </option>
 
+            <option value="SS3">
+              SS3
+            </option>
 
-<select
 
-value={statusFilter}
+          </select>
 
-onChange={(e)=>{
 
-setStatusFilter(e.target.value);
 
-setPage(1);
 
-}}
 
-className="
-bg-slate-800
-border
-border-white/10
-rounded-xl
-px-4
-text-white
-"
 
->
+          {/* GENDER */}
 
 
-<option value="">
-All Status
-</option>
 
+          <select
 
-<option value="active">
-Active
-</option>
+            value={genderFilter}
 
+            onChange={(e)=>{
 
-<option value="archived">
-Archived
-</option>
+              setGenderFilter(e.target.value);
 
+              setPage(1);
 
-</select>
+            }}
 
 
+            className="
+              h-12
+              w-full
+              min-w-0
+              bg-slate-800
+              border
+              border-white/10
+              rounded-xl
+              px-3
+              text-sm
+              text-white
+              truncate
+              focus:outline-none
+              focus:border-green-500
+            "
 
-</div>
 
+          >
 
-{/* TABLE */}
 
+            <option value="">
+              All Gender
+            </option>
 
-<div
-className="
-bg-slate-900
-border
-border-white/10
-rounded-2xl
-shadow-xl
-overflow-hidden
-"
->
 
+            <option value="Male">
+              Male
+            </option>
 
-<table
-className="
-w-full
-text-xs
-table-fixed
-"
->
 
+            <option value="Female">
+              Female
+            </option>
 
 
-<thead>
+          </select>
 
 
-<tr
-className="
-border-b
-border-white/10
-text-gray-400
-"
->
 
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[25%]
-"
->
-Student
-</th>
 
 
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[15%]
-"
->
-ID
-</th>
+          {/* SESSION */}
 
 
 
+          <select
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[12%]
-"
->
-Gender
-</th>
+            value={sessionFilter}
 
+            onChange={(e)=>{
 
-{/* Session */}
+              setSessionFilter(e.target.value);
 
-<select
+              setPage(1);
 
-  value={sessionFilter}
+            }}
 
-  onChange={(e)=>{
 
-    setSessionFilter(e.target.value);
+            className="
+              h-12
+              w-full
+              min-w-0
+              bg-slate-800
+              border
+              border-white/10
+              rounded-xl
+              px-3
+              text-sm
+              text-white
+              truncate
+              focus:outline-none
+              focus:border-green-500
+            "
 
-    setPage(1);
 
-  }}
+          >
 
-  className="
-    bg-slate-800
-    border
-    border-white/10
-    rounded-xl
-    px-4
-    text-white
-  "
 
->
+            <option value="">
+              All Sessions
+            </option>
 
-  <option value="">
-    All Sessions
-  </option>
 
+            <option value="2025/2026">
+              2025/2026
+            </option>
 
-  <option value="2025/2026">
-    2025/2026
-  </option>
 
+            <option value="2026/2027">
+              2026/2027
+            </option>
 
-  <option value="2026/2027">
-    2026/2027
-  </option>
 
+          </select>
 
-</select>
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[12%]
-"
->
-Class
-</th>
 
 
 
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[15%]
-"
->
-Session
-</th>
 
+          {/* STATUS */}
 
 
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[10%]
-"
->
-Status
-</th>
+          <select
 
+            value={statusFilter}
 
+            onChange={(e)=>{
 
+              setStatusFilter(e.target.value);
 
-<th
-className="
-px-2
-py-3
-text-left
-w-[11%]
-"
->
-Action
-</th>
+              setPage(1);
 
+            }}
 
-</tr>
 
+            className="
+              h-12
+              w-full
+              min-w-0
+              bg-slate-800
+              border
+              border-white/10
+              rounded-xl
+              px-3
+              text-sm
+              text-white
+              truncate
+              focus:outline-none
+              focus:border-green-500
+            "
 
-</thead>
 
+          >
 
 
+            <option value="">
+              All Status
+            </option>
 
 
+            <option value="active">
+              Active
+            </option>
 
-<tbody>
 
+            <option value="archived">
+              Archived
+            </option>
 
 
-{
+          </select>
 
-loading ? (
 
 
-<tr>
+        </div>
 
-<td
-colSpan="7"
-className="
-text-center
-py-10
-text-gray-400
-"
->
 
-Loading students...
 
-</td>
 
-</tr>
 
 
+        {/* ============================
+              ACTIVE FILTERS
+        ============================= */}
 
-)
 
-:
 
-students.length === 0 ? (
+        {hasActiveFilters && (
 
 
-<tr>
 
-<td
-colSpan="7"
-className="
-text-center
-py-10
-text-gray-400
-"
->
+          <div
 
-No students found
+            className="
+              mt-6
+              border-t
+              border-white/10
+              pt-5
+            "
 
-</td>
+          >
 
-</tr>
 
 
+            <div
 
-)
+              className="
+                flex
+                flex-wrap
+                items-center
+                gap-3
+              "
 
+            >
 
-:
+
+
+              <span
+
+                className="
+                  text-sm
+                  text-gray-400
+                  font-medium
+                "
+
+              >
+
+                Active Filters:
+
+              </span>
+
+
+
+
+
+              {search && (
+
+
+                <button
+
+                  onClick={() =>
+                    removeFilter("search")
+                  }
+
+
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-blue-500/20
+                    text-blue-300
+                    rounded-full
+                    px-3
+                    py-1.5
+                    text-sm
+                    hover:bg-blue-500/30
+                    transition
+                  "
+
+                >
+
+
+                  Search: {search}
+
+
+                  <FaTimes size={10}/>
+
+
+                </button>
+
+
+              )}
+
+
+
+
+
+
+              {classFilter && (
+
+
+                <button
+
+                  onClick={() =>
+                    removeFilter("class")
+                  }
+
+
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-green-500/20
+                    text-green-300
+                    rounded-full
+                    px-3
+                    py-1.5
+                    text-sm
+                    hover:bg-green-500/30
+                    transition
+                  "
+
+                >
+
+
+                  Class: {classFilter}
+
+
+                  <FaTimes size={10}/>
+
+
+                </button>
+
+
+              )}
+
+
+
+
+
+
+              {genderFilter && (
+
+
+                <button
+
+                  onClick={() =>
+                    removeFilter("gender")
+                  }
+
+
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-pink-500/20
+                    text-pink-300
+                    rounded-full
+                    px-3
+                    py-1.5
+                    text-sm
+                    hover:bg-pink-500/30
+                    transition
+                  "
+
+                >
+
+
+                  Gender: {genderFilter}
+
+
+                  <FaTimes size={10}/>
+
+
+                </button>
+
+
+              )}
+
+
+
+
+
+
+              {sessionFilter && (
+
+
+                <button
+
+                  onClick={() =>
+                    removeFilter("session")
+                  }
+
+
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-yellow-500/20
+                    text-yellow-300
+                    rounded-full
+                    px-3
+                    py-1.5
+                    text-sm
+                    hover:bg-yellow-500/30
+                    transition
+                  "
+
+                >
+
+
+                  Session: {sessionFilter}
+
+
+                  <FaTimes size={10}/>
+
+
+                </button>
+
+
+              )}
+
+
+
+
+
+
+              {statusFilter && (
+
+
+                <button
+
+                  onClick={() =>
+                    removeFilter("status")
+                  }
+
+
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    bg-purple-500/20
+                    text-purple-300
+                    rounded-full
+                    px-3
+                    py-1.5
+                    text-sm
+                    hover:bg-purple-500/30
+                    transition
+                  "
+
+                >
+
+
+                  Status: {statusFilter}
+
+
+                  <FaTimes size={10}/>
+
+
+                </button>
+
+
+              )}
+
+
+
+
+
+
+              <button
+
+                onClick={clearAllFilters}
+
+
+                className="
+                  ml-auto
+                  text-sm
+                  text-red-400
+                  hover:text-red-300
+                  font-medium
+                "
+
+              >
+
+                Clear All
+
+              </button>
+
+
+
+            </div>
+
+
+
+          </div>
+
+
+        )}
+
+
+
+      </div>
+
+
+
+
+
+
+      {/* ============================
+            RESULTS SUMMARY
+      ============================= */}
+
+
+
+      <div
+
+        className="
+          flex
+          justify-between
+          items-center
+          mb-4
+        "
+
+      >
+
+
+
+        <p className="text-sm text-gray-400">
+
+
+          Showing
+
+
+          <span
+
+            className="
+              text-green-400
+              font-semibold
+              mx-1
+            "
+
+          >
+
+            {students.length}
+
+          </span>
+
+
+          of
+
+
+          <span
+
+            className="
+              text-green-400
+              font-semibold
+              mx-1
+            "
+
+          >
+
+            {pagination?.totalStudents || 0}
+
+          </span>
+
+
+          students
+
+
+        </p>
+
+
+
+
+
+        {pagination && (
+
+
+          <p className="text-xs text-gray-500">
+
+            Page {pagination.currentPage} of {pagination.totalPages}
+
+          </p>
+
+
+        )}
+
+
+
+      </div>
+
+
+
+
+
+      {/* TABLE */}
+
+
+
+      <div
+
+        className="
+          bg-slate-900
+          border
+          border-white/10
+          rounded-2xl
+          shadow-xl
+          overflow-hidden
+        "
+
+      >
+
+
+
+        <div className="overflow-x-auto">
+
+
+
+          <table
+
+            className="
+              w-full
+              table-fixed
+              text-sm
+            "
+
+          >
+
+
+
+            <thead>
+
+
+              <tr
+
+                className="
+                  border-b
+                  border-white/10
+                  text-gray-400
+                "
+
+              >
+
+
+                <th className="px-3 py-4 text-left w-[30%]">
+                  Student
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[15%]">
+                  ID
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[10%]">
+                  Gender
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[12%]">
+                  Class
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[15%]">
+                  Session
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[10%]">
+                  Status
+                </th>
+
+
+                <th className="px-3 py-4 text-left w-[8%]">
+                  Action
+                </th>
+
+
+              </tr>
+
+
+            </thead>
+            <tbody>
+
+
+{loading ? (
+
+
+  <tr>
+
+    <td
+      colSpan="7"
+      className="
+        text-center
+        py-12
+        text-gray-400
+      "
+    >
+
+      <div
+        className="
+          flex
+          flex-col
+          items-center
+          gap-3
+        "
+      >
+
+        <div
+          className="
+            w-8
+            h-8
+            border-4
+            border-green-500
+            border-t-transparent
+            rounded-full
+            animate-spin
+          "
+        />
+
+        Loading students...
+
+      </div>
+
+
+    </td>
+
+
+  </tr>
+
+
+
+) : students.length === 0 ? (
+
+
+
+  <tr>
+
+    <td
+      colSpan="7"
+      className="py-14"
+    >
+
+      <div
+        className="
+          flex
+          flex-col
+          items-center
+          justify-center
+          text-center
+          gap-4
+        "
+      >
+
+        <div className="text-5xl">
+          🔍
+        </div>
+
+
+        <h3
+          className="
+            text-lg
+            font-semibold
+            text-white
+          "
+        >
+          No students found
+        </h3>
+
+
+        <p
+          className="
+            text-gray-400
+            max-w-md
+          "
+        >
+          No students match your current filters.
+          Try removing some filters or search terms.
+        </p>
+
+
+
+        {hasActiveFilters && (
+
+          <button
+
+            onClick={clearAllFilters}
+
+            className="
+              mt-2
+              bg-green-600
+              hover:bg-green-700
+              px-5
+              py-2
+              rounded-xl
+              transition
+              text-sm
+            "
+
+          >
+
+            Clear Filters
+
+          </button>
+
+        )}
+
+
+
+      </div>
+
+
+    </td>
+
+
+  </tr>
+
+
+
+) : (
+
 
 
 students.map((student)=>(
@@ -742,116 +1419,139 @@ students.map((student)=>(
 
 <tr
 
-key={student.studentId}
+  key={student.studentId}
 
-className="
-border-b
-border-white/10
-hover:bg-white/5
-transition
-"
+
+  onClick={() =>
+    navigate(
+      `/students/${student.studentId}`
+    )
+  }
+
+
+  className="
+    border-b
+    border-white/10
+    hover:bg-green-500/5
+    transition
+    cursor-pointer
+    select-none
+  "
 
 >
 
 
+
+{/* STUDENT */}
 
 
 <td
-className="
-px-2
-py-3
-"
+  className="
+    px-3
+    py-4
+  "
 >
 
-
-<div
-className="
-flex
-items-center
-gap-2
-"
->
-
-
-{
+  <div
+    className="
+      flex
+      items-center
+      gap-3
+      min-w-0
+    "
+  >
 
 
-student.photo?.url ? (
+    {student.photo?.url ? (
+
+      <img
+
+        src={student.photo.url}
+
+        alt="student"
+
+        className="
+          w-10
+          h-10
+          rounded-full
+          object-cover
+          shrink-0
+        "
+
+      />
 
 
-<img
-
-src={student.photo.url}
-
-alt="student"
-
-className="
-w-7
-h-7
-rounded-full
-object-cover
-"
-
-/>
+    ) : (
 
 
-)
+      <div
+
+        className="
+          w-10
+          h-10
+          rounded-full
+          bg-green-600
+          flex
+          items-center
+          justify-center
+          font-bold
+          text-sm
+          shrink-0
+        "
+
+      >
+
+        {student.firstName?.[0]}
+
+        {student.lastName?.[0]}
 
 
-:
+      </div>
 
 
-(
-
-
-<div
-
-className="
-w-7
-h-7
-rounded-full
-bg-green-600
-flex
-items-center
-justify-center
-text-[10px]
-font-bold
-"
-
->
-
-{student.firstName?.[0]}
-
-{student.lastName?.[0]}
-
-
-</div>
-
-
-)
-
-
-}
+    )}
 
 
 
+    <div className="min-w-0">
 
 
-<span
+      <p
+        className="
+          text-gray-200
+          font-medium
+          truncate
+        "
+      >
 
-className="
-text-gray-200
-truncate
-"
+        {student.firstName} {student.lastName}
 
->
-
-{student.firstName} {student.lastName}
-
-</span>
+      </p>
 
 
-</div>
+
+      {student.otherName && (
+
+        <p
+          className="
+            text-xs
+            text-gray-500
+            truncate
+          "
+        >
+
+          {student.otherName}
+
+        </p>
+
+      )}
+
+
+
+    </div>
+
+
+  </div>
 
 
 </td>
@@ -860,20 +1560,19 @@ truncate
 
 
 
+{/* ID */}
 
 
 <td
-
-className="
-px-2
-py-3
-text-gray-300
-truncate
-"
-
+  className="
+    px-3
+    py-4
+    text-gray-300
+    truncate
+  "
 >
 
-{student.studentId}
+  {student.studentId}
 
 </td>
 
@@ -881,18 +1580,18 @@ truncate
 
 
 
+{/* GENDER */}
+
 
 <td
-
-className="
-px-2
-py-3
-text-gray-300
-"
-
+  className="
+    px-3
+    py-4
+    text-gray-300
+  "
 >
 
-{student.gender}
+  {student.gender}
 
 </td>
 
@@ -900,18 +1599,18 @@ text-gray-300
 
 
 
+{/* CLASS */}
+
 
 <td
-
-className="
-px-2
-py-3
-text-gray-300
-"
-
+  className="
+    px-3
+    py-4
+    text-gray-300
+  "
 >
 
-{student.currentClass}
+  {student.currentClass}
 
 </td>
 
@@ -919,18 +1618,18 @@ text-gray-300
 
 
 
+{/* SESSION */}
+
 
 <td
-
-className="
-px-2
-py-3
-text-gray-300
-"
-
+  className="
+    px-3
+    py-4
+    text-gray-300
+  "
 >
 
-{student.session}
+  {student.session}
 
 </td>
 
@@ -938,56 +1637,51 @@ text-gray-300
 
 
 
+{/* STATUS */}
+
 
 <td
-
-className="
-px-2
-py-3
-"
-
+  className="
+    px-3
+    py-4
+  "
 >
 
 
 <span
 
 className={`
-px-2
-py-1
-rounded-full
-text-[10px]
-font-medium
 
-${
-student.isActive
+  inline-flex
 
-?
+  px-3
 
-"bg-green-600/20 text-green-400"
+  py-1
 
-:
+  rounded-full
 
-"bg-red-600/20 text-red-400"
+  text-xs
 
-}
+  font-medium
+
+
+  ${
+    student.isActive
+
+    ? "bg-green-500/20 text-green-400"
+
+    : "bg-red-500/20 text-red-400"
+
+  }
 
 `}
 
 >
 
 
-{
-
-student.isActive
-
-?
-
-"Active"
-
-:
-
-"Archived"
-
+{student.isActive
+  ? "Active"
+  : "Archived"
 }
 
 
@@ -1000,43 +1694,53 @@ student.isActive
 
 
 
-
+{/* ACTION */}
 
 
 <td
-
-className="
-px-2
-py-3
-"
-
+  className="
+    px-3
+    py-4
+  "
 >
 
 
 <button
 
 
-onClick={()=>navigate(
-`/students/${student.studentId}`
-)}
+  onClick={(e)=>{
 
 
-className="
-flex
-items-center
-gap-1
-bg-blue-600
-hover:bg-blue-700
-px-2
-py-1
-rounded-lg
-text-[11px]
-"
+    e.stopPropagation();
+
+
+    navigate(
+      `/students/${student.studentId}`
+    );
+
+
+  }}
+
+
+
+  className="
+    flex
+    items-center
+    gap-2
+    bg-blue-600
+    hover:bg-blue-700
+    px-3
+    py-2
+    rounded-lg
+    text-xs
+    transition
+  "
+
 
 >
 
 
-<FaEye size={10}/>
+<FaEye size={12}/>
 
 
 View
@@ -1045,9 +1749,8 @@ View
 </button>
 
 
+
 </td>
-
-
 
 
 
@@ -1059,12 +1762,10 @@ View
 ))
 
 
-}
-
+)}
 
 
 </tbody>
-
 
 
 </table>
@@ -1072,20 +1773,30 @@ View
 
 </div>
 
+
+</div>
+
+
+
+
+
+
 {/* PAGINATION */}
 
 
-{
-pagination && (
+
+{pagination && (
 
 
 <div
+
 className="
-flex
-justify-between
-items-center
-mt-6
+  flex
+  justify-between
+  items-center
+  mt-6
 "
+
 >
 
 
@@ -1095,27 +1806,30 @@ mt-6
 disabled={page === 1}
 
 
-onClick={()=>
-setPage(page - 1)
+onClick={() =>
+  setPage(page - 1)
 }
 
 
 className="
-flex
-items-center
-gap-2
-bg-slate-800
-hover:bg-slate-700
-px-3
-py-2
-rounded-lg
-text-sm
-disabled:opacity-40
+  flex
+  items-center
+  gap-2
+  bg-slate-800
+  hover:bg-slate-700
+  px-4
+  py-2
+  rounded-lg
+  text-sm
+  disabled:opacity-40
 "
+
 
 >
 
+
 <FaChevronLeft/>
+
 
 Previous
 
@@ -1127,17 +1841,19 @@ Previous
 
 
 <p
+
 className="
-text-gray-400
-text-sm
+  text-gray-400
+  text-sm
 "
+
 >
+
 
 Page {pagination.currentPage} of {pagination.totalPages}
 
+
 </p>
-
-
 
 
 
@@ -1147,27 +1863,28 @@ Page {pagination.currentPage} of {pagination.totalPages}
 
 
 disabled={
-page === pagination.totalPages
+  page === pagination.totalPages
 }
 
 
-onClick={()=>
-setPage(page + 1)
+onClick={() =>
+  setPage(page + 1)
 }
 
 
 className="
-flex
-items-center
-gap-2
-bg-green-600
-hover:bg-green-700
-px-3
-py-2
-rounded-lg
-text-sm
-disabled:opacity-40
+  flex
+  items-center
+  gap-2
+  bg-green-600
+  hover:bg-green-700
+  px-4
+  py-2
+  rounded-lg
+  text-sm
+  disabled:opacity-40
 "
+
 
 >
 
@@ -1185,10 +1902,7 @@ Next
 </div>
 
 
-)
-
-
-}
+)}
 
 
 
@@ -1199,7 +1913,6 @@ Next
 
 
 }
-
 
 
 export default Students;

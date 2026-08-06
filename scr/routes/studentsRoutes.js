@@ -16,6 +16,7 @@ const {
   verifyStudentQrcode,
   generateStudentQRCode,
   uploadStudentPhoto,
+  monthlyRegistrationAnalytics,
 } = require("../controllers/studentcontroller");
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
@@ -33,6 +34,11 @@ router.post(
   bulkImportStudents,
 );
 router.get("/students/dashboard", protect, dashboard);
+router.get(
+  "/students/analytics/monthly",
+  protect,
+  monthlyRegistrationAnalytics
+);
 
 /**
  * @swagger
