@@ -188,7 +188,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
 
 
     description:
-      `${req.user.fullName} created student ${student.firstName} ${student.lastName}`,
+      `${req.admin.fullName} created student ${student.firstName} ${student.lastName}`,
 
 
     req,
