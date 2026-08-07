@@ -8,6 +8,7 @@ const ActivityLog = require("../models/activityLog");
 const generateQRCode = require("../utils/generateQRCode");
 const generateStudentSlip = require("../utils/generateStudentSlip");
 const cloudinary = require("../config/cloudinary");
+const parseExcelDate = require("../utils/parseExcelDate");
 const createAuditLog = require("../utils/createAuditLog");
 
 exports.createStudent = asyncHandler(async (req, res) => {
@@ -591,21 +592,46 @@ exports.dashboard = asyncHandler(async (req, res) => {
 });
 
 exports.bulkImportStudents = asyncHandler(async (req, res) => {
+
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: "Please upload an Excel file.",
+    });
+  }
+
+
+
   const workbook = XLSX.readFile(req.file.path);
+
 
   const sheetName = workbook.SheetNames[0];
 
+
   const worksheet = workbook.Sheets[sheetName];
 
-  const students = XLSX.utils.sheet_to_json(worksheet);
+
+  const students = XLSX.utils.sheet_to_json(
+    worksheet
+  );
+
+
 
   // Delete uploaded file after reading it
   fs.unlinkSync(req.file.path);
 
+
+
   const importedStudents = [];
+
   const skippedStudents = [];
 
+
+
+
   for (const student of students) {
+
+
     const {
       firstName,
       lastName,
@@ -618,25 +644,12 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       parentPhone,
     } = student;
 
-    const parsedDateOfBirth = new Date(dateOfBirth);
 
 
-if (isNaN(parsedDateOfBirth)) {
 
-  skippedStudents.push({
-
-    student,
-
-    reason: "Invalid date of birth format."
-
-  });
-
-
-  continue;
-
-}
 
     // Required field validation
+
     if (
       !firstName ||
       !lastName ||
@@ -646,104 +659,315 @@ if (isNaN(parsedDateOfBirth)) {
       !session
     ) {
 
-  skippedStudents.push({
 
-    student,
+      skippedStudents.push({
 
-    reason: "Missing required fields."
+        student,
 
-  });
+        reason: "Missing required fields.",
+
+      });
 
 
-  continue;
+      continue;
 
-}
+    }
+
+
+
+
+
+    // Parse date from Excel
+
+    const parsedDateOfBirth = parseExcelDate(
+      dateOfBirth
+    );
+
+
+
+
+    if (!parsedDateOfBirth) {
+
+
+      skippedStudents.push({
+
+        student,
+
+        reason: "Invalid date of birth format.",
+
+      });
+
+
+      continue;
+
+    }
+
+
+
+
+
 
     // Gender validation
-    if (!["Male", "Female"].includes(gender)) {
+
+    if (
+      !["Male", "Female"].includes(gender)
+    ) {
+
+
       skippedStudents.push({
+
         student: {
+
           firstName,
+
           lastName,
+
           gender,
+
         },
-        reason: "Gender must be Male or Female.",
+
+        reason:
+          "Gender must be Male or Female.",
+
       });
 
+
       continue;
+
     }
+
+
+
+
+
+
+
 
     // Duplicate check
-    const existingStudent = await Student.findOne({
-      firstName: {
-        $regex: new RegExp(`^${firstName.trim()}$`, "i"),
-      },
-      lastName: {
-        $regex: new RegExp(`^${lastName.trim()}$`, "i"),
-      },
-      dateOfBirth: new Date(dateOfBirth),
-      isActive: true,
-    });
 
-    if (existingStudent) {
-      skippedStudents.push({
-        student: {
-          firstName,
-          lastName,
-          dateOfBirth,
+    const existingStudent =
+      await Student.findOne({
+
+        firstName: {
+
+          $regex:
+            new RegExp(
+              `^${firstName.trim()}$`,
+              "i"
+            ),
+
         },
-        existingStudentId: existingStudent.studentId,
-        reason: "Student already exists.",
+
+
+        lastName: {
+
+          $regex:
+            new RegExp(
+              `^${lastName.trim()}$`,
+              "i"
+            ),
+
+        },
+
+
+        dateOfBirth: parsedDateOfBirth,
+
+
+        isActive: true,
+
       });
 
+
+
+
+
+    if (existingStudent) {
+
+
+      skippedStudents.push({
+
+        student: {
+
+          firstName,
+
+          lastName,
+
+          dateOfBirth,
+
+        },
+
+
+        existingStudentId:
+          existingStudent.studentId,
+
+
+        reason:
+          "Student already exists.",
+
+      });
+
+
       continue;
+
     }
 
+
+
+
+
+
+
+
     // Generate Student ID
-    const studentId = await generateStudentId();
 
-    // Save student
-    const newStudent = await Student.create({
-      studentId,
-      firstName,
-      lastName,
-      otherName,
-      gender,
-      dateOfBirth,
-      currentClass,
-      session,
-      parentName,
-      parentPhone,
-      createdBy: req.admin._id,
-      updatedBy: req.admin._id,
-    });
+    const studentId =
+      await generateStudentId();
 
-    // Store only useful information in the response
+
+
+
+
+
+    // Create student
+
+    const newStudent =
+      await Student.create({
+
+        studentId,
+
+
+        firstName,
+
+
+        lastName,
+
+
+        otherName,
+
+
+        gender,
+
+
+        dateOfBirth:
+          parsedDateOfBirth,
+
+
+        currentClass,
+
+
+        session,
+
+
+        parentName,
+
+
+        parentPhone,
+
+
+        createdBy:
+          req.admin._id,
+
+
+        updatedBy:
+          req.admin._id,
+
+      });
+
+
+
+
+
+
+
+    // Store imported student information
+
     importedStudents.push({
-      studentId: newStudent.studentId,
-      firstName: newStudent.firstName,
-      lastName: newStudent.lastName,
-      currentClass: newStudent.currentClass,
-      session: newStudent.session,
+
+      studentId:
+        newStudent.studentId,
+
+
+      firstName:
+        newStudent.firstName,
+
+
+      lastName:
+        newStudent.lastName,
+
+
+      currentClass:
+        newStudent.currentClass,
+
+
+      session:
+        newStudent.session,
+
     });
+
+
+
   }
+
+
+
+
+
   await logActivity({
-    adminId: req.admin._id,
-    action: "Bulk Import",
-    details: `${importedStudents.length} students imported`,
+
+    adminId:
+      req.admin._id,
+
+
+    action:
+      "Bulk Import",
+
+
+    details:
+      `${importedStudents.length} students imported`,
+
   });
+
+
+
+
+
+
 
   res.status(201).json({
+
     success: true,
-    message: "Bulk import completed successfully.",
+
+
+    message:
+      "Bulk import completed successfully.",
+
+
+
     summary: {
-      totalRows: students.length,
-      imported: importedStudents.length,
-      skipped: skippedStudents.length,
+
+      totalRows:
+        students.length,
+
+
+      imported:
+        importedStudents.length,
+
+
+      skipped:
+        skippedStudents.length,
+
     },
+
+
     importedStudents,
+
+
     skippedStudents,
+
   });
+
+
+
 });
 
 exports.exportStudents = asyncHandler(async (req, res) => {
