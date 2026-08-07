@@ -12,6 +12,7 @@ const parseExcelDate = require("../utils/parseExcelDate");
 const createAuditLog = require("../utils/createAuditLog");
 
 exports.createStudent = asyncHandler(async (req, res) => {
+
   const {
     firstName,
     lastName,
@@ -24,68 +25,224 @@ exports.createStudent = asyncHandler(async (req, res) => {
     parentPhone,
   } = req.body;
 
-  const existingStudent = await Student.findOne({
-    firstName: {
-      $regex: new RegExp(`^${firstName.trim()}$`, "i"),
-    },
-    lastName: {
-      $regex: new RegExp(`^${lastName.trim()}$`, "i"),
-    },
-    dateOfBirth: new Date(dateOfBirth),
-    isActive: true,
-  });
+
+
+  // Parse date of birth
+
+  const parsedDateOfBirth = parseExcelDate(
+    dateOfBirth
+  );
+
+
+
+  if (!parsedDateOfBirth) {
+
+    return res.status(400).json({
+
+      success: false,
+
+      message:
+        "Invalid date of birth format.",
+
+    });
+
+  }
+
+
+
+
+
+  // Check duplicate student
+
+  const existingStudent =
+    await Student.findOne({
+
+      firstName: {
+
+        $regex:
+          new RegExp(
+            `^${firstName.trim()}$`,
+            "i"
+          ),
+
+      },
+
+
+      lastName: {
+
+        $regex:
+          new RegExp(
+            `^${lastName.trim()}$`,
+            "i"
+          ),
+
+      },
+
+
+      dateOfBirth:
+        parsedDateOfBirth,
+
+
+      isActive: true,
+
+    });
+
+
+
+
 
   if (existingStudent) {
+
     res.status(409);
-    throw new Error("A student with these details already exists.");
+
+    throw new Error(
+      "A student with these details already exists."
+    );
+
   }
+
+
+
+
+
   // Generate Student ID
-  const studentId = await generateStudentId();
+
+  const studentId =
+    await generateStudentId();
+
+
+
+
+
 
   // Create student
-  const student = await Student.create({
-    studentId,
-    firstName,
-    lastName,
-    otherName,
-    gender,
-    dateOfBirth: parsedDateOfBirth,
-    currentClass,
-    session,
-    admissionDate: new Date(),
-    parentName,
-    parentPhone,
-    createdBy: req.admin._id,
-    updatedBy: req.admin._id,
-  });
+
+  const student =
+    await Student.create({
+
+      studentId,
+
+
+      firstName,
+
+
+      lastName,
+
+
+      otherName,
+
+
+      gender,
+
+
+      dateOfBirth:
+        parsedDateOfBirth,
+
+
+      currentClass,
+
+
+      session,
+
+
+      admissionDate:
+        new Date(),
+
+
+      parentName,
+
+
+      parentPhone,
+
+
+      createdBy:
+        req.admin._id,
+
+
+      updatedBy:
+        req.admin._id,
+
+    });
+
+
+
+
+
+
+
+
+  // Audit log
 
   await createAuditLog({
 
-adminId: req.admin._id,
+    adminId:
+      req.admin._id,
 
-action:"CREATE",
 
-module:"STUDENT",
+    action:
+      "CREATE",
 
-description:
-`${req.user.fullName} created student ${student.firstName} ${student.lastName}`,
 
-req,
+    module:
+      "STUDENT",
 
-});
+
+    description:
+      `${req.user.fullName} created student ${student.firstName} ${student.lastName}`,
+
+
+    req,
+
+  });
+
+
+
+
+
+
+  // Activity log
 
   await logActivity({
-    adminId: req.admin._id,
-    action: "CREATE_STUDENT",
-    studentId: student.studentId,
-    details: `Created student ${student.firstName} ${student.lastName}`,
+
+    adminId:
+      req.admin._id,
+
+
+    action:
+      "CREATE_STUDENT",
+
+
+    studentId:
+      student.studentId,
+
+
+    details:
+      `Created student ${student.firstName} ${student.lastName}`,
+
   });
 
+
+
+
+
+
+
+
   res.status(201).json({
+
     success: true,
-    message: "Student created successfully.",
+
+
+    message:
+      "Student created successfully.",
+
+
     student,
+
   });
+
+
+
 });
 
 exports.getStudents = asyncHandler(async (req, res) => {

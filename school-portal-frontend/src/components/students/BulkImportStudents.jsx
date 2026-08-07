@@ -255,13 +255,14 @@ function BulkImportStudents({
 
             className="
               fixed
-              inset-0
-              bg-black/60
-              flex
-              items-center
-              justify-center
-              z-50
-              p-4
+                inset-0
+                bg-black/60
+                flex
+                items-center
+                justify-center
+                z-50
+                p-4
+              overflow-y-auto
             "
 
           >
@@ -272,14 +273,16 @@ function BulkImportStudents({
             <div
 
               className="
-                bg-slate-900
-                border
-                border-white/10
-                rounded-2xl
-                p-6
-                w-full
-                max-w-lg
-                text-white
+                 bg-slate-900
+    border
+    border-white/10
+    rounded-2xl
+    p-6
+    w-full
+    max-w-lg
+    max-h-[90vh]
+    overflow-y-auto
+    text-white
               "
 
             >
