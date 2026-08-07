@@ -677,35 +677,66 @@ exports.getArchivedStudents = asyncHandler(async (req, res) => {
 });
 
 exports.verifyStudent = async (req, res) => {
-  console.log("VERIFY ID:", req.params.studentId);
+  try {
 
-  const student = await Student.findOne({
-    studentId: req.params.studentId,
-  });
-
-  console.log("FOUND STUDENT:", student);
-
-  if (!student || student.isActive === false) {
-    return res.status(404).json({
-      success: false,
-      verified: false,
-      exists: false,
-      message: "Student not found",
+    const student = await Student.findOne({
+      studentId: req.params.studentId,
     });
-  }
 
-  res.status(200).json({
-    success: true,
-    verified: true,
-    student: {
-      studentId: student.studentId,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      gender: student.gender,
-      currentClass: student.currentClass,
-      session: student.session,
-    },
-  });
+
+    if (!student || student.isActive === false) {
+
+      return res.status(404).json({
+        success: false,
+        verified: false,
+        exists: false,
+        message: "Student not found",
+      });
+
+    }
+
+
+
+    res.status(200).json({
+
+      success: true,
+
+      verified: true,
+
+      student: {
+
+        studentId: student.studentId,
+
+        firstName: student.firstName,
+
+        lastName: student.lastName,
+
+        otherName: student.otherName,
+
+        gender: student.gender,
+
+        currentClass: student.currentClass,
+
+        session: student.session,
+
+        photo: student.photo,
+
+      },
+
+    });
+
+
+  } catch(error) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message: error.message,
+
+    });
+
+  }
 };
 
 exports.dashboard = asyncHandler(async (req, res) => {

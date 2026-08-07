@@ -25,6 +25,10 @@ const { studentSchema } = require("../validators/studentValidator");
 const upload = require("../middleware/uploadMiddlewear");
 const uploadPhoto = require("../middleware/photoUpload");
 const { authorizePermission } = require("../middleware/permissionMiddleware");
+const {
+  verifyLimiter
+} = require("../middleware/rateLimiter");
+
 
 
 const router = express.Router();
@@ -155,7 +159,7 @@ router.get("/students/archived", protect, authorizePermission("students.view"), 
  *         description: Unauthorized
  */
 router.get("/students", protect, authorizePermission("students.view"), getStudents);
-router.get("/students/verify/:studentId", protect, verifyStudent);
+router.get("/students/verify/:studentId", verifyLimiter, verifyStudent);
 router.patch("/students/:studentId/restore", protect, authorizePermission("students.restore"), restoreStudent);
 router.patch(
   "/students/:studentId/photo",

@@ -520,13 +520,6 @@ const exportStudents = async () => {
 }
 
 
-
-
-
-
-const {hasPermission}=useAuth();
-
-
 {
 hasPermission("students.create") && (
 
