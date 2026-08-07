@@ -83,6 +83,11 @@ function AdminManagement() {
         label: "Upload Student Photo",
       },
 
+        {
+        key: "students.import",
+        label: "Import Students",
+      },
+
     ],
 
 
@@ -108,11 +113,7 @@ function AdminManagement() {
         key: "admins.delete",
         label: "Delete Admin",
       },
-      {
-        key: "students.import",
-        label: "Import Students",
-      },
-      
+     
 
     ],
 

@@ -49,7 +49,7 @@ function BulkImportStudents({
 
         gender: "",
 
-        dateOfBirth: "",
+        dateOfBirth: "MM/DD/YYYY",
 
         currentClass: "",
 

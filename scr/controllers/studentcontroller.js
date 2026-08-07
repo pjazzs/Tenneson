@@ -48,7 +48,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
     lastName,
     otherName,
     gender,
-    dateOfBirth,
+    dateOfBirth: parsedDateOfBirth,
     currentClass,
     session,
     admissionDate: new Date(),
@@ -618,6 +618,24 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       parentPhone,
     } = student;
 
+    const parsedDateOfBirth = new Date(dateOfBirth);
+
+
+if (isNaN(parsedDateOfBirth)) {
+
+  skippedStudents.push({
+
+    student,
+
+    reason: "Invalid date of birth format."
+
+  });
+
+
+  continue;
+
+}
+
     // Required field validation
     if (
       !firstName ||
@@ -627,13 +645,19 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       !currentClass ||
       !session
     ) {
-      skippedStudents.push({
-        student,
-        reason: "Missing required fields.",
-      });
 
-      continue;
-    }
+  skippedStudents.push({
+
+    student,
+
+    reason: "Missing required fields."
+
+  });
+
+
+  continue;
+
+}
 
     // Gender validation
     if (!["Male", "Female"].includes(gender)) {
