@@ -7,6 +7,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
+import BulkImportStudents from "../../components/students/BulkImportStudents";
 
 import {
   FaPlus,
@@ -56,6 +57,7 @@ const { hasPermission } = useAuth();
   const [statusFilter, setStatusFilter] = useState("");
 
   const [exporting, setExporting] = useState(false);
+  const [refresh, setRefresh] = useState(0);
 
 
 
@@ -313,6 +315,7 @@ const { hasPermission } = useAuth();
     sessionFilter,
 
     statusFilter,
+    refresh,
 
   ]);
 
@@ -453,6 +456,21 @@ const exportStudents = async () => {
 
 
         </div>
+
+
+        {
+  hasPermission("students.import") && (
+
+    <BulkImportStudents
+
+      onImportSuccess={()=>{
+    setRefresh(prev=>prev+1);
+ }}
+
+    />
+
+  )
+}
 
 
 

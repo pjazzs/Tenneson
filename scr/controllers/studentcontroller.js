@@ -60,7 +60,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
 
   await createAuditLog({
 
-user:req.user._id,
+adminId: req.admin._id,
 
 action:"CREATE",
 
@@ -359,7 +359,7 @@ exports.updateStudent = asyncHandler(async (req, res) => {
 
   await createAuditLog({
 
-user:req.user._id,
+adminId: req.admin._id,
 
 action:"UPDATE",
 
@@ -412,7 +412,7 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
 
   await createAuditLog({
 
-user:req.user._id,
+adminId: req.admin._id,
 
 action:"ARCHIVE",
 

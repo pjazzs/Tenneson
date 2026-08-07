@@ -110,6 +110,8 @@ exports.registerAdmin = async (req, res) => {
   }
 };
 
+
+
 exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -135,7 +137,10 @@ exports.loginAdmin = async (req, res) => {
     }
 
     // Compare password
-    const isMatch = await bcrypt.compare(password, admin.password);
+    const isMatch = await bcrypt.compare(
+      password,
+      admin.password
+    );
 
     if (!isMatch) {
       return res.status(401).json({
@@ -144,24 +149,21 @@ exports.loginAdmin = async (req, res) => {
       });
     }
 
+    // Generate JWT
     const token = generateToken(admin);
 
+    // Create audit log
     const createAuditLog = require("../utils/createAuditLog");
+
     await createAuditLog({
+      user: admin._id,
+      action: "LOGIN",
+      module: "AUTH",
+      description: `${admin.fullName} logged into the system`,
+      req,
+    });
 
-user:user._id,
-
-action:"LOGIN",
-
-module:"AUTH",
-
-description:
-`${user.fullName} logged into the system`,
-
-req,
-
-});
-
+    // Send response
     res.status(200).json({
       success: true,
       message: "Login successful.",
@@ -174,10 +176,67 @@ req,
         permissions: admin.permissions,
       },
     });
+
   } catch (error) {
+
     res.status(500).json({
       success: false,
       message: error.message,
     });
+
   }
+};
+
+
+
+exports.deleteAdmin = async (req,res)=>{
+
+  try{
+
+    const admin = await Admin.findById(
+      req.params.id
+    );
+
+
+    if(!admin){
+
+      return res.status(404).json({
+        message:"Admin not found"
+      });
+
+    }
+
+
+    if(admin.role === "super_admin"){
+
+      return res.status(403).json({
+        message:"Cannot delete super admin"
+      });
+
+    }
+
+
+
+    await admin.deleteOne();
+
+
+
+    res.json({
+
+      message:"Admin deleted successfully"
+
+    });
+
+
+
+  }catch(error){
+
+    res.status(500).json({
+
+      message:error.message
+
+    });
+
+  }
+
 };
