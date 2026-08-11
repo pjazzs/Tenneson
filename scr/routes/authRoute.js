@@ -1,5 +1,5 @@
 const express = require("express");
-const { registerAdmin, loginAdmin, deleteAdmin } = require("../controllers/authController");
+const { registerAdmin, loginAdmin } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 const { authorize } = require("../middleware/authorize");
 const { authLimiter } = require("../middleware/rateLimiter");
@@ -169,11 +169,5 @@ router.post(
   loginAdmin
 );
 
-router.delete(
-  "/:id",
-  protect,
-  authorize("super_admin"),
-  deleteAdmin
-);
 
 module.exports = router;
