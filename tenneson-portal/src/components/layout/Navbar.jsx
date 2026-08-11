@@ -1,22 +1,21 @@
+
 import {
   FaUserCircle,
   FaSignOutAlt,
+  FaBars,
 } from "react-icons/fa";
 
 import { logout } from "../../utils/auth";
 
-
-function Navbar() {
-
-
+function Navbar({ onMenuClick }) {
   return (
-
     <header
       className="
         bg-slate-950
         border-b
         border-white/10
-        px-6
+        px-4
+        sm:px-6
         py-4
         flex
         justify-between
@@ -24,59 +23,65 @@ function Navbar() {
         text-white
       "
     >
-
-
       {/* Left Section */}
-
-      <div>
-
-
-        <h2
+      <div className="flex items-center gap-3 min-w-0">
+        {/* Mobile Menu Button */}
+        <button
+          type="button"
+          onClick={onMenuClick}
           className="
-            text-xl
-            font-bold
+            md:hidden
+            flex
+            items-center
+            justify-center
+            bg-white/5
+            hover:bg-white/10
+            p-2.5
+            rounded-xl
+            transition
+            flex-shrink-0
           "
+          aria-label="Open navigation menu"
         >
+          <FaBars size={20} />
+        </button>
 
-          Admin Dashboard
+        <div className="min-w-0">
+          <h2
+            className="
+              text-lg
+              sm:text-xl
+              font-bold
+              truncate
+            "
+          >
+            Admin Dashboard
+          </h2>
 
-        </h2>
-
-
-        <p
-          className="
-            text-sm
-            text-gray-400
-          "
-        >
-
-          Manage students and school activities
-
-        </p>
-
-
+          <p
+            className="
+              hidden
+              sm:block
+              text-sm
+              text-gray-400
+            "
+          >
+            Manage students and school activities
+          </p>
+        </div>
       </div>
 
-
-
-
-
-
       {/* Right Section */}
-
-
       <div
         className="
           flex
           items-center
-          gap-5
+          gap-2
+          sm:gap-5
+          ml-3
         "
       >
-
-
         {/* Admin Info */}
-
-
         <div
           className="
             hidden
@@ -89,94 +94,71 @@ function Navbar() {
             rounded-xl
           "
         >
-
-
           <FaUserCircle
             size={30}
             className="text-green-500"
           />
 
-
           <div>
-
-
-            <p
-              className="
-                text-sm
-                font-semibold
-              "
-            >
-
+            <p className="text-sm font-semibold">
               Administrator
-
             </p>
 
-
-            <p
-              className="
-                text-xs
-                text-gray-400
-              "
-            >
-
+            <p className="text-xs text-gray-400">
               School Portal
-
             </p>
-
-
           </div>
-
-
         </div>
 
+        {/* Mobile User Icon */}
+        <div
+          className="
+            flex
+            sm:hidden
+            items-center
+            justify-center
+            bg-white/5
+            rounded-xl
+            p-2
+          "
+        >
+          <FaUserCircle
+            size={24}
+            className="text-green-500"
+          />
+        </div>
 
-
-
-
-
-
-
-        {/* Logout Button */}
-
-
+        {/* Logout */}
         <button
-
+          type="button"
           onClick={logout}
-
           className="
             flex
             items-center
+            justify-center
             gap-2
             bg-red-600
             hover:bg-red-700
-            px-4
+            px-3
+            sm:px-4
             py-2
             rounded-xl
             transition
             shadow-lg
+            text-sm
+            sm:text-base
+            whitespace-nowrap
           "
-
         >
-
           <FaSignOutAlt />
 
-          Logout
-
-
+          <span className="hidden sm:inline">
+            Logout
+          </span>
         </button>
-
-
-
       </div>
-
-
-
     </header>
-
-
   );
-
 }
-
 
 export default Navbar;

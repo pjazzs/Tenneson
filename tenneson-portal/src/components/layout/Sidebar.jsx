@@ -5,16 +5,12 @@ import {
   FaArchive,
   FaHistory,
   FaSchool,
-  FaBars,
   FaTimes,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
-import { useState } from "react";
 
-function Sidebar() {
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-
+function Sidebar({ isMobileOpen, onClose }) {
   const menuItems = [
     {
       name: "Dashboard",
@@ -44,32 +40,6 @@ function Sidebar() {
   return (
     <>
       {/* =========================================
-          MOBILE MENU BUTTON
-      ========================================= */}
-
-      <button
-        type="button"
-        onClick={() => setIsMobileOpen(true)}
-        className="
-          md:hidden
-          fixed
-          top-4
-          left-4
-          z-50
-          bg-slate-950
-          text-white
-          p-3
-          rounded-xl
-          shadow-lg
-          border
-          border-white/10
-        "
-        aria-label="Open navigation menu"
-      >
-        <FaBars size={20} />
-      </button>
-
-      {/* =========================================
           MOBILE OVERLAY
       ========================================= */}
 
@@ -82,7 +52,7 @@ function Sidebar() {
             z-40
             bg-black/50
           "
-          onClick={() => setIsMobileOpen(false)}
+          onClick={onClose}
         />
       )}
 
@@ -125,7 +95,7 @@ function Sidebar() {
 
         <button
           type="button"
-          onClick={() => setIsMobileOpen(false)}
+          onClick={onClose}
           className="
             md:hidden
             absolute
@@ -162,28 +132,18 @@ function Sidebar() {
               items-center
               justify-center
               shadow-lg
-              shrink-0
+              flex-shrink-0
             "
           >
             <FaSchool size={24} />
           </div>
 
           <div>
-            <h1
-              className="
-                text-xl
-                font-bold
-              "
-            >
+            <h1 className="text-xl font-bold">
               Tenneson
             </h1>
 
-            <p
-              className="
-                text-xs
-                text-gray-400
-              "
-            >
+            <p className="text-xs text-gray-400">
               School Portal
             </p>
           </div>
@@ -193,17 +153,12 @@ function Sidebar() {
             NAVIGATION
         ========================================= */}
 
-        <nav
-          className="
-            space-y-3
-            flex-1
-          "
-        >
+        <nav className="space-y-3 flex-1">
           {menuItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
-              onClick={() => setIsMobileOpen(false)}
+              onClick={onClose}
               className={({ isActive }) => `
                 flex
                 items-center
@@ -221,19 +176,11 @@ function Sidebar() {
                 }
               `}
             >
-              <span
-                className="
-                  text-lg
-                "
-              >
+              <span className="text-lg">
                 {item.icon}
               </span>
 
-              <span
-                className="
-                  font-medium
-                "
-              >
+              <span className="font-medium">
                 {item.name}
               </span>
             </NavLink>
@@ -254,22 +201,11 @@ function Sidebar() {
             p-4
           "
         >
-          <p
-            className="
-              text-sm
-              text-gray-300
-            "
-          >
+          <p className="text-sm text-gray-300">
             Tenneson Comprehensive College
           </p>
 
-          <p
-            className="
-              text-xs
-              text-gray-500
-              mt-1
-            "
-          >
+          <p className="text-xs text-gray-500 mt-1">
             Student Management System
           </p>
         </div>
