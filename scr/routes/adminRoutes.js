@@ -2,24 +2,21 @@ const express = require("express");
 
 const router = express.Router();
 
-
 const {
   getAdmins,
+  updatePermissions,
+  deleteAdmin,
 } = require("../controllers/adminController");
 
+const { protect } = require("../middleware/authMiddleware");
 
 const {
-  protect
-} = require("../middleware/authMiddleware");
-
-
-const {
-  authorizePermission
+  authorizePermission,
 } = require("../middleware/permissionMiddleware");
 
-
-const {updatePermissions} = require("../controllers/adminController")
-
+// ===============================
+// Get All Admins
+// ===============================
 
 router.get(
   "/admins",
@@ -28,6 +25,10 @@ router.get(
   getAdmins
 );
 
+// ===============================
+// Update Admin Permissions
+// ===============================
+
 router.patch(
   "/admins/:id/permissions",
   protect,
@@ -35,7 +36,15 @@ router.patch(
   updatePermissions
 );
 
+// ===============================
+// Delete Admin
+// ===============================
 
-
+router.delete(
+  "/admins/:id",
+  protect,
+  authorizePermission("admins.delete"),
+  deleteAdmin
+);
 
 module.exports = router;

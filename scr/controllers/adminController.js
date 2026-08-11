@@ -1,108 +1,196 @@
+const mongoose = require("mongoose");
 const Admin = require("../models/Admin");
 const asyncHandler = require("express-async-handler");
-
+const createAuditLog = require("../utils/createAuditLog");
 
 // ===============================
 // Get All Admins
 // ===============================
 
-exports.getAdmins = async (req, res) => {
-
-  try {
-
-
-    const admins = await Admin.find()
-
-      .select("-password")
-
-      .sort({
-        createdAt: -1,
-      });
-
-
-
-    res.status(200).json({
-
-      success:true,
-
-      count:admins.length,
-
-      admins,
-
+exports.getAdmins = asyncHandler(async (req, res) => {
+  const admins = await Admin.find()
+    .select("-password")
+    .sort({
+      createdAt: -1,
     });
 
+  return res.status(200).json({
+    success: true,
+    count: admins.length,
+    admins,
+  });
+});
 
+// ===============================
+// Update Admin Permissions
+// ===============================
 
-  } catch(error) {
+exports.updatePermissions = asyncHandler(async (req, res) => {
+  const { permissions } = req.body;
 
+  // ===============================
+  // Validate Admin ID
+  // ===============================
 
-    res.status(500).json({
-
-      success:false,
-
-      message:error.message,
-
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid admin ID.",
     });
-
-
   }
 
-};
+  // ===============================
+  // Validate Permissions
+  // ===============================
 
-exports.updatePermissions = asyncHandler(async(req,res)=>{
+  if (!Array.isArray(permissions)) {
+    return res.status(400).json({
+      success: false,
+      message: "Permissions must be an array.",
+    });
+  }
 
+  // ===============================
+  // Find Admin
+  // ===============================
 
- const admin = await Admin.findByIdAndUpdate(
-   req.params.id,
-   {
-     permissions:req.body.permissions
-   },
-   {
-     new:true
-   }
- );
+  const admin = await Admin.findById(req.params.id);
 
+  if (!admin) {
+    return res.status(404).json({
+      success: false,
+      message: "Admin not found.",
+    });
+  }
 
- if(!admin){
+  // ===============================
+  // Prevent Permission Changes
+  // To Super Admin
+  // ===============================
 
-   return res.status(404).json({
+  if (admin.role === "super_admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Super admin permissions cannot be modified.",
+    });
+  }
 
-     success:false,
+  // ===============================
+  // Update Permissions
+  // ===============================
 
-     message:"Admin not found"
+  admin.permissions = permissions;
 
-   });
+  await admin.save();
 
- }
+  // ===============================
+  // Audit Log
+  // ===============================
 
+  await createAuditLog({
+    user: req.admin._id,
+    action: "UPDATE_PERMISSION",
+    module: "ADMIN",
+    description: `${req.admin.fullName} updated permissions for ${admin.fullName}`,
+    req,
+  });
 
+  // ===============================
+  // Remove Password
+  // ===============================
 
- await createAuditLog({
+  const safeAdmin = admin.toObject();
 
-   user:req.user._id,
+  delete safeAdmin.password;
 
-   action:"UPDATE_PERMISSION",
+  // ===============================
+  // Response
+  // ===============================
 
-   module:"ADMIN",
+  return res.status(200).json({
+    success: true,
+    message: "Permissions updated successfully.",
+    admin: safeAdmin,
+  });
+});
 
-   description:
-   `${req.user.fullName} updated permissions for ${admin.fullName}`,
+// ===============================
+// Delete Admin
+// ===============================
 
-   req,
+exports.deleteAdmin = asyncHandler(async (req, res) => {
+  const adminId = req.params.id;
 
- });
+  // ===============================
+  // Validate Admin ID
+  // ===============================
 
+  if (!mongoose.Types.ObjectId.isValid(adminId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid admin ID.",
+    });
+  }
 
+  // ===============================
+  // Prevent Self Deletion
+  // ===============================
 
- res.json({
+  if (req.admin._id.toString() === adminId) {
+    return res.status(400).json({
+      success: false,
+      message: "You cannot delete your own account.",
+    });
+  }
 
-   success:true,
+  // ===============================
+  // Find Admin
+  // ===============================
 
-   message:"Permissions updated successfully",
+  const admin = await Admin.findById(adminId);
 
-   admin
+  if (!admin) {
+    return res.status(404).json({
+      success: false,
+      message: "Admin not found.",
+    });
+  }
 
- });
+  // ===============================
+  // Prevent Super Admin Deletion
+  // ===============================
 
+  if (admin.role === "super_admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Super admin accounts cannot be deleted.",
+    });
+  }
 
+  // ===============================
+  // Delete Admin
+  // ===============================
+
+  await Admin.findByIdAndDelete(adminId);
+
+  // ===============================
+  // Audit Log
+  // ===============================
+
+  await createAuditLog({
+    user: req.admin._id,
+    action: "DELETE_ADMIN",
+    module: "ADMIN",
+    description: `${req.admin.fullName} deleted admin ${admin.fullName}`,
+    req,
+  });
+
+  // ===============================
+  // Response
+  // ===============================
+
+  return res.status(200).json({
+    success: true,
+    message: "Admin deleted successfully.",
+  });
 });

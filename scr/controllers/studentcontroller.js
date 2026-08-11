@@ -524,7 +524,7 @@ action:"UPDATE",
 module:"STUDENT",
 
 description:
-`${req.user.fullName} updated student ${student.firstName} ${student.lastName}`,
+`${req.admin.fullName} updated student ${student.firstName} ${student.lastName}`,
 
 req,
 
@@ -545,69 +545,42 @@ req,
 });
 
 exports.deleteStudent = asyncHandler(async (req, res) => {
-
   const { studentId } = req.params;
 
-
   const student = await Student.findOneAndUpdate(
-
     { studentId },
-
     { isActive: false },
-
-     { returnDocument: "after" } 
-
+    { returnDocument: "after" }
   );
 
-
   if (!student) {
-
-    res.status(404);
-
-    throw new Error("Student not found.");
-
+    return res.status(404).json({
+      success: false,
+      message: "Student not found.",
+    });
   }
 
+  // Create audit log
   await createAuditLog({
+    user: req.admin._id,
+    action: "ARCHIVE",
+    module: "STUDENT",
+    description: `${req.admin.fullName} archived student ${student.firstName} ${student.lastName}`,
+    req,
+  });
 
-adminId: req.admin._id,
-
-action:"ARCHIVE",
-
-module:"STUDENT",
-
-description:
-`${req.user.fullName} archived student ${student.firstName} ${student.lastName}`,
-
-req,
-
-});
-
-
-
+  // Create student activity log
   await logActivity({
-
     adminId: req.admin._id,
-
     action: "DELETE_STUDENT",
-
     studentId: student.studentId,
-
     details: `${student.firstName} ${student.lastName}`,
-
   });
 
-
-
-  res.status(200).json({
-
+  return res.status(200).json({
     success: true,
-
     message: "Student archived successfully",
-
   });
-
-
 });
 
 exports.restoreStudent = asyncHandler(async (req, res) => {
@@ -1391,7 +1364,7 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
     });
   }
 
-  await generateStudentSlip(student, res);
+  return generateStudentSlip(student, res);
 });
 
 
