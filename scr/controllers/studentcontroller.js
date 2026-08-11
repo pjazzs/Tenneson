@@ -906,37 +906,34 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
     // Duplicate check
 
-    const existingStudent =
-      await Student.findOne({
+   const startOfDay = new Date(parsedDateOfBirth);
+startOfDay.setHours(0, 0, 0, 0);
 
-        firstName: {
+const endOfDay = new Date(parsedDateOfBirth);
+endOfDay.setHours(23, 59, 59, 999);
 
-          $regex:
-            new RegExp(
-              `^${firstName.trim()}$`,
-              "i"
-            ),
+const existingStudent = await Student.findOne({
+  firstName: {
+    $regex: new RegExp(
+      `^${firstName.trim()}$`,
+      "i"
+    ),
+  },
 
-        },
+  lastName: {
+    $regex: new RegExp(
+      `^${lastName.trim()}$`,
+      "i"
+    ),
+  },
 
+  dateOfBirth: {
+    $gte: startOfDay,
+    $lte: endOfDay,
+  },
 
-        lastName: {
-
-          $regex:
-            new RegExp(
-              `^${lastName.trim()}$`,
-              "i"
-            ),
-
-        },
-
-
-        dateOfBirth: parsedDateOfBirth,
-
-
-        isActive: true,
-
-      });
+  isActive: true,
+});
 
 
 

@@ -209,6 +209,9 @@ function Sidebar({ isMobileOpen, onClose }) {
             Student Management System
           </p>
         </div>
+        <p className="text-xs italic text-gray-400 text-center mt-8 tracking-wide">
+  Crafted with ❤️ by <span className="font-semibold text-gray-600">Pjazz</span>
+</p>
       </aside>
     </>
   );
