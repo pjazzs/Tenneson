@@ -1372,7 +1372,7 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
 exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
   const student = await Student.findOne({
     studentId: req.params.studentId,
-    isArchived: true,
+    isActive: true,
   });
 
   if (!student) {
