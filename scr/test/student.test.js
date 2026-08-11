@@ -9,12 +9,16 @@ describe("Student API", () => {
   beforeEach(async () => {
     const hashedPassword = await bcrypt.hash("password123", 12);
 
-    const admin = await Admin.create({
-      fullName: "Test Admin",
-      email: `admin${Date.now()}@test.com`,
-      password: hashedPassword,
-      role: "admin",
-    });
+   const admin = await Admin.create({
+  fullName: "Test Admin",
+  email: `admin${Date.now()}@test.com`,
+  password: hashedPassword,
+  role: "admin",
+  permissions: [
+    "students.create",
+    "students.view",
+  ],
+});
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: admin.email,

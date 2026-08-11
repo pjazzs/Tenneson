@@ -11,11 +11,12 @@ describe("Student Update API", () => {
     // Create test admin
     const hashedPassword = await bcrypt.hash("password123", 12);
 
-    const admin = await Admin.create({
-      fullName: "Test Admin",
-      email: `admin${Date.now()}@test.com`,
-      password: hashedPassword,
-      role: "admin",
+   const admin = await Admin.create({ 
+    fullName: "Test Admin",
+     email: `admin${Date.now()}@test.com`,
+      password: hashedPassword, 
+      role: "admin", 
+      permissions: [ "students.create", "students.update", ], 
     });
 
     // Login admin

@@ -1,3 +1,4 @@
+
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
@@ -11,18 +12,26 @@ describe("Student Delete API", () => {
     // Create admin
     const hashedPassword = await bcrypt.hash("password123", 12);
 
+    const email = `admin${Date.now()}@test.com`;
+
     await Admin.create({
       fullName: "Test Admin",
-      email: "admin@test.com",
+      email,
       password: hashedPassword,
       role: "admin",
+      permissions: [
+        "students.create",
+        "students.delete",
+      ],
     });
 
     // Login admin
-    const loginResponse = await request(app).post("/api/v1/auth/login").send({
-      email: "admin@test.com",
-      password: "password123",
-    });
+    const loginResponse = await request(app)
+      .post("/api/v1/auth/login")
+      .send({
+        email,
+        password: "password123",
+      });
 
     token = loginResponse.body.token;
 
@@ -48,7 +57,6 @@ describe("Student Delete API", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
-
     expect(response.body.success).toBe(true);
   });
 
@@ -58,7 +66,7 @@ describe("Student Delete API", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(404);
-
     expect(response.body.success).toBe(false);
   });
 });
+

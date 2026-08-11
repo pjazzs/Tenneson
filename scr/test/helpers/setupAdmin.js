@@ -1,10 +1,10 @@
+
 const request = require("supertest");
 const app = require("../../app");
 const Admin = require("../../models/Admin");
 const bcrypt = require("bcrypt");
 
 const setupAdmin = async () => {
-
   const uniqueEmail = `superadmin${Date.now()}@test.com`;
 
   const hashedPassword = await bcrypt.hash("password123", 12);
@@ -25,7 +25,6 @@ const setupAdmin = async () => {
 
   const superAdminToken = superAdminLogin.body.token;
 
-
   const adminEmail = `admin${Date.now()}@test.com`;
 
   const registerResponse = await request(app)
@@ -35,8 +34,12 @@ const setupAdmin = async () => {
       fullName: "Test Admin",
       email: adminEmail,
       password: "password123",
+      permissions: [
+        "students.create",
+      ],
     });
 
+  expect(registerResponse.statusCode).toBe(201);
 
   const loginResponse = await request(app)
     .post("/api/v1/auth/login")
@@ -45,10 +48,10 @@ const setupAdmin = async () => {
       password: "password123",
     });
 
-    expect(loginResponse.statusCode).toBe(200);
+  expect(loginResponse.statusCode).toBe(200);
 
   return loginResponse.body.token;
-
 };
 
 module.exports = setupAdmin;
+

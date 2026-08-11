@@ -1,3 +1,4 @@
+
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
@@ -8,7 +9,7 @@ describe("Student Pagination API", () => {
 
   beforeEach(async () => {
     const hashedPassword = await bcrypt.hash("password123", 12);
-    const superAdminEmail= `superadmin${Date.now()}@test.com`;
+    const superAdminEmail = `superadmin${Date.now()}@test.com`;
 
     await Admin.create({
       fullName: "Super Admin",
@@ -17,14 +18,16 @@ describe("Student Pagination API", () => {
       role: "super_admin",
     });
 
-    const superAdminLogin = await request(app).post("/api/v1/auth/login").send({
-      email: superAdminEmail,
-      password: "password123",
-    });
+    const superAdminLogin = await request(app)
+      .post("/api/v1/auth/login")
+      .send({
+        email: superAdminEmail,
+        password: "password123",
+      });
 
     const superAdminToken = superAdminLogin.body.token;
 
-    const adminEmail  = `admin${Date.now()}@test.com`;
+    const adminEmail = `admin${Date.now()}@test.com`;
 
     await request(app)
       .post("/api/v1/auth/register")
@@ -33,16 +36,22 @@ describe("Student Pagination API", () => {
         fullName: "Test Admin",
         email: adminEmail,
         password: "password123",
+        permissions: [
+          "students.create",
+          "students.view",
+        ],
       });
 
-    const loginResponse = await request(app).post("/api/v1/auth/login").send({
-      email: adminEmail,
-      password: "password123",
-    });
+    const loginResponse = await request(app)
+      .post("/api/v1/auth/login")
+      .send({
+        email: adminEmail,
+        password: "password123",
+      });
 
     token = loginResponse.body.token;
 
-    // create students
+    // Create students
     for (let i = 0; i < 12; i++) {
       await request(app)
         .post("/api/v1/students")
@@ -74,3 +83,4 @@ describe("Student Pagination API", () => {
     expect(response.body.pagination.totalStudents).toBe(12);
   });
 });
+
