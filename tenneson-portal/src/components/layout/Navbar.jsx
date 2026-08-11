@@ -39,7 +39,7 @@ function Navbar({ onMenuClick }) {
             p-2.5
             rounded-xl
             transition
-            flex-shrink-0
+            shrink-0
           "
           aria-label="Open navigation menu"
         >

@@ -132,7 +132,7 @@ function Sidebar({ isMobileOpen, onClose }) {
               items-center
               justify-center
               shadow-lg
-              flex-shrink-0
+              shrink-0
             "
           >
             <FaSchool size={24} />
