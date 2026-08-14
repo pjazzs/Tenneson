@@ -1,16 +1,97 @@
-# React + Vite
+# Tenneson Portal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Tenneson Portal is a modern school administration and student management system designed to help schools manage student records, administrators, permissions, verification, activity tracking, and audit records from a centralized web portal.
 
-Currently, two official plugins are available:
+The system provides a secure administrative dashboard with role-based and permission-based access control.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Overview
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Tenneson Portal was built to simplify day-to-day school administration by providing a centralized platform for managing student information and administrative activities.
 
-## Expanding the ESLint configuration
+The portal allows authorized administrators to:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Manage student records
+- Register new students
+- View and update student information
+- Archive students
+- Restore archived students
+- Search and filter students
+- Verify student IDs
+- Manage administrators
+- Assign administrator permissions
+- Delete administrator accounts where permitted
+- View activity logs
+- View audit logs
+- Access dashboard statistics
+- Perform permission-controlled administrative actions
+
+The system uses both frontend and backend authorization to ensure that users cannot access features beyond their assigned permissions.
+
+---
+
+# Features
+
+## Authentication
+
+Administrators can securely log into the portal using their registered email and password.
+
+Authentication includes:
+
+- Admin login
+- JWT-based authentication
+- Protected administrative routes
+- Persistent login session
+- Logout/session handling
+- Password protection
+- Authentication rate limiting
+
+---
+
+# Dashboard
+
+The dashboard provides an overview of important school information.
+
+It can display statistics such as:
+
+- Total students
+- Active students
+- Archived students
+- Student distribution
+- Recent activities
+- Quick actions
+
+Quick Actions are dynamically displayed based on the logged-in administrator's permissions.
+
+---
+
+# Student Management
+
+The student management system allows authorized administrators to manage student records.
+
+### Student features include:
+
+- Add student
+- View students
+- View student details
+- Edit student information
+- Archive students
+- Restore students
+- Search students
+- Filter students
+- Paginate student records
+- Upload student photos
+- Import student records
+- Export student records
+- Generate student IDs
+- Generate student registration slips
+
+Student IDs use the school's configured identification format.
+
+Example:
+
+```text
+TCC00001
+TCC00002
+TCC00003
