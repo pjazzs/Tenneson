@@ -664,6 +664,7 @@ function Students() {
 
 
             <input
+            id="student-search"
 
               type="text"
 
@@ -706,6 +707,8 @@ function Students() {
           {/* CLASS */}
 
           <select
+           id="class-filter"
+           name="classFilter"
 
             value={classFilter}
 
@@ -770,6 +773,8 @@ function Students() {
           {/* GENDER */}
 
           <select
+          id="gender-filter"
+          name="genderFilter"
 
             value={genderFilter}
 
@@ -818,6 +823,8 @@ function Students() {
           {/* SESSION */}
 
           <select
+            id="session-filter"
+             name="sessionFilter"
 
             value={sessionFilter}
 
@@ -866,6 +873,8 @@ function Students() {
           {/* STATUS */}
 
           <select
+          id="status-filter"
+          name="statusFilter"
 
             value={statusFilter}
 

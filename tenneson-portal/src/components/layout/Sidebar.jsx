@@ -1,4 +1,6 @@
 
+import useAuth from "../../hooks/useAuth";
+
 import {
   FaHome,
   FaUserGraduate,
@@ -6,36 +8,59 @@ import {
   FaHistory,
   FaSchool,
   FaTimes,
+  FaUserShield,
+  FaClipboardList,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
 
 function Sidebar({ isMobileOpen, onClose }) {
+  const { admin, hasPermission } = useAuth();
   const menuItems = [
-    {
-      name: "Dashboard",
-      path: "/dashboard",
-      icon: <FaHome />,
-    },
+  {
+    name: "Dashboard",
+    path: "/dashboard",
+    icon: <FaHome />,
+    visible: true,
+  },
 
-    {
-      name: "Students",
-      path: "/students",
-      icon: <FaUserGraduate />,
-    },
+  {
+    name: "Students",
+    path: "/students",
+    icon: <FaUserGraduate />,
+    visible: hasPermission("students.view"),
+  },
 
-    {
-      name: "Activity Logs",
-      path: "/activity-logs",
-      icon: <FaHistory />,
-    },
+  {
+    name: "Activity Logs",
+    path: "/activity-logs",
+    icon: <FaHistory />,
+    visible: hasPermission("students.view"),
+  },
 
-    {
-      name: "Archived Students",
-      path: "/students/archived",
-      icon: <FaArchive />,
-    },
-  ];
+  {
+    name: "Archived Students",
+    path: "/students/archived",
+    icon: <FaArchive />,
+    visible: hasPermission("students.view"),
+  },
+
+  {
+    name: "Admin Management",
+    path: "/admins",
+    icon: <FaUserShield />,
+    visible: hasPermission("admins.manage"),
+  },
+
+  {
+    name: "Audit Logs",
+    path: "/audit-logs",
+    icon: <FaClipboardList />,
+    visible:
+      admin?.role === "admin" ||
+      admin?.role === "super_admin",
+  },
+];
 
   return (
     <>
@@ -154,7 +179,9 @@ function Sidebar({ isMobileOpen, onClose }) {
         ========================================= */}
 
         <nav className="space-y-3 flex-1">
-          {menuItems.map((item) => (
+          {menuItems
+          .filter((item) => item.visible)
+          .map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import useAuth from "../../hooks/useAuth";
 
 import {
   FaUserShield,
@@ -10,49 +11,75 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-
 function AdminManagement() {
-
-
   const navigate = useNavigate();
 
+  const { admin } = useAuth();
+
+  /*
+  =========================================
+  CURRENT ADMIN
+  =========================================
+  */
+
+  const isSuperAdmin = admin?.role === "super_admin";
+
+  const hasPermission = (permission) => {
+    if (isSuperAdmin) {
+      return true;
+    }
+
+    return (
+      Array.isArray(admin?.permissions) &&
+      admin.permissions.includes(permission)
+    );
+  };
+
+  /*
+  =========================================
+  ADMIN PERMISSIONS
+  =========================================
+  */
+
+  const canManageAdmins = hasPermission("admins.manage");
+  const canCreateAdmins = hasPermission("admins.create");
+  const canUpdateAdmins = hasPermission("admins.update");
+  const canDeleteAdmins = hasPermission("admins.delete");
+
+  /*
+  =========================================
+  STATE
+  =========================================
+  */
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-
+  const [showPermissionModal, setShowPermissionModal] =
+    useState(false);
 
   const [admins, setAdmins] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
-
   const [selectedAdmin, setSelectedAdmin] = useState(null);
-
 
   const [permissions, setPermissions] = useState([]);
 
-
-
   const [newAdmin, setNewAdmin] = useState({
-
     fullName: "",
-
     email: "",
-
     password: "",
-
     role: "admin",
-
   });
 
-
+  /*
+  =========================================
+  AVAILABLE PERMISSIONS
+  =========================================
+  */
 
   const permissionGroups = {
-
-
     Students: [
-
       {
         key: "students.view",
         label: "View Students",
@@ -83,20 +110,16 @@ function AdminManagement() {
         label: "Upload Student Photo",
       },
 
-        {
+      {
         key: "students.import",
         label: "Import Students",
       },
-
     ],
 
-
-
     Admins: [
-
       {
-        key: "admins.view",
-        label: "View Admins",
+        key: "admins.manage",
+        label: "Manage Admins",
       },
 
       {
@@ -106,409 +129,470 @@ function AdminManagement() {
 
       {
         key: "admins.update",
-        label: "Update Admin",
+        label: "Update Admin Permissions",
       },
 
       {
         key: "admins.delete",
         label: "Delete Admin",
       },
-     
-
     ],
-
-
   };
 
-
-
   const allPermissions = Object.values(permissionGroups)
-
     .flat()
+    .map((permission) => permission.key);
 
-    .map(permission => permission.key);
-
-
-
+  /*
+  =========================================
+  FETCH ADMINS
+  =========================================
+  */
 
   useEffect(() => {
-
-
     const fetchAdmins = async () => {
-
+      if (!canManageAdmins) {
+        setAdmins([]);
+        setLoading(false);
+        return;
+      }
 
       try {
-
-
         const response = await api.get("/admins");
 
-
         setAdmins(response.data.admins || []);
-
-
-
-      } catch(error) {
-
-
+      } catch (error) {
         console.log(
           "Admin fetch error:",
           error.response?.data || error.message
         );
 
-
+        setAdmins([]);
       } finally {
-
-
         setLoading(false);
-
-
       }
-
-
     };
 
-
-
     fetchAdmins();
+  }, [canManageAdmins]);
 
-
-  }, []);
-
-
-
+  /*
+  =========================================
+  CREATE ADMIN
+  =========================================
+  */
 
   const createAdmin = async () => {
+    if (!canCreateAdmins) {
+      console.log(
+        "You do not have permission to create admins."
+      );
 
+      return;
+    }
+
+    if (
+      !newAdmin.fullName.trim() ||
+      !newAdmin.email.trim() ||
+      !newAdmin.password.trim()
+    ) {
+      console.log(
+        "Full name, email and password are required."
+      );
+
+      return;
+    }
 
     try {
-
-
       const response = await api.post(
         "/auth/register",
         newAdmin
       );
 
+      /*
+      =========================================
+      UPDATE TABLE ONLY IF ADMIN MANAGEMENT
+      IS AVAILABLE
+      =========================================
+      */
 
-
-      setAdmins(prev => [
-
-        ...prev,
-
-        response.data.admin
-
-      ]);
-
-
+      if (response.data.admin) {
+        setAdmins((prev) => [
+          response.data.admin,
+          ...prev,
+        ]);
+      }
 
       setShowCreateModal(false);
 
-
-
       setNewAdmin({
-
         fullName: "",
-
         email: "",
-
         password: "",
-
         role: "admin",
-
       });
-
-
-
-    } catch(error) {
-
-
+    } catch (error) {
       console.log(
-
         "Create admin error:",
-
         error.response?.data || error.message
+      );
+    }
+  };
 
+  /*
+  =========================================
+  DELETE ADMIN
+  =========================================
+  */
+
+  const deleteAdmin = async (adminId) => {
+    /*
+    =========================================
+    FRONTEND PERMISSION CHECK
+    =========================================
+    */
+
+    if (!canDeleteAdmins) {
+      console.log(
+        "You do not have permission to delete admins."
       );
 
-
+      return;
     }
 
-
-  };
-
-
-
- const deleteAdmin = async (adminId) => {
-
-  const confirmDelete = window.confirm(
-    "Are you sure you want to delete this admin?"
-  );
-
-
-  if (!confirmDelete) return;
-
-
-  try {
-
-    await api.delete(
-      `/admins/${adminId}`
-    );
-
-
-    // Remove deleted admin from UI immediately
-    setAdmins(prev =>
-      prev.filter(
-        admin => admin._id !== adminId
-      )
-    );
-
-
-  } catch(error) {
-
-    console.log(
-      "Delete admin error:",
-      error.response?.data || error.message
-    );
-
-  }
-
-};
-
-
-
-
-  const openPermissionModal = (admin) => {
-
-
-    setSelectedAdmin(admin);
-
-
-    setPermissions(admin.permissions || []);
-
-
-    setShowPermissionModal(true);
-
-
-  };
-
-
-
-
-
-  const togglePermission = (permission) => {
-
-
-    setPermissions(prev =>
-
-
-      prev.includes(permission)
-
-        ? prev.filter(item => item !== permission)
-
-        : [...prev, permission]
-
-
-    );
-
-
-  };
-
-
-
-
-
-  const toggleAllPermissions = () => {
-
-
-    if(permissions.length === allPermissions.length){
-
-      setPermissions([]);
-
-
-    }else{
-
-
-      setPermissions(allPermissions);
-
-
-    }
-
-
-  };
-
-
-
-
-  const toggleGroupPermissions = (group) => {
-
-
-    const groupPermissions = permissionGroups[group]
-
-      .map(permission => permission.key);
-
-
-
-    const hasAll = groupPermissions.every(permission =>
-
-      permissions.includes(permission)
-
-    );
-
-
-
-    if(hasAll){
-
-
-      setPermissions(prev =>
-
-        prev.filter(item =>
-
-          !groupPermissions.includes(item)
-
-        )
-
+    /*
+    =========================================
+    PREVENT INVALID REQUEST
+    =========================================
+    */
+
+    if (!adminId) {
+      console.error(
+        "Cannot delete admin: missing admin ID."
       );
 
-
-    }else{
-
-
-      setPermissions(prev =>
-
-        [
-
-          ...new Set([
-
-            ...prev,
-
-            ...groupPermissions
-
-          ])
-
-        ]
-
-      );
-
-
+      return;
     }
 
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this admin?"
+    );
 
-  };
-  const savePermissions = async () => {
-
+    if (!confirmDelete) {
+      return;
+    }
 
     try {
+      await api.delete(`/admins/${adminId}`);
 
+      setAdmins((prev) =>
+        prev.filter(
+          (adminItem) =>
+            adminItem._id !== adminId
+        )
+      );
+    } catch (error) {
+      console.log(
+        "Delete admin error:",
+        error.response?.data || error.message
+      );
+    }
+  };
 
+  /*
+  =========================================
+  OPEN PERMISSION MODAL
+  =========================================
+  */
+
+  const openPermissionModal = (adminToEdit) => {
+    if (!canUpdateAdmins) {
+      console.log(
+        "You do not have permission to update admin permissions."
+      );
+
+      return;
+    }
+
+    if (!adminToEdit?._id) {
+      console.error(
+        "Cannot manage admin: missing admin ID."
+      );
+
+      return;
+    }
+
+    if (adminToEdit.role === "super_admin") {
+      return;
+    }
+
+    setSelectedAdmin(adminToEdit);
+
+    setPermissions(
+      Array.isArray(adminToEdit.permissions)
+        ? adminToEdit.permissions
+        : []
+    );
+
+    setShowPermissionModal(true);
+  };
+
+  /*
+  =========================================
+  TOGGLE SINGLE PERMISSION
+  =========================================
+  */
+
+  const togglePermission = (permission) => {
+    setPermissions((prev) =>
+      prev.includes(permission)
+        ? prev.filter(
+            (item) => item !== permission
+          )
+        : [...prev, permission]
+    );
+  };
+
+  /*
+  =========================================
+  TOGGLE ALL PERMISSIONS
+  =========================================
+  */
+
+  const toggleAllPermissions = () => {
+    if (
+      permissions.length ===
+      allPermissions.length
+    ) {
+      setPermissions([]);
+    } else {
+      setPermissions([...allPermissions]);
+    }
+  };
+
+  /*
+  =========================================
+  TOGGLE GROUP PERMISSIONS
+  =========================================
+  */
+
+  const toggleGroupPermissions = (group) => {
+    const groupPermissions =
+      permissionGroups[group].map(
+        (permission) => permission.key
+      );
+
+    const hasAll = groupPermissions.every(
+      (permission) =>
+        permissions.includes(permission)
+    );
+
+    if (hasAll) {
+      setPermissions((prev) =>
+        prev.filter(
+          (item) =>
+            !groupPermissions.includes(item)
+        )
+      );
+    } else {
+      setPermissions((prev) => [
+        ...new Set([
+          ...prev,
+          ...groupPermissions,
+        ]),
+      ]);
+    }
+  };
+
+  /*
+  =========================================
+  SAVE PERMISSIONS
+  =========================================
+  */
+
+  const savePermissions = async () => {
+    if (!canUpdateAdmins) {
+      console.log(
+        "You do not have permission to update admin permissions."
+      );
+
+      return;
+    }
+
+    if (!selectedAdmin?._id) {
+      console.error(
+        "Cannot update permissions: missing admin ID."
+      );
+
+      return;
+    }
+
+    try {
       await api.patch(
-
         `/admins/${selectedAdmin._id}/permissions`,
-
         {
           permissions,
         }
-
       );
 
-
-
-      // update table immediately
-
-      setAdmins(prev =>
-
-        prev.map(admin =>
-
-          admin._id === selectedAdmin._id
-
+      setAdmins((prev) =>
+        prev.map((adminItem) =>
+          adminItem._id === selectedAdmin._id
             ? {
-
-                ...admin,
-
+                ...adminItem,
                 permissions,
-
               }
-
-            : admin
-
+            : adminItem
         )
-
       );
-
-
 
       setShowPermissionModal(false);
-
-
-
-    } catch(error) {
-
-
+      setSelectedAdmin(null);
+      setPermissions([]);
+    } catch (error) {
       console.log(
-
         "Permission update error:",
-
         error.response?.data || error.message
-
       );
-
-
     }
-
-
   };
 
+  /*
+  =========================================
+  CLOSE PERMISSION MODAL
+  =========================================
+  */
 
+  const closePermissionModal = () => {
+    setShowPermissionModal(false);
+    setSelectedAdmin(null);
+    setPermissions([]);
+  };
 
+  /*
+  =========================================
+  LOADING
+  =========================================
+  */
 
-
-
-  if(loading){
-
-
+  if (loading) {
     return (
-
       <div
-
         className="
           flex
           justify-center
           items-center
           h-60
-          text-white
+          text-gray-700
         "
-
       >
-
         Loading admins...
-
       </div>
-
     );
-
-
   }
 
+  /*
+  =========================================
+  ACCESS DENIED
+  =========================================
+  */
 
+  if (!canManageAdmins) {
+    return (
+      <div
+        className="
+          min-h-[70vh]
+          flex
+          items-center
+          justify-center
+          p-6
+        "
+      >
+        <div
+          className="
+            bg-slate-900
+            border
+            border-red-500/20
+            rounded-2xl
+            p-8
+            max-w-md
+            w-full
+            text-center
+          "
+        >
+          <FaUserShield
+            className="
+              text-red-400
+              text-5xl
+              mx-auto
+              mb-5
+            "
+          />
 
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-white
+              mb-3
+            "
+          >
+            Access Denied
+          </h1>
 
+          <p
+            className="
+              text-gray-400
+              mb-6
+            "
+          >
+            You do not have permission to
+            manage administrators.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/dashboard")
+            }
+            className="
+              bg-green-600
+              hover:bg-green-700
+              px-5
+              py-3
+              rounded-xl
+              text-white
+              font-semibold
+              transition
+            "
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+  =========================================
+  MAIN UI
+  =========================================
+  */
 
   return (
-
     <div
-
       className="
         min-h-screen
         bg-slate-950
         p-6
         text-white
       "
-
     >
-
-
-
+      {/* =========================================
+          HEADER
+      ========================================= */}
 
       <div
-
         className="
           mb-8
           flex
@@ -517,16 +601,9 @@ function AdminManagement() {
           flex-wrap
           gap-4
         "
-
       >
-
-
-
         <div>
-
-
           <h1
-
             className="
               text-3xl
               font-bold
@@ -534,61 +611,33 @@ function AdminManagement() {
               items-center
               gap-3
             "
-
           >
-
-
-            <FaUserShield/>
-
+            <FaUserShield />
 
             Admin Management
-
-
           </h1>
 
-
-
           <p
-
             className="
               text-gray-400
               mt-2
             "
-
           >
-
-
-            Manage administrators and their permissions.
-
-
+            Manage administrators and their
+            permissions.
           </p>
-
-
-
         </div>
 
-
-
-
-
-
         <div
-
           className="
             flex
             gap-3
+            flex-wrap
           "
-
         >
-
-
-
           <button
-
-
+            type="button"
             onClick={() => navigate(-1)}
-
-
             className="
               bg-gray-600
               hover:bg-gray-700
@@ -598,68 +647,52 @@ function AdminManagement() {
               flex
               items-center
               gap-2
+              transition
             "
-
-
           >
-
-
-            <FaArrowLeft/>
-
+            <FaArrowLeft />
 
             Back
-
-
           </button>
 
+          {/* =========================================
+              CREATE ADMIN
 
+              This now correctly checks admins.create
+              instead of only allowing super_admin.
+          ========================================= */}
 
+          {canCreateAdmins && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowCreateModal(true)
+              }
+              className="
+                bg-green-600
+                hover:bg-green-700
+                px-5
+                py-3
+                rounded-xl
+                flex
+                items-center
+                gap-2
+                transition
+              "
+            >
+              <FaPlus />
 
-
-          <button
-
-
-            onClick={() => setShowCreateModal(true)}
-
-
-            className="
-              bg-green-600
-              hover:bg-green-700
-              px-5
-              py-3
-              rounded-xl
-              flex
-              items-center
-              gap-2
-            "
-
-
-          >
-
-
-            <FaPlus/>
-
-
-            Add Admin
-
-
-          </button>
-
-
-
+              Add Admin
+            </button>
+          )}
         </div>
-
-
-
       </div>
 
-
-
-
-
+      {/* =========================================
+          ADMIN TABLE
+      ========================================= */}
 
       <div
-
         className="
           bg-white/10
           border
@@ -667,121 +700,73 @@ function AdminManagement() {
           rounded-2xl
           overflow-hidden
         "
-
       >
-
-
-
         <div className="overflow-x-auto">
-
-
           <table className="w-full">
-
-
-
             <thead>
-
-
               <tr
-
                 className="
                   border-b
                   border-white/10
                   text-gray-300
                 "
-
               >
-
-
-
                 <th className="p-4 text-left">
                   Name
                 </th>
-
 
                 <th className="p-4 text-left">
                   Email
                 </th>
 
-
                 <th className="p-4 text-left">
                   Role
                 </th>
-
 
                 <th className="p-4 text-left">
                   Permissions
                 </th>
 
-
                 <th className="p-4 text-left">
                   Action
                 </th>
-
-
-
               </tr>
-
-
             </thead>
 
-
-
-
-
             <tbody>
-
-
-              {
-
-                admins.map(admin => (
-
-
-
+              {admins.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="
+                      p-10
+                      text-center
+                      text-gray-400
+                    "
+                  >
+                    No administrators found.
+                  </td>
+                </tr>
+              ) : (
+                admins.map((adminItem) => (
                   <tr
-
-
-                    key={admin._id}
-
-
+                    key={adminItem._id}
                     className="
                       border-b
                       border-white/10
                       hover:bg-white/5
                     "
-
-
                   >
-
-
-
                     <td className="p-4">
-
-
-                      {admin.fullName}
-
-
+                      {adminItem.fullName}
                     </td>
 
-
-
-
                     <td className="p-4">
-
-
-                      {admin.email}
-
-
+                      {adminItem.email}
                     </td>
 
-
-
-
                     <td className="p-4">
-
-
                       <span
-
                         className="
                           px-3
                           py-1
@@ -790,27 +775,13 @@ function AdminManagement() {
                           text-green-400
                           text-sm
                         "
-
                       >
-
-
-                        {admin.role}
-
-
+                        {adminItem.role}
                       </span>
-
-
                     </td>
 
-
-
-
-
                     <td className="p-4">
-
-
                       <span
-
                         className="
                           bg-blue-600/20
                           text-blue-400
@@ -819,874 +790,517 @@ function AdminManagement() {
                           rounded-full
                           text-sm
                         "
-
                       >
-
-
-                        {admin.permissions?.length || 0}
-
-                        {" "}
-
+                        {adminItem.permissions
+                          ?.length || 0}{" "}
                         permissions
-
-
                       </span>
-
-
                     </td>
 
+                    <td className="p-4">
+                      <div className="flex gap-2 flex-wrap">
+                        {/* =========================================
+                            MANAGE PERMISSIONS
+                        ========================================= */}
 
+                        {canUpdateAdmins &&
+                          adminItem.role !==
+                            "super_admin" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openPermissionModal(
+                                  adminItem
+                                )
+                              }
+                              className="
+                                flex
+                                items-center
+                                gap-2
+                                bg-purple-600
+                                hover:bg-purple-700
+                                px-4
+                                py-2
+                                rounded-xl
+                                transition
+                              "
+                            >
+                              <FaUserShield />
 
+                              Manage
+                            </button>
+                          )}
 
+                        {/* =========================================
+                            DELETE ADMIN
+                        ========================================= */}
 
-<td className="p-4">
+                        {canDeleteAdmins &&
+                          adminItem.role !==
+                            "super_admin" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteAdmin(
+                                  adminItem._id
+                                )
+                              }
+                              className="
+                                bg-red-600
+                                hover:bg-red-700
+                                px-4
+                                py-2
+                                rounded-xl
+                                transition
+                              "
+                            >
+                              Delete
+                            </button>
+                          )}
 
-  <div className="flex gap-2">
+                        {/* =========================================
+                            NO ACTIONS AVAILABLE
+                        ========================================= */}
 
-
-    <button
-
-      onClick={() =>
-        openPermissionModal(admin)
-      }
-
-      disabled={
-        admin.role === "super_admin"
-      }
-
-      className="
-        flex
-        items-center
-        gap-2
-        bg-purple-600
-        hover:bg-purple-700
-        disabled:bg-gray-600
-        px-4
-        py-2
-        rounded-xl
-      "
-
-    >
-
-      <FaUserShield/>
-
-      Manage
-
-
-    </button>
-
-
-
-
-
-    <button
-
-      onClick={() =>
-        deleteAdmin(admin._id)
-      }
-
-      disabled={
-        admin.role === "super_admin"
-      }
-
-      className="
-        bg-red-600
-        hover:bg-red-700
-        disabled:bg-gray-600
-        px-4
-        py-2
-        rounded-xl
-      "
-
-    >
-
-      Delete
-
-
-    </button>
-
-
-
-  </div>
-
-
-</td>
-
-
-
+                        {!canUpdateAdmins &&
+                          !canDeleteAdmins && (
+                            <span
+                              className="
+                                text-gray-500
+                                text-sm
+                              "
+                            >
+                              No actions
+                            </span>
+                          )}
+                      </div>
+                    </td>
                   </tr>
-
-
-
                 ))
-
-              }
-
-
+              )}
             </tbody>
-
-
-
           </table>
-
-
-
         </div>
-
-
-
       </div>
-      {
-        showCreateModal && (
 
+      {/* =========================================
+          CREATE ADMIN MODAL
+      ========================================= */}
+
+      {showCreateModal && (
+        <div
+          className="
+            fixed
+            inset-0
+            bg-black/60
+            flex
+            items-center
+            justify-center
+            z-50
+            p-4
+          "
+        >
           <div
-
             className="
-              fixed
-              inset-0
-              bg-black/60
-              flex
-              items-center
-              justify-center
-              z-50
+              bg-slate-900
+              border
+              border-white/10
+              rounded-2xl
+              p-6
+              w-full
+              max-w-md
             "
-
           >
-
-
             <div
-
               className="
-                bg-slate-900
-                border
-                border-white/10
-                rounded-2xl
-                p-6
-                w-full
-                max-w-md
+                flex
+                justify-between
+                items-center
+                mb-6
               "
-
             >
+              <h2 className="text-xl font-bold">
+                Create Admin
+              </h2>
 
-
-
-              <div
-
+              <button
+                type="button"
+                aria-label="Close create admin modal"
+                onClick={() =>
+                  setShowCreateModal(false)
+                }
                 className="
-                  flex
-                  justify-between
-                  items-center
-                  mb-6
+                  text-gray-400
+                  hover:text-white
+                  transition
                 "
-
               >
+                <FaTimes />
+              </button>
+            </div>
 
+            <div className="space-y-4">
+              <input
+                id="full-name"
+                name="fullName"
+                placeholder="Full Name"
+                type="text"
+                autoComplete="name"
+                value={newAdmin.fullName}
+                onChange={(e) =>
+                  setNewAdmin({
+                    ...newAdmin,
+                    fullName: e.target.value,
+                  })
+                }
+                className="
+                  w-full
+                  bg-slate-800
+                  border
+                  border-white/10
+                  rounded-xl
+                  px-4
+                  py-3
+                  text-white
+                  focus:outline-none
+                  focus:border-green-500
+                "
+              />
 
+              <input
+                id="admin-email"
+                name="email"
+                placeholder="Email"
+                type="email"
+                autoComplete="email"
+                value={newAdmin.email}
+                onChange={(e) =>
+                  setNewAdmin({
+                    ...newAdmin,
+                    email: e.target.value,
+                  })
+                }
+                className="
+                  w-full
+                  bg-slate-800
+                  border
+                  border-white/10
+                  rounded-xl
+                  px-4
+                  py-3
+                  text-white
+                  focus:outline-none
+                  focus:border-green-500
+                "
+              />
+
+              <input
+                id="admin-password"
+                name="password"
+                placeholder="Password"
+                type="password"
+                autoComplete="new-password"
+                value={newAdmin.password}
+                onChange={(e) =>
+                  setNewAdmin({
+                    ...newAdmin,
+                    password: e.target.value,
+                  })
+                }
+                className="
+                  w-full
+                  bg-slate-800
+                  border
+                  border-white/10
+                  rounded-xl
+                  px-4
+                  py-3
+                  text-white
+                  focus:outline-none
+                  focus:border-green-500
+                "
+              />
+
+              <select
+                id="admin-role"
+                name="role"
+                value={newAdmin.role}
+                onChange={(e) =>
+                  setNewAdmin({
+                    ...newAdmin,
+                    role: e.target.value,
+                  })
+                }
+                className="
+                  w-full
+                  bg-slate-800
+                  border
+                  border-white/10
+                  rounded-xl
+                  px-4
+                  py-3
+                  text-white
+                  focus:outline-none
+                  focus:border-green-500
+                "
+              >
+                <option value="admin">
+                  Admin
+                </option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={createAdmin}
+              className="
+                mt-6
+                w-full
+                bg-green-600
+                hover:bg-green-700
+                py-3
+                rounded-xl
+                font-semibold
+                transition
+              "
+            >
+              Create Admin
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================
+          PERMISSION MODAL
+      ========================================= */}
+
+      {showPermissionModal && (
+        <div
+          className="
+            fixed
+            inset-0
+            bg-black/60
+            flex
+            items-center
+            justify-center
+            z-50
+            p-4
+          "
+        >
+          <div
+            className="
+              bg-slate-900
+              border
+              border-white/10
+              rounded-2xl
+              p-6
+              w-full
+              max-w-lg
+              max-h-[90vh]
+              overflow-y-auto
+            "
+          >
+            <div
+              className="
+                flex
+                justify-between
+                items-center
+                mb-6
+              "
+            >
+              <div>
                 <h2 className="text-xl font-bold">
-
-                  Create Admin
-
+                  Manage Permissions
                 </h2>
 
-
-
-                <button
-
-                  onClick={() =>
-                    setShowCreateModal(false)
-                  }
-
+                <p
+                  className="
+                    text-gray-400
+                    text-sm
+                    mt-1
+                  "
                 >
-
-                  <FaTimes/>
-
-                </button>
-
-
-
+                  {selectedAdmin?.fullName}
+                </p>
               </div>
-
-
-
-
-
-              <div className="space-y-4">
-
-
-
-                <input
-
-                  placeholder="Full Name"
-
-                  value={newAdmin.fullName}
-
-                  onChange={(e) =>
-
-                    setNewAdmin({
-
-                      ...newAdmin,
-
-                      fullName:e.target.value
-
-                    })
-
-                  }
-
-
-                  className="
-                    w-full
-                    bg-slate-800
-                    border
-                    border-white/10
-                    rounded-xl
-                    px-4
-                    py-3
-                  "
-
-                />
-
-
-
-
-
-                <input
-
-                  placeholder="Email"
-
-                  type="email"
-
-                  value={newAdmin.email}
-
-
-                  onChange={(e) =>
-
-                    setNewAdmin({
-
-                      ...newAdmin,
-
-                      email:e.target.value
-
-                    })
-
-                  }
-
-
-                  className="
-                    w-full
-                    bg-slate-800
-                    border
-                    border-white/10
-                    rounded-xl
-                    px-4
-                    py-3
-                  "
-
-                />
-
-
-
-
-
-
-                <input
-
-                  placeholder="Password"
-
-                  type="password"
-
-
-                  value={newAdmin.password}
-
-
-                  onChange={(e) =>
-
-                    setNewAdmin({
-
-                      ...newAdmin,
-
-                      password:e.target.value
-
-                    })
-
-                  }
-
-
-                  className="
-                    w-full
-                    bg-slate-800
-                    border
-                    border-white/10
-                    rounded-xl
-                    px-4
-                    py-3
-                  "
-
-                />
-
-
-
-
-
-
-
-                <select
-
-
-                  value={newAdmin.role}
-
-
-                  onChange={(e) =>
-
-                    setNewAdmin({
-
-                      ...newAdmin,
-
-                      role:e.target.value
-
-                    })
-
-                  }
-
-
-                  className="
-                    w-full
-                    bg-slate-800
-                    border
-                    border-white/10
-                    rounded-xl
-                    px-4
-                    py-3
-                  "
-
-
-                >
-
-
-
-                  <option value="admin">
-
-                    Admin
-
-                  </option>
-
-
-
-                  {/* <option value="super_admin">
-
-                    Super Admin
-
-                  </option> */}
-
-
-
-                </select>
-
-
-
-              </div>
-
-
-
-
-
-
 
               <button
-
-
-                onClick={createAdmin}
-
-
+                type="button"
+                aria-label="Close permissions modal"
+                onClick={
+                  closePermissionModal
+                }
                 className="
-                  mt-6
-                  w-full
-                  bg-green-600
-                  hover:bg-green-700
-                  py-3
-                  rounded-xl
-                  font-semibold
+                  text-gray-400
+                  hover:text-white
+                  transition
                 "
-
-
               >
-
-
-                Create Admin
-
-
+                <FaTimes />
               </button>
-
-
-
-
             </div>
 
+            <div className="space-y-5">
+              {/* =========================================
+                  SELECT ALL
+              ========================================= */}
 
-
-          </div>
-
-
-        )
-
-      }
-
-
-
-
-
-
-
-      {
-        showPermissionModal && (
-
-          <div
-
-            className="
-              fixed
-              inset-0
-              bg-black/60
-              flex
-              items-center
-              justify-center
-              z-50
-            "
-
-          >
-
-
-
-
-            <div
-
-              className="
-                bg-slate-900
-                border
-                border-white/10
-                rounded-2xl
-                p-6
-                w-full
-                max-w-lg
-              "
-
-            >
-
-
-
-
-              <div
-
+              <label
+                htmlFor="select-all-permissions"
                 className="
                   flex
-                  justify-between
                   items-center
-                  mb-6
+                  gap-3
+                  bg-green-600/20
+                  p-3
+                  rounded-lg
+                  cursor-pointer
                 "
-
               >
-
-
-
-                <div>
-
-
-                  <h2 className="text-xl font-bold">
-
-                    Manage Permissions
-
-                  </h2>
-
-
-
-
-                  <p className="text-gray-400 text-sm">
-
-
-                    {selectedAdmin?.fullName}
-
-
-                  </p>
-
-
-
-                </div>
-
-
-
-
-                <button
-
-
-                  onClick={() =>
-
-                    setShowPermissionModal(false)
-
+                <input
+                  id="select-all-permissions"
+                  name="selectAllPermissions"
+                  type="checkbox"
+                  checked={
+                    permissions.length ===
+                    allPermissions.length
                   }
+                  onChange={
+                    toggleAllPermissions
+                  }
+                />
 
+                <span className="font-semibold">
+                  Select All Permissions
+                </span>
+              </label>
 
+              {/* =========================================
+                  PERMISSION GROUPS
+              ========================================= */}
+
+              {Object.keys(
+                permissionGroups
+              ).map((group) => (
+                <div
+                  key={group}
+                  className="
+                    bg-white/5
+                    rounded-xl
+                    p-4
+                  "
                 >
-
-                  <FaTimes/>
-
-                </button>
-
-
-
-
-              </div>
-
-
-
-
-
-
-              <div
-
-                className="
-                  space-y-3
-                  max-h-80
-                  overflow-y-auto
-                "
-
-              >
-
-
-
-                <div className="space-y-5">
-
-
-
-                  {/* SELECT ALL */}
-
-
-
-                  <label
-
+                  <div
                     className="
                       flex
+                      justify-between
                       items-center
-                      gap-3
-                      bg-green-600/20
-                      p-3
-                      rounded-lg
-                      cursor-pointer
+                      mb-3
                     "
-
                   >
+                    <h3
+                      className="
+                        font-bold
+                        text-green-400
+                      "
+                    >
+                      {group}
+                    </h3>
 
+                    <label
+                      htmlFor={`select-${group}`}
+                      className="
+                        text-sm
+                        flex
+                        items-center
+                        gap-2
+                        cursor-pointer
+                      "
+                    >
+                      <input
+                        id={`select-${group}`}
+                        name={`select-${group}`}
+                        type="checkbox"
+                        checked={permissionGroups[
+                          group
+                        ].every((item) =>
+                          permissions.includes(
+                            item.key
+                          )
+                        )}
+                        onChange={() =>
+                          toggleGroupPermissions(
+                            group
+                          )
+                        }
+                      />
 
+                      Select All
+                    </label>
+                  </div>
 
-                    <input
-
-
-                      type="checkbox"
-
-
-                      checked={
-                        permissions.length === allPermissions.length
-                      }
-
-
-                      onChange={toggleAllPermissions}
-
-
-                    />
-
-
-
-                    <span className="font-semibold">
-
-                      Select All Permissions
-
-                    </span>
-
-
-
-                  </label>
-                  {
-                    Object.keys(permissionGroups).map(group => (
-
-
-                      <div
-
-                        key={group}
-
+                  <div className="space-y-2">
+                    {permissionGroups[
+                      group
+                    ].map((permission) => (
+                      <label
+                        key={permission.key}
+                        htmlFor={`permission-${permission.key}`}
                         className="
-                          bg-white/5
-                          rounded-xl
-                          p-4
+                          flex
+                          items-center
+                          gap-3
+                          bg-slate-800
+                          p-3
+                          rounded-lg
+                          cursor-pointer
                         "
-
                       >
-
-
-
-                        <div
-
-                          className="
-                            flex
-                            justify-between
-                            items-center
-                            mb-3
-                          "
-
-                        >
-
-
-
-                          <h3
-
-                            className="
-                              font-bold
-                              text-green-400
-                            "
-
-                          >
-
-
-                            {group}
-
-
-                          </h3>
-
-
-
-
-
-                          <label
-
-                            className="
-                              text-sm
-                              flex
-                              items-center
-                              gap-2
-                            "
-
-                          >
-
-
-
-                            <input
-
-
-                              type="checkbox"
-
-
-                              checked={
-
-                                permissionGroups[group]
-
-                                  .every(item =>
-
-                                    permissions.includes(item.key)
-
-                                  )
-
-                              }
-
-
-                              onChange={() =>
-
-                                toggleGroupPermissions(group)
-
-                              }
-
-
-                            />
-
-
-
-                            Select All
-
-
-
-                          </label>
-
-
-
-
-                        </div>
-
-
-
-
-
-
-
-
-                        <div className="space-y-2">
-
-
-
-                          {
-
-                            permissionGroups[group].map(permission => (
-
-
-
-                              <label
-
-
-                                key={permission.key}
-
-
-                                className="
-                                  flex
-                                  items-center
-                                  gap-3
-                                  bg-slate-800
-                                  p-3
-                                  rounded-lg
-                                  cursor-pointer
-                                "
-
-
-                              >
-
-
-
-
-                                <input
-
-
-                                  type="checkbox"
-
-
-                                  checked={
-
-                                    permissions.includes(
-                                      permission.key
-                                    )
-
-                                  }
-
-
-                                  onChange={() =>
-
-                                    togglePermission(
-                                      permission.key
-                                    )
-
-                                  }
-
-
-                                />
-
-
-
-
-
-                                <span>
-
-
-                                  {permission.label}
-
-
-                                </span>
-
-
-
-
-                              </label>
-
-
-
-                            ))
-
+                        <input
+                          id={`permission-${permission.key}`}
+                          name={`permission-${permission.key}`}
+                          type="checkbox"
+                          checked={permissions.includes(
+                            permission.key
+                          )}
+                          onChange={() =>
+                            togglePermission(
+                              permission.key
+                            )
                           }
+                        />
 
-
-
-
-
-                        </div>
-
-
-
-
-
-                      </div>
-
-
-
-                    ))
-
-                  }
-
-
-
-
-
+                        <span>
+                          {permission.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-
-
-
-
-
-              </div>
-
-
-
-
-
-
-
-              <button
-
-
-                onClick={savePermissions}
-
-
-                className="
-                  mt-6
-                  w-full
-                  bg-green-600
-                  hover:bg-green-700
-                  py-3
-                  rounded-xl
-                  font-semibold
-                "
-
-
-              >
-
-
-
-                Save Permissions
-
-
-
-              </button>
-
-
-
-
-
-
+              ))}
             </div>
 
-
-
-
+            <button
+              type="button"
+              onClick={savePermissions}
+              className="
+                mt-6
+                w-full
+                bg-green-600
+                hover:bg-green-700
+                py-3
+                rounded-xl
+                font-semibold
+                transition
+              "
+            >
+              Save Permissions
+            </button>
           </div>
-
-
-        )
-
-      }
-
-
-
-
-
-
+        </div>
+      )}
     </div>
-
   );
-
-
-
 }
-
-
 
 export default AdminManagement;

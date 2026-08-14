@@ -268,6 +268,7 @@ navigate("/dashboard");
 
 
           <input
+          id="admin-email"
 
             type="email"
 
@@ -312,6 +313,7 @@ navigate("/dashboard");
 
 
           <input
+          id="admin-password"
 
             type="password"
 
