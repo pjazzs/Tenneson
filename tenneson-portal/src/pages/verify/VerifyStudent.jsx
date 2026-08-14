@@ -1,13 +1,28 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import api from "../../api/axios";
+import {
+  useEffect,
+  useState,
+} from "react";
 
+import {
+  useParams,
+} from "react-router-dom";
+
+import {
+  FaCheckCircle,
+  FaTimesCircle,
+  FaUserGraduate,
+  FaIdCard,
+} from "react-icons/fa";
+
+import api from "../../api/axios";
 
 
 function VerifyStudent() {
 
 
-  const { studentId } = useParams();
+  const {
+    studentId,
+  } = useParams();
 
 
   const [student, setStudent] = useState(null);
@@ -15,7 +30,6 @@ function VerifyStudent() {
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
-
 
 
 
@@ -29,13 +43,19 @@ function VerifyStudent() {
       try {
 
 
+        setLoading(true);
+
+        setError("");
+
+
         const response = await api.get(
           `/students/qrcode/verify/${studentId}`
         );
 
 
-        setStudent(response.data.student);
-
+        setStudent(
+          response.data.student
+        );
 
 
       } catch (error) {
@@ -43,7 +63,7 @@ function VerifyStudent() {
 
         setError(
           error.response?.data?.message ||
-          "Student verification failed"
+          "Unable to verify student."
         );
 
 
@@ -69,33 +89,13 @@ function VerifyStudent() {
 
 
 
-
-
+  /*
+  =========================================
+  LOADING
+  =========================================
+  */
 
   if (loading) {
-
-
-    return (
-
-      <div className="text-center mt-10">
-
-        Verifying student...
-
-      </div>
-
-    );
-
-
-  }
-
-
-
-
-
-
-
-
-  if (error) {
 
 
     return (
@@ -103,33 +103,122 @@ function VerifyStudent() {
       <div
         className="
           min-h-screen
+          bg-slate-950
           flex
           items-center
           justify-center
-          bg-gray-100
+          text-white
         "
       >
 
         <div
           className="
-            bg-white
-            shadow
-            rounded-xl
-            p-8
-            text-center
+            flex
+            flex-col
+            items-center
+            gap-4
           "
         >
 
-          <h1 className="text-2xl font-bold text-red-600">
+          <div
+            className="
+              w-10
+              h-10
+              border-4
+              border-green-500
+              border-t-transparent
+              rounded-full
+              animate-spin
+            "
+          />
+
+
+          <p>
+            Verifying student...
+          </p>
+
+
+        </div>
+
+      </div>
+
+    );
+
+  }
+
+
+
+
+
+  /*
+  =========================================
+  VERIFICATION FAILED
+  =========================================
+  */
+
+  if (error || !student) {
+
+
+    return (
+
+      <div
+        className="
+          min-h-screen
+          bg-slate-950
+          flex
+          items-center
+          justify-center
+          p-5
+          text-white
+        "
+      >
+
+
+        <div
+          className="
+            bg-slate-900
+            border
+            border-red-500/20
+            rounded-2xl
+            p-8
+            max-w-md
+            w-full
+            text-center
+            shadow-xl
+          "
+        >
+
+
+          <FaTimesCircle
+            className="
+              text-red-500
+              text-5xl
+              mx-auto
+              mb-5
+            "
+          />
+
+
+          <h1
+            className="
+              text-2xl
+              font-bold
+              mb-3
+            "
+          >
 
             Verification Failed
 
           </h1>
 
 
-          <p className="mt-3 text-gray-600">
+          <p
+            className="
+              text-gray-400
+            "
+          >
 
-            {error}
+            {error || "Student not found."}
 
           </p>
 
@@ -141,94 +230,435 @@ function VerifyStudent() {
 
     );
 
-
   }
 
 
 
 
 
-
+  /*
+  =========================================
+  VERIFIED STUDENT
+  =========================================
+  */
 
   return (
-
 
     <div
       className="
         min-h-screen
-        bg-gray-100
+        bg-slate-950
         flex
         items-center
         justify-center
+        p-5
+        text-white
       "
     >
 
 
-
       <div
         className="
-          bg-white
-          shadow-xl
-          rounded-xl
-          p-8
           w-full
           max-w-md
+          bg-slate-900
+          border
+          border-white/10
+          rounded-3xl
+          shadow-2xl
+          overflow-hidden
         "
       >
 
 
-        <h1
+        {/* =========================================
+            HEADER
+        ========================================= */}
+
+        <div
           className="
-            text-2xl
-            font-bold
-            text-green-600
+            bg-green-600
+            p-6
             text-center
           "
         >
 
-          ✓ Verified Student
 
-        </h1>
-
-
-
-
-
-        <div className="mt-6 space-y-4">
-
-
-          <Info
-            label="Student ID"
-            value={student.studentId}
+          <FaCheckCircle
+            className="
+              text-white
+              text-5xl
+              mx-auto
+              mb-3
+            "
           />
 
 
-          <Info
-            label="Name"
-            value={`${student.firstName} ${student.lastName}`}
-          />
+          <h1
+            className="
+              text-2xl
+              font-bold
+            "
+          >
+
+            Verified Student
+
+          </h1>
 
 
-          <Info
-            label="Gender"
-            value={student.gender}
-          />
+          <p
+            className="
+              text-green-100
+              mt-1
+            "
+          >
 
+            Student record confirmed
 
-          <Info
-            label="Class"
-            value={student.currentClass}
-          />
-
-
-          <Info
-            label="Session"
-            value={student.session}
-          />
+          </p>
 
 
         </div>
 
+
+
+
+        {/* =========================================
+            STUDENT PHOTO
+        ========================================= */}
+
+        <div
+          className="
+            flex
+            justify-center
+            mt-6
+          "
+        >
+
+
+          {student.photo?.url ? (
+
+            <img
+              src={student.photo.url}
+              alt={`${student.firstName || ""} ${student.lastName || ""}`}
+              className="
+                w-28
+                h-28
+                rounded-full
+                object-cover
+                border-4
+                border-green-500
+              "
+            />
+
+          ) : (
+
+            <div
+              className="
+                w-28
+                h-28
+                rounded-full
+                bg-green-600
+                flex
+                items-center
+                justify-center
+                text-3xl
+                font-bold
+              "
+            >
+
+              {student.firstName?.[0] || ""}
+              {student.lastName?.[0] || ""}
+
+            </div>
+
+          )}
+
+
+        </div>
+
+
+
+
+        {/* =========================================
+            STUDENT DETAILS
+        ========================================= */}
+
+        <div
+          className="
+            p-6
+            space-y-4
+          "
+        >
+
+
+          {/* NAME */}
+
+          <div
+            className="
+              text-center
+              mb-6
+            "
+          >
+
+            <h2
+              className="
+                text-2xl
+                font-bold
+              "
+            >
+
+              {student.firstName} {student.lastName}
+
+            </h2>
+
+
+            {student.otherName && (
+
+              <p
+                className="
+                  text-gray-400
+                "
+              >
+
+                {student.otherName}
+
+              </p>
+
+            )}
+
+          </div>
+
+
+
+
+          {/* ID + GENDER */}
+
+          <div
+            className="
+              grid
+              grid-cols-2
+              gap-4
+            "
+          >
+
+
+            <div
+              className="
+                bg-slate-800
+                rounded-xl
+                p-4
+              "
+            >
+
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-2
+                  text-gray-400
+                  text-sm
+                  mb-2
+                "
+              >
+
+                <FaIdCard />
+
+                Student ID
+
+              </div>
+
+
+              <p
+                className="
+                  font-semibold
+                "
+              >
+
+                {student.studentId}
+
+              </p>
+
+            </div>
+
+
+
+
+            <div
+              className="
+                bg-slate-800
+                rounded-xl
+                p-4
+              "
+            >
+
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-2
+                  text-gray-400
+                  text-sm
+                  mb-2
+                "
+              >
+
+                <FaUserGraduate />
+
+                Gender
+
+              </div>
+
+
+              <p
+                className="
+                  font-semibold
+                "
+              >
+
+                {student.gender}
+
+              </p>
+
+            </div>
+
+
+          </div>
+
+
+
+
+          {/* CURRENT CLASS */}
+
+          <div
+            className="
+              bg-slate-800
+              rounded-xl
+              p-4
+            "
+          >
+
+            <p
+              className="
+                text-gray-400
+                text-sm
+                mb-1
+              "
+            >
+
+              Current Class
+
+            </p>
+
+
+            <p
+              className="
+                font-semibold
+              "
+            >
+
+              {student.currentClass}
+
+            </p>
+
+
+          </div>
+
+
+
+
+          {/* SESSION */}
+
+          <div
+            className="
+              bg-slate-800
+              rounded-xl
+              p-4
+            "
+          >
+
+            <p
+              className="
+                text-gray-400
+                text-sm
+                mb-1
+              "
+            >
+
+              Session
+
+            </p>
+
+
+            <p
+              className="
+                font-semibold
+              "
+            >
+
+              {student.session}
+
+            </p>
+
+
+          </div>
+
+
+
+
+          {/* STATUS */}
+
+          <div
+            className="
+              flex
+              justify-center
+              mt-5
+            "
+          >
+
+            <span
+              className="
+                bg-green-500/20
+                text-green-400
+                px-5
+                py-2
+                rounded-full
+                text-sm
+                font-semibold
+              "
+            >
+
+              ACTIVE STUDENT
+
+            </span>
+
+          </div>
+
+
+        </div>
+
+
+
+
+        {/* =========================================
+            FOOTER
+        ========================================= */}
+
+        <div
+          className="
+            border-t
+            border-white/10
+            p-4
+            text-center
+            text-xs
+            text-gray-500
+          "
+        >
+
+          This verification is generated from the school
+          student management system.
+
+        </div>
 
 
       </div>
@@ -236,46 +666,10 @@ function VerifyStudent() {
 
     </div>
 
-
   );
 
 
 }
-
-
-
-
-
-
-
-function Info({label, value}) {
-
-
-  return (
-
-    <div>
-
-      <p className="text-gray-500">
-
-        {label}
-
-      </p>
-
-
-      <p className="font-semibold text-gray-800">
-
-        {value}
-
-      </p>
-
-
-    </div>
-
-  );
-
-
-}
-
 
 
 export default VerifyStudent;
