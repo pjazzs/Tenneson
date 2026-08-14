@@ -166,7 +166,7 @@ function AuditLog() {
           <table
             className="
               w-full
-              min-w-[900px]
+              min-w-225
             "
           >
 

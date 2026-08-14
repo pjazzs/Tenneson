@@ -10,31 +10,18 @@ function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
-      {/* =========================================
-          SIDEBAR
-      ========================================= */}
+
+      {/* Sidebar */}
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* =========================================
-          MAIN AREA
-      ========================================= */}
+      {/* Main Content */}
       <div className="flex-1 min-w-0">
-        {/* =========================================
-            FIXED NAVBAR
-        ========================================= */}
-        <div
-          className="
-            fixed
-            top-0
-            right-0
-            left-0
-            lg:left-64
-            z-50
-          "
-        >
+
+        {/* Fixed Navbar */}
+        <div className="fixed top-0 right-0 left-0 md:left-72 z-40">
           <Navbar
             onMenuClick={() =>
               setIsMobileSidebarOpen(true)
@@ -42,19 +29,13 @@ function Layout() {
           />
         </div>
 
-        {/* =========================================
-            PAGE CONTENT
-        ========================================= */}
-        <main
-          className="
-            pt-20
-            p-4
-            md:p-6
-          "
-        >
+        {/* Page Content */}
+        <main className="pt-24 p-4 md:p-6 md:pt-24">
           <Outlet />
         </main>
+
       </div>
+
     </div>
   );
 }
