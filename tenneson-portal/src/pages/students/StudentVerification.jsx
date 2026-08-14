@@ -48,7 +48,7 @@ function VerifyStudent() {
 
 
         const response = await api.get(
-          `/students/verify/${studentId}`
+          `/students/qrcode/verify/${studentId}`
         );
 
 

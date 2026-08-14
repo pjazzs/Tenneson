@@ -1380,15 +1380,18 @@ exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
     });
   }
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     verified: true,
     student: {
       studentId: student.studentId,
-      name: `${student.firstName} ${student.lastName}`,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      otherName: student.otherName,
       gender: student.gender,
-      class: student.currentClass,
+      currentClass: student.currentClass,
       session: student.session,
+      photo: student.photo,
     },
   });
 });
