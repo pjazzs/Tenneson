@@ -1,7 +1,7 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 
-function PermissionRoute({ permission }) {
+function PermissionRoute({ permission, children }) {
   const { admin, hasPermission } = useAuth();
 
   if (!admin) {
@@ -12,7 +12,7 @@ function PermissionRoute({ permission }) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  return children;
 }
 
 export default PermissionRoute;
