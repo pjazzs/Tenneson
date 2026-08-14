@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 
@@ -11,21 +10,48 @@ function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
-      {/* Sidebar */}
+      {/* =========================================
+          SIDEBAR
+      ========================================= */}
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* Main Content */}
+      {/* =========================================
+          MAIN AREA
+      ========================================= */}
       <div className="flex-1 min-w-0">
-        <Navbar
-          onMenuClick={() =>
-            setIsMobileSidebarOpen(true)
-          }
-        />
+        {/* =========================================
+            FIXED NAVBAR
+        ========================================= */}
+        <div
+          className="
+            fixed
+            top-0
+            right-0
+            left-0
+            lg:left-64
+            z-50
+          "
+        >
+          <Navbar
+            onMenuClick={() =>
+              setIsMobileSidebarOpen(true)
+            }
+          />
+        </div>
 
-        <main className="p-4 md:p-6">
+        {/* =========================================
+            PAGE CONTENT
+        ========================================= */}
+        <main
+          className="
+            pt-20
+            p-4
+            md:p-6
+          "
+        >
           <Outlet />
         </main>
       </div>

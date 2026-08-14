@@ -1,301 +1,425 @@
 import {
-useEffect,
-useState
+  useEffect,
+  useState,
 } from "react";
 
 import {
-useNavigate
+  useNavigate,
 } from "react-router-dom";
 
 import api from "../../api/axios";
 
 
-function AuditLog(){
+function AuditLog() {
 
-const navigate = useNavigate();
+  const navigate = useNavigate();
 
-const [logs,setLogs]=useState([]);
+  const [logs, setLogs] = useState([]);
 
-const [loading,setLoading]=useState(true);
+  const [loading, setLoading] = useState(true);
 
 
+  useEffect(() => {
 
-useEffect(()=>{
+    const fetchLogs = async () => {
 
+      try {
 
-const fetchLogs=async()=>{
+        const response = await api.get(
+          "/audit"
+        );
 
-try{
 
-const response=await api.get(
-"/audit"
-);
+        setLogs(
+          response.data.logs
+        );
 
 
-setLogs(
-response.data.logs
-);
+      } catch (error) {
 
+        console.log(
+          error.response?.data || error.message
+        );
 
-}catch(error){
+      } finally {
 
-console.log(
-error.response?.data || error.message
-);
+        setLoading(false);
 
+      }
 
-}finally{
+    };
 
-setLoading(false);
 
-}
+    fetchLogs();
 
+  }, []);
 
-};
 
+  return (
 
-fetchLogs();
+    <div className="text-white">
 
 
-},[]);
+      {/* =========================================
+          PAGE HEADER
+      ========================================= */}
 
+      <div
+        className="
+          flex
+          flex-col
+          sm:flex-row
+          sm:justify-between
+          sm:items-center
+          gap-4
+          mb-6
+        "
+      >
 
 
+        <div>
 
+          <h1
+            className="
+              text-3xl
+              font-bold
+              text-gray-900
+            "
+          >
 
-return (
+            Audit Logs
 
-<div className="
-text-white
-">
+          </h1>
 
 
-<div className="
-flex
-justify-between
-items-center
-mb-6
-">
+          <p
+            className="
+              text-gray-600
+              mt-2
+            "
+          >
 
+            Track important activities performed
+            by administrators.
 
-<div>
+          </p>
 
-<h1 className="
-text-3xl
-font-bold
-text-gray-900
-">
+        </div>
 
-Audit Logs
 
-</h1>
 
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/dashboard")
+          }
+          className="
+            bg-slate-800
+            hover:bg-slate-700
+            text-white
+            px-5
+            py-2
+            rounded-xl
+            text-sm
+            transition
+            whitespace-nowrap
+            self-start
+            sm:self-auto
+          "
+        >
+
+          ← Back to Dashboard
+
+        </button>
+
+
+      </div>
+
+
+
+
+      {/* =========================================
+          AUDIT LOG TABLE
+      ========================================= */}
+
+      <div
+        className="
+          bg-slate-900
+          rounded-2xl
+          border
+          border-white/10
+          overflow-hidden
+        "
+      >
 
-<p className="
-text-gray-600
-mt-2
-">
 
-Track important activities performed by administrators.
+        {/* =========================================
+            HORIZONTAL SCROLL CONTAINER
 
-</p>
+            This allows the table to be swiped
+            left/right on mobile.
+        ========================================= */}
 
+        <div className="overflow-x-auto">
 
-</div>
 
+          <table
+            className="
+              w-full
+              min-w-[900px]
+            "
+          >
 
 
-<button
+            {/* =====================================
+                TABLE HEADER
+            ===================================== */}
 
-onClick={() =>
-navigate("/dashboard")
-}
+            <thead>
 
-className="
-bg-slate-800
-hover:bg-slate-700
-px-5
-py-2
-rounded-xl
-text-sm
-transition
-"
+              <tr
+                className="
+                  border-b
+                  border-white/10
+                  text-gray-400
+                "
+              >
 
->
 
-← Back to Dashboard
+                <th
+                  className="
+                    p-4
+                    text-left
+                    whitespace-nowrap
+                  "
+                >
+                  User
+                </th>
 
-</button>
 
+                <th
+                  className="
+                    p-4
+                    text-left
+                    whitespace-nowrap
+                  "
+                >
+                  Action
+                </th>
 
-</div>
 
+                <th
+                  className="
+                    p-4
+                    text-left
+                    whitespace-nowrap
+                  "
+                >
+                  Module
+                </th>
 
 
-<div className="
-bg-slate-900
-rounded-2xl
-border
-border-white/10
-overflow-hidden
-">
+                <th
+                  className="
+                    p-4
+                    text-left
+                    whitespace-nowrap
+                  "
+                >
+                  Description
+                </th>
 
 
-<table className="w-full">
+                <th
+                  className="
+                    p-4
+                    text-left
+                    whitespace-nowrap
+                  "
+                >
+                  Date
+                </th>
 
 
-<thead>
+              </tr>
 
-<tr className="
-border-b
-border-white/10
-text-gray-400
-">
+            </thead>
 
 
-<th className="p-4 text-left">
-User
-</th>
 
 
-<th className="p-4 text-left">
-Action
-</th>
+            {/* =====================================
+                TABLE BODY
+            ===================================== */}
 
+            <tbody>
 
-<th className="p-4 text-left">
-Module
-</th>
 
+              {loading ? (
 
-<th className="p-4 text-left">
-Description
-</th>
+                <tr>
 
+                  <td
+                    colSpan="5"
+                    className="
+                      text-center
+                      p-10
+                      text-gray-400
+                    "
+                  >
 
-<th className="p-4 text-left">
-Date
-</th>
+                    Loading logs...
 
+                  </td>
 
-</tr>
+                </tr>
 
-</thead>
+              ) : logs.length === 0 ? (
 
+                <tr>
 
+                  <td
+                    colSpan="5"
+                    className="
+                      text-center
+                      p-10
+                      text-gray-400
+                    "
+                  >
 
-<tbody>
+                    No audit logs found.
 
+                  </td>
 
-{
-loading ? (
+                </tr>
 
-<tr>
+              ) : (
 
-<td
-colSpan="5"
-className="
-text-center
-p-10
-"
->
+                logs.map((log) => (
 
-Loading logs...
+                  <tr
+                    key={log._id}
+                    className="
+                      border-b
+                      border-white/10
+                      hover:bg-white/5
+                    "
+                  >
 
-</td>
 
-</tr>
+                    {/* USER */}
 
+                    <td
+                      className="
+                        p-4
+                        whitespace-nowrap
+                      "
+                    >
 
-)
+                      {log.user?.fullName || "System"}
 
-:
+                    </td>
 
-logs.map(log=>(
 
 
-<tr
-key={log._id}
-className="
-border-b
-border-white/10
-hover:bg-white/5
-"
->
 
+                    {/* ACTION */}
 
-<td className="p-4">
+                    <td className="p-4">
 
-{log.user?.fullName || "System"}
+                      <span
+                        className="
+                          bg-blue-500/20
+                          text-blue-400
+                          px-3
+                          py-1
+                          rounded-full
+                          text-sm
+                          whitespace-nowrap
+                        "
+                      >
 
-</td>
+                        {log.action}
 
+                      </span>
 
-<td className="p-4">
+                    </td>
 
-<span className="
-bg-blue-500/20
-text-blue-400
-px-3
-py-1
-rounded-full
-text-sm
-">
 
-{log.action}
 
-</span>
 
-</td>
+                    {/* MODULE */}
 
+                    <td
+                      className="
+                        p-4
+                        whitespace-nowrap
+                      "
+                    >
 
-<td className="p-4">
+                      {log.module}
 
-{log.module}
+                    </td>
 
-</td>
 
 
-<td className="p-4 text-gray-300">
 
-{log.description}
+                    {/* DESCRIPTION */}
 
-</td>
+                    <td
+                      className="
+                        p-4
+                        text-gray-300
+                        max-w-md
+                      "
+                    >
 
+                      {log.description}
 
-<td className="p-4 text-gray-400">
+                    </td>
 
-{
-new Date(
-log.createdAt
-).toLocaleString()
-}
 
-</td>
 
 
-</tr>
+                    {/* DATE */}
 
+                    <td
+                      className="
+                        p-4
+                        text-gray-400
+                        whitespace-nowrap
+                      "
+                    >
 
-))
+                      {new Date(
+                        log.createdAt
+                      ).toLocaleString()}
 
+                    </td>
 
-}
 
+                  </tr>
 
-</tbody>
+                ))
 
+              )}
 
-</table>
 
+            </tbody>
 
-</div>
 
+          </table>
 
-</div>
 
-);
+        </div>
 
+
+      </div>
+
+
+    </div>
+
+  );
 
 }
 
