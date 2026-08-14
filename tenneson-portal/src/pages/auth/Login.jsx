@@ -8,40 +8,22 @@ import api from "../../api/axios";
 import useAuth from "../../hooks/useAuth";
 
 function Login() {
-
-
   const navigate = useNavigate();
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [email,setEmail] = useState("");
-
-  const [password,setPassword] = useState("");
-
-  const [error,setError] = useState("");
-
-  const [loading,setLoading] = useState(false);
   const { setAdmin } = useAuth();
 
-
-
-
-
-
-  const handleSubmit = async(e)=>{
-
-
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-
     setError("");
-
     setLoading(true);
 
-
-
-    try{
-
-
+    try {
       const response = await api.post(
         "/auth/login",
         {
@@ -50,53 +32,28 @@ function Login() {
         }
       );
 
-
-
-     localStorage.setItem(
-  "token",
-  response.data.token
-);
-
-localStorage.setItem(
-  "admin",
-  JSON.stringify(response.data.admin)
-);
-
-setAdmin(response.data.admin);
-
-navigate("/dashboard");
-
-
-
-    }catch(error){
-
-
-      setError(
-
-        error.response?.data?.message ||
-        "Login failed"
-
+      localStorage.setItem(
+        "token",
+        response.data.token
       );
 
+      localStorage.setItem(
+        "admin",
+        JSON.stringify(response.data.admin)
+      );
 
+      setAdmin(response.data.admin);
 
-    }finally{
-
-
+      navigate("/dashboard");
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+        "Login failed"
+      );
+    } finally {
       setLoading(false);
-
-
     }
-
-
   };
-
-
-
-
-
-
-
 
   const inputStyle = `
     w-full
@@ -111,36 +68,22 @@ navigate("/dashboard");
     focus:border-green-500
   `;
 
-
-
-
-
-
-
   return (
-
-
-    <div className="
-      min-h-screen
-      flex
-      items-center
-      justify-center
-      bg-linear-to-br
-      from-slate-950
-      via-slate-900
-      to-green-950
-      px-4
-    ">
-
-
-
-
-
-
+    <div
+      className="
+        min-h-screen
+        flex
+        items-center
+        justify-center
+        bg-linear-to-br
+        from-slate-950
+        via-slate-900
+        to-green-950
+        px-4
+      "
+    >
       <form
-
         onSubmit={handleSubmit}
-
         className="
           w-full
           max-w-md
@@ -152,81 +95,56 @@ navigate("/dashboard");
           rounded-3xl
           p-8
         "
-
       >
-
-
-
-
-
-        <div className="
-          flex
-          flex-col
-          items-center
-          mb-8
-        ">
-
-
-          <div className="
-            w-20
-            h-20
-            rounded-full
-            bg-green-600
+        <div
+          className="
             flex
+            flex-col
             items-center
-            justify-center
-            text-white
-            text-3xl
-            shadow-lg
-            mb-4
-          ">
-
-            <FaSchool/>
-
+            mb-8
+          "
+        >
+          <div
+            className="
+              w-20
+              h-20
+              rounded-full
+              bg-green-600
+              flex
+              items-center
+              justify-center
+              text-white
+              text-3xl
+              shadow-lg
+              mb-4
+            "
+          >
+            <FaSchool />
           </div>
 
-
-
-
-
-          <h1 className="
-            text-3xl
-            font-bold
-            text-white
-          ">
-
+          <h1
+            className="
+              text-3xl
+              font-bold
+              text-white
+            "
+          >
             Tenneson Portal
-
           </h1>
 
-
-
-
-          <p className="
-            text-gray-400
-            mt-2
-          ">
-
+          <p
+            className="
+              text-gray-400
+              mt-2
+            "
+          >
             Admin Dashboard Login
-
           </p>
-
-
-
         </div>
 
-
-
-
-
-
-
-
-
-        {
-          error && (
-
-            <div className="
+        {error && (
+          <div
+            className="
               bg-red-600/20
               text-red-400
               border
@@ -234,115 +152,67 @@ navigate("/dashboard");
               p-3
               rounded-xl
               mb-5
-            ">
-
-              {error}
-
-            </div>
-
-          )
-        }
-
-
-
-
-
-
-
-
+            "
+          >
+            {error}
+          </div>
+        )}
 
         <div className="mb-5">
-
-
-          <label className="
-            text-gray-300
-            text-sm
-            block
-            mb-2
-          ">
-
+          <label
+            htmlFor="admin-email"
+            className="
+              text-gray-300
+              text-sm
+              block
+              mb-2
+            "
+          >
             Email
-
           </label>
 
-
-
           <input
-          id="admin-email"
-
+            id="admin-email"
+            name="email"
             type="email"
-
             placeholder="admin@example.com"
-
             value={email}
-
-            onChange={(e)=>setEmail(e.target.value)}
-
+            onChange={(e) => setEmail(e.target.value)}
             className={inputStyle}
-
+            autoComplete="email"
             required
-
           />
-
-
         </div>
-
-
-
-
-
-
-
-
 
         <div className="mb-6">
-
-
-          <label className="
-            text-gray-300
-            text-sm
-            block
-            mb-2
-          ">
-
+          <label
+            htmlFor="admin-password"
+            className="
+              text-gray-300
+              text-sm
+              block
+              mb-2
+            "
+          >
             Password
-
           </label>
 
-
-
-
           <input
-          id="admin-password"
-
+            id="admin-password"
+            name="password"
             type="password"
-
             placeholder="Enter password"
-
             value={password}
-
-            onChange={(e)=>setPassword(e.target.value)}
-
+            onChange={(e) => setPassword(e.target.value)}
             className={inputStyle}
-
+            autoComplete="current-password"
             required
-
           />
-
-
         </div>
 
-
-
-
-
-
-
-
         <button
-
+          type="submit"
           disabled={loading}
-
           className="
             w-full
             flex
@@ -358,43 +228,14 @@ navigate("/dashboard");
             transition
             disabled:opacity-50
           "
-
         >
+          <FaLock />
 
-
-          <FaLock/>
-
-
-          {
-            loading
-            ?
-            "Logging in..."
-            :
-            "Login"
-          }
-
-
-
+          {loading ? "Logging in..." : "Login"}
         </button>
-
-
-
-
-
-
       </form>
-
-
-
-
-
     </div>
-
-
   );
-
-
 }
-
 
 export default Login;
