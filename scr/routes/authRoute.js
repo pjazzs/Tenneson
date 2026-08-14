@@ -3,12 +3,15 @@ const { registerAdmin, loginAdmin } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 const { authorize } = require("../middleware/authorize");
 const { authLimiter } = require("../middleware/rateLimiter");
+const {
+  authorizePermission,
+} = require("../middleware/permissionMiddleware");
 
 const router = express.Router();
 router.post(
   "/auth/register",
   protect,
-  authorize("super_admin"),
+  authorizePermission("admins.create"),
   registerAdmin,
 );
 
