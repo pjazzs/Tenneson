@@ -28,11 +28,6 @@ const adminSchema = new mongoose.Schema(
       default: "admin",
     },
 
-
-    // =========================
-    // Permission Control
-    // =========================
-
     permissions: {
       type: [
         {
@@ -42,16 +37,16 @@ const adminSchema = new mongoose.Schema(
       default: [],
     },
 
-
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
   },
 );
 
-
-const Admin =
-  mongoose.models.Admin || mongoose.model("Admin", adminSchema);
-
+const Admin = mongoose.models.Admin || mongoose.model("Admin", adminSchema);
 
 module.exports = Admin;

@@ -21,15 +21,14 @@ const {
 } = require("../controllers/studentcontroller");
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
-const { studentSchema } = require("../validators/studentValidator");
+const {
+  studentSchema,
+  studentUpdateSchema,
+} = require("../validators/studentValidator");
 const upload = require("../middleware/uploadMiddlewear");
 const uploadPhoto = require("../middleware/photoUpload");
 const { authorizePermission } = require("../middleware/permissionMiddleware");
-const {
-  verifyLimiter
-} = require("../middleware/rateLimiter");
-
-
+const { verifyLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
@@ -38,20 +37,16 @@ router.post(
   protect,
   authorizePermission("students.import"),
   upload.single("file"),
-  bulkImportStudents
+  bulkImportStudents,
 );
 router.get("/students/dashboard", protect, dashboard);
 router.get(
   "/students/analytics/monthly",
   protect,
-  monthlyRegistrationAnalytics
+  monthlyRegistrationAnalytics,
 );
 
-router.get(
-  "/students/analytics/classes",
-  protect,
-  classAnalytics
-);
+router.get("/students/analytics/classes", protect, classAnalytics);
 
 /**
  * @swagger
@@ -98,23 +93,39 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.get("/students/activity-logs", protect, authorizePermission("students.view"), getActivityLogs);
+router.get(
+  "/students/activity-logs",
+  protect,
+  authorizePermission("students.view"),
+  getActivityLogs,
+);
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
-router.get("/students/export", protect, authorizePermission("students.export"), exportStudents);
+router.get(
+  "/students/export",
+  protect,
+  authorizePermission("students.export"),
+  exportStudents,
+);
 router.post(
   "/students",
   protect,
   authorizePermission("students.create"),
   validate(studentSchema),
-  createStudent
+  createStudent,
 );
-router.get("/students/:studentId/slip", protect, downloadStudentSlip);
 router.get(
-  "/students/:studentId/qrcode",
+  "/students/:studentId/slip",
   protect,
-  generateStudentQRCode,
+  authorizePermission("students.view"),
+  downloadStudentSlip,
 );
-router.get("/students/archived", protect, authorizePermission("students.view"), getArchivedStudents);
+router.get("/students/:studentId/qrcode", protect, generateStudentQRCode);
+router.get(
+  "/students/archived",
+  protect,
+  authorizePermission("students.view"),
+  getArchivedStudents,
+);
 
 /**
  * @swagger
@@ -158,15 +169,25 @@ router.get("/students/archived", protect, authorizePermission("students.view"), 
  *       401:
  *         description: Unauthorized
  */
-router.get("/students", protect, authorizePermission("students.view"), getStudents);
+router.get(
+  "/students",
+  protect,
+  authorizePermission("students.view"),
+  getStudents,
+);
 router.get("/students/verify/:studentId", verifyLimiter, verifyStudent);
-router.patch("/students/:studentId/restore", protect, authorizePermission("students.restore"), restoreStudent);
+router.patch(
+  "/students/:studentId/restore",
+  protect,
+  authorizePermission("students.restore"),
+  restoreStudent,
+);
 router.patch(
   "/students/:studentId/photo",
   protect,
   authorizePermission("students.photo"),
   uploadPhoto.single("photo"),
-  uploadStudentPhoto
+  uploadStudentPhoto,
 );
 
 /**
@@ -196,7 +217,7 @@ router.get(
   "/students/:studentId",
   protect,
   authorizePermission("students.view"),
-  getStudent
+  getStudent,
 );
 
 /**
@@ -225,8 +246,8 @@ router.get(
  *                 type: string
  *                 example: Michael
  *               currentClass:
- * 
- * 
+ *
+ *
  *                 type: string
  *                 example: JSS2
  *               parentPhone:
@@ -242,7 +263,8 @@ router.put(
   "/students/:studentId",
   protect,
   authorizePermission("students.update"),
-  updateStudent
+  validate(studentUpdateSchema),
+  updateStudent,
 );
 
 /**
@@ -272,9 +294,7 @@ router.delete(
   "/students/:studentId",
   protect,
   authorizePermission("students.delete"),
-  deleteStudent
+  deleteStudent,
 );
-
-
 
 module.exports = router;

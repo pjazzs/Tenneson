@@ -1,19 +1,10 @@
 const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const generateToken = require("../utils/generateToken");
 
 exports.registerAdmin = async (req, res) => {
   try {
-
-    const {
-      fullName,
-      email,
-      password,
-      role,
-      permissions,
-    } = req.body;
-
+    const { fullName, email, password, role, permissions } = req.body;
 
     if (!fullName || !email || !password) {
       return res.status(400).json({
@@ -22,9 +13,9 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
-
-    const existingAdmin = await Admin.findOne({ email });
-
+    const existingAdmin = await Admin.findOne({
+      email: email.toLowerCase(),
+    });
 
     if (existingAdmin) {
       return res.status(409).json({
@@ -33,84 +24,37 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
-
     const hashedPassword = await bcrypt.hash(password, 12);
 
-
     const admin = await Admin.create({
-
       fullName,
-
       email: email.toLowerCase(),
-
       password: hashedPassword,
-
       role: role || "admin",
-
       permissions: permissions || [],
-
     });
 
+    const token = generateToken(admin);
 
-
-    const token = jwt.sign(
-
-      {
-        id: admin._id,
-        email: admin.email,
-        role: admin.role,
-        permissions: admin.permissions,
-      },
-
-      process.env.JWT_SECRET,
-
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN,
-      },
-
-    );
-
-
-
-    res.status(201).json({
-
+    return res.status(201).json({
       success: true,
-
       message: "Admin registered successfully.",
-
       token,
-
       admin: {
-
         id: admin._id,
-
         fullName: admin.fullName,
-
         email: admin.email,
-
         role: admin.role,
-
         permissions: admin.permissions,
-
       },
-
     });
-
-
   } catch (error) {
-
-    res.status(500).json({
-
+    return res.status(500).json({
       success: false,
-
       message: error.message,
-
     });
-
   }
 };
-
-
 
 exports.loginAdmin = async (req, res) => {
   try {
@@ -137,10 +81,7 @@ exports.loginAdmin = async (req, res) => {
     }
 
     // Compare password
-    const isMatch = await bcrypt.compare(
-      password,
-      admin.password
-    );
+    const isMatch = await bcrypt.compare(password, admin.password);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -176,67 +117,38 @@ exports.loginAdmin = async (req, res) => {
         permissions: admin.permissions,
       },
     });
-
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
 };
 
+exports.deleteAdmin = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.params.id);
 
-
-exports.deleteAdmin = async (req,res)=>{
-
-  try{
-
-    const admin = await Admin.findById(
-      req.params.id
-    );
-
-
-    if(!admin){
-
+    if (!admin) {
       return res.status(404).json({
-        message:"Admin not found"
+        message: "Admin not found",
       });
-
     }
 
-
-    if(admin.role === "super_admin"){
-
+    if (admin.role === "super_admin") {
       return res.status(403).json({
-        message:"Cannot delete super admin"
+        message: "Cannot delete super admin",
       });
-
     }
-
-
 
     await admin.deleteOne();
 
-
-
     res.json({
-
-      message:"Admin deleted successfully"
-
+      message: "Admin deleted successfully",
     });
-
-
-
-  }catch(error){
-
+  } catch (error) {
     res.status(500).json({
-
-      message:error.message
-
+      message: error.message,
     });
-
   }
-
 };

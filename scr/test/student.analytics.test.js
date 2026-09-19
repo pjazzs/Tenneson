@@ -20,12 +20,10 @@ describe("Student Analytics API", () => {
       permissions: [],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     token = loginResponse.body.token;
   });
@@ -100,21 +98,48 @@ describe("Student Analytics API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.success).toBe(true);
 
-    const january = response.body.data.find(
-      (item) => item.month === "January"
-    );
+    const january = response.body.data.find((item) => item.month === "January");
 
     const february = response.body.data.find(
-      (item) => item.month === "February"
+      (item) => item.month === "February",
     );
 
     expect(january.count).toBe(2);
     expect(february.count).toBe(1);
   });
 
+  test("Should include registrations made on December 31", async () => {
+    const currentYear = new Date().getFullYear();
+
+    await Student.create({
+      studentId: "TCC90004",
+      firstName: "December",
+      lastName: "ThirtyOne",
+      gender: "Male",
+      dateOfBirth: new Date("2012-12-10"),
+      currentClass: "JSS1",
+      session: "2025/2026",
+      isActive: true,
+      createdAt: new Date(currentYear, 11, 31, 15, 30, 0),
+    });
+
+    const response = await request(app)
+      .get("/api/v1/students/analytics/monthly")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const december = response.body.data.find(
+      (item) => item.month === "December",
+    );
+
+    expect(december.count).toBe(1);
+  });
+
   test("Should reject monthly analytics without authentication", async () => {
     const response = await request(app).get(
-      "/api/v1/students/analytics/monthly"
+      "/api/v1/students/analytics/monthly",
     );
 
     expect(response.statusCode).toBe(401);
@@ -163,13 +188,9 @@ describe("Student Analytics API", () => {
 
     expect(Array.isArray(response.body.data)).toBe(true);
 
-    const jss1 = response.body.data.find(
-      (item) => item._id === "JSS1"
-    );
+    const jss1 = response.body.data.find((item) => item._id === "JSS1");
 
-    const jss2 = response.body.data.find(
-      (item) => item._id === "JSS2"
-    );
+    const jss2 = response.body.data.find((item) => item._id === "JSS2");
 
     expect(jss1.count).toBe(2);
     expect(jss2.count).toBe(1);
@@ -206,16 +227,14 @@ describe("Student Analytics API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.success).toBe(true);
 
-    const jss1 = response.body.data.find(
-      (item) => item._id === "JSS1"
-    );
+    const jss1 = response.body.data.find((item) => item._id === "JSS1");
 
     expect(jss1.count).toBe(1);
   });
 
   test("Should reject class analytics without authentication", async () => {
     const response = await request(app).get(
-      "/api/v1/students/analytics/classes"
+      "/api/v1/students/analytics/classes",
     );
 
     expect(response.statusCode).toBe(401);

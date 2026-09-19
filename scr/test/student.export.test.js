@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
-const Student = require("../models/Student");
+const Student = require("../models/student");
 const bcrypt = require("bcrypt");
 
 describe("Student Export API", () => {
@@ -17,19 +17,13 @@ describe("Student Export API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-        "students.export",
-      ],
+      permissions: ["students.create", "students.view", "students.export"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -84,14 +78,12 @@ describe("Student Export API", () => {
     expect(response.statusCode).toBe(200);
 
     expect(response.headers["content-type"]).toMatch(
-      /spreadsheet|excel|octet-stream/
+      /spreadsheet|excel|octet-stream/,
     );
 
     expect(response.headers["content-disposition"]).toBeDefined();
 
-    expect(response.headers["content-disposition"]).toMatch(
-      /Students\.xlsx/
-    );
+    expect(response.headers["content-disposition"]).toMatch(/Students\.xlsx/);
 
     expect(response.body).toBeInstanceOf(Buffer);
 
@@ -106,9 +98,7 @@ describe("Student Export API", () => {
 
     expect(response.statusCode).toBe(200);
 
-    expect(response.headers["content-disposition"]).toMatch(
-      /Students\.xlsx/
-    );
+    expect(response.headers["content-disposition"]).toMatch(/Students\.xlsx/);
 
     expect(response.body).toBeInstanceOf(Buffer);
 
@@ -167,6 +157,35 @@ describe("Student Export API", () => {
     expect(response.body.length).toBeGreaterThan(0);
   });
 
+  test("Should reject exports that exceed the maximum allowed rows", async () => {
+    const students = Array.from({ length: 10001 }, (_, index) => ({
+      studentId: `TCC${String(index + 10000).padStart(5, "0")}`,
+      firstName: `BulkStudent${index}`,
+      lastName: "ExportTest",
+      gender: index % 2 === 0 ? "Male" : "Female",
+      dateOfBirth: new Date(2000, 0, 1 + index),
+      currentClass: "JSS1",
+      session: "2025/2026",
+      parentName: "Test Parent",
+      parentPhone: "08000000000",
+      isActive: true,
+    }));
+
+    await Student.insertMany(students);
+
+    const response = await request(app)
+      .get("/api/v1/students/export")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(413);
+
+    expect(response.body.success).toBe(false);
+
+    expect(response.body.message).toMatch(/Export is too large/i);
+
+    expect(response.body.message).toMatch(/10000/i);
+  });
+
   test("Should require students.export permission", async () => {
     const hashedPassword = await bcrypt.hash("password123", 12);
 
@@ -177,18 +196,13 @@ describe("Student Export API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-      ],
+      permissions: ["students.create", "students.view"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -196,10 +210,7 @@ describe("Student Export API", () => {
 
     const response = await request(app)
       .get("/api/v1/students/export")
-      .set(
-        "Authorization",
-        `Bearer ${noPermissionToken}`
-      );
+      .set("Authorization", `Bearer ${noPermissionToken}`);
 
     expect(response.statusCode).toBe(403);
 
@@ -207,8 +218,7 @@ describe("Student Export API", () => {
   });
 
   test("Should reject export without authentication", async () => {
-    const response = await request(app)
-      .get("/api/v1/students/export");
+    const response = await request(app).get("/api/v1/students/export");
 
     expect(response.statusCode).toBe(401);
   });

@@ -1,7 +1,12 @@
 const XLSX = require("xlsx");
 const fs = require("fs");
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
 const asyncHandler = require("express-async-handler");
+
 const Student = require("../models/student");
+const StudentCredential = require("../models/StudentCredential");
+
 const generateStudentId = require("../utils/generateStudentID");
 const logActivity = require("../utils/logActivity");
 const ActivityLog = require("../models/activityLog");
@@ -11,8 +16,118 @@ const cloudinary = require("../config/cloudinary");
 const parseExcelDate = require("../utils/parseExcelDate");
 const createAuditLog = require("../utils/createAuditLog");
 
-exports.createStudent = asyncHandler(async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 
+/**
+ * Generate a secure temporary student password.
+ *
+ * This password is returned only when a credential is initially created
+ * so the administrator/class teacher can provide it to the student.
+ *
+ * The student will be required to change it after first login.
+ */
+const generateTemporaryPassword = () => {
+  return crypto.randomBytes(6).toString("base64url").slice(0, 10);
+};
+
+/**
+ * Escape user input before using it inside a MongoDB regular expression.
+ *
+ * This prevents characters such as:
+ * . * + ? ^ $ { } ( ) | [ ] \
+ *
+ * from being interpreted as regex operators.
+ */
+const escapeRegex = (value) => {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+/**
+ * Create a StudentCredential for a student.
+ *
+ * If a password is supplied, it is used.
+ * Otherwise, a secure temporary password is generated.
+ *
+ * The plaintext password is never stored in the database.
+ */
+const createStudentCredential = async ({ student, password, adminId }) => {
+  const existingCredential = await StudentCredential.findOne({
+    student: student._id,
+  });
+
+  if (existingCredential) {
+    const error = new Error(
+      "A student login account already exists for this student.",
+    );
+
+    error.statusCode = 409;
+
+    throw error;
+  }
+
+  const username = student.studentId.toUpperCase();
+
+  const plainPassword =
+    password && String(password).trim()
+      ? String(password)
+      : generateTemporaryPassword();
+
+  const passwordHash = await bcrypt.hash(plainPassword, 12);
+
+  const credential = await StudentCredential.create({
+    student: student._id,
+    username,
+    passwordHash,
+    mustChangePassword: true,
+    isActive: true,
+    createdBy: adminId,
+    updatedBy: adminId,
+  });
+
+  return {
+    credential,
+    temporaryPassword: plainPassword,
+  };
+};
+
+/**
+ * Create a credential for a bulk-imported student.
+ *
+ * Bulk imports do not normally contain passwords, so a secure temporary
+ * password is generated for each imported student.
+ */
+const createBulkStudentCredential = async ({ student, adminId }) => {
+  const password = generateTemporaryPassword();
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const credential = await StudentCredential.create({
+    student: student._id,
+    username: student.studentId.toUpperCase(),
+    passwordHash,
+    mustChangePassword: true,
+    isActive: true,
+    createdBy: adminId,
+    updatedBy: adminId,
+  });
+
+  return {
+    credential,
+    temporaryPassword: password,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Create Student
+|--------------------------------------------------------------------------
+*/
+
+exports.createStudent = asyncHandler(async (req, res) => {
   const {
     firstName,
     lastName,
@@ -23,234 +138,249 @@ exports.createStudent = asyncHandler(async (req, res) => {
     session,
     parentName,
     parentPhone,
+    password,
   } = req.body;
 
+  /*
+  |--------------------------------------------------------------------------
+  | Parse Date of Birth
+  |--------------------------------------------------------------------------
+  */
 
-
-  // Parse date of birth
-
-  const parsedDateOfBirth = parseExcelDate(
-    dateOfBirth
-  );
-
-
+  const parsedDateOfBirth = parseExcelDate(dateOfBirth);
 
   if (!parsedDateOfBirth) {
-
     return res.status(400).json({
-
       success: false,
-
-      message:
-        "Invalid date of birth format.",
-
+      message: "Invalid date of birth format.",
     });
-
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Check Duplicate Student
+  |--------------------------------------------------------------------------
+  |
+  | This application-level check handles the normal case.
+  |
+  | The database-level unique index on:
+  |
+  | firstName + lastName + dateOfBirth
+  |
+  | provides the final protection against concurrent requests.
+  |
+  */
 
+  const escapedFirstName = escapeRegex(firstName.trim());
+  const escapedLastName = escapeRegex(lastName.trim());
 
+  const existingStudent = await Student.findOne({
+    firstName: {
+      $regex: new RegExp(`^${escapedFirstName}$`, "i"),
+    },
 
+    lastName: {
+      $regex: new RegExp(`^${escapedLastName}$`, "i"),
+    },
 
-  // Check duplicate student
+    dateOfBirth: parsedDateOfBirth,
 
-  const existingStudent =
-    await Student.findOne({
-
-      firstName: {
-
-        $regex:
-          new RegExp(
-            `^${firstName.trim()}$`,
-            "i"
-          ),
-
-      },
-
-
-      lastName: {
-
-        $regex:
-          new RegExp(
-            `^${lastName.trim()}$`,
-            "i"
-          ),
-
-      },
-
-
-      dateOfBirth:
-        parsedDateOfBirth,
-
-
-      isActive: true,
-
-    });
-
-
-
-
+    isActive: true,
+  });
 
   if (existingStudent) {
-
-    res.status(409);
-
-    throw new Error(
-      "A student with these details already exists."
-    );
-
+    return res.status(409).json({
+      success: false,
+      message: "A student with these details already exists.",
+    });
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Generate Student ID
+  |--------------------------------------------------------------------------
+  */
 
+  const studentId = await generateStudentId();
 
+  /*
+  |--------------------------------------------------------------------------
+  | Create Student
+  |--------------------------------------------------------------------------
+  |
+  | The compound unique index protects this operation against a race
+  | condition where two identical registrations pass the duplicate
+  | check at almost the same time.
+  |
+  */
 
+  let student;
 
-  // Generate Student ID
-
-  const studentId =
-    await generateStudentId();
-
-
-
-
-
-
-  // Create student
-
-  const student =
-    await Student.create({
-
+  try {
+    student = await Student.create({
       studentId,
-
 
       firstName,
 
-
       lastName,
-
 
       otherName,
 
-
       gender,
 
-
-      dateOfBirth:
-        parsedDateOfBirth,
-
+      dateOfBirth: parsedDateOfBirth,
 
       currentClass,
 
-
       session,
 
-
-      admissionDate:
-        new Date(),
-
+      admissionDate: new Date(),
 
       parentName,
 
-
       parentPhone,
 
+      createdBy: req.admin._id,
 
-      createdBy:
-        req.admin._id,
+      updatedBy: req.admin._id,
+    });
+  } catch (error) {
+    /*
+     * MongoDB duplicate-key error.
+     *
+     * This occurs when another concurrent request created an
+     * active student with the same first name, last name,
+     * and date of birth between our duplicate check and
+     * Student.create().
+     */
 
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "A student with these details already exists.",
+      });
+    }
 
-      updatedBy:
-        req.admin._id,
+    throw error;
+  }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Create Student Login Credential
+  |--------------------------------------------------------------------------
+  */
+
+  let credentialResult;
+
+  try {
+    credentialResult = await createStudentCredential({
+      student,
+      password,
+      adminId: req.admin._id,
+    });
+  } catch (error) {
+    /*
+     * Roll back the student if credential creation fails.
+     * This prevents students from existing without login credentials.
+     */
+
+    await Student.deleteOne({
+      _id: student._id,
     });
 
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
 
+    throw error;
+  }
 
-
-
-
-
-
-  // Audit log
+  /*
+  |--------------------------------------------------------------------------
+  | Audit Log
+  |--------------------------------------------------------------------------
+  */
 
   await createAuditLog({
+    user: req.admin._id,
 
-    adminId:
-      req.admin._id,
+    action: "CREATE",
 
-
-    action:
-      "CREATE",
-
-
-    module:
-      "STUDENT",
-
+    module: "STUDENT",
 
     description:
-      `${req.admin.fullName} created student ${student.firstName} ${student.lastName}`,
-
+      `${req.admin.fullName} created student ` +
+      `${student.firstName} ${student.lastName}`,
 
     req,
-
   });
 
-
-
-
-
-
-  // Activity log
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
 
   await logActivity({
+    adminId: req.admin._id,
 
-    adminId:
-      req.admin._id,
+    action: "CREATE_STUDENT",
 
+    studentId: student.studentId,
 
-    action:
-      "CREATE_STUDENT",
-
-
-    studentId:
-      student.studentId,
-
-
-    details:
-      `Created student ${student.firstName} ${student.lastName}`,
-
+    details: `Created student ${student.firstName} ${student.lastName}`,
   });
 
+  /*
+  |--------------------------------------------------------------------------
+  | Response
+  |--------------------------------------------------------------------------
+  */
 
-
-
-
-
-
-
-  res.status(201).json({
-
+  return res.status(201).json({
     success: true,
 
-
-    message:
-      "Student created successfully.",
-
+    message: "Student created successfully.",
 
     student,
 
+    studentCredential: {
+      username: credentialResult.credential.username,
+
+      temporaryPassword: credentialResult.temporaryPassword,
+
+      mustChangePassword: credentialResult.credential.mustChangePassword,
+    },
   });
-
-
-
 });
 
+/*
+|--------------------------------------------------------------------------
+| Get Students
+|--------------------------------------------------------------------------
+*/
+
 exports.getStudents = asyncHandler(async (req, res) => {
+  /*
+  |--------------------------------------------------------------------------
+  | Pagination
+  |--------------------------------------------------------------------------
+  */
 
-  const page = Number(req.query.page) || 1;
+  const requestedPage = Number(req.query.page);
 
-  const limit = Number(req.query.limit) || 10;
+  const requestedLimit = Number(req.query.limit);
 
+  const page =
+    Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  const limit =
+    Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 10;
 
   const search = req.query.search || "";
 
@@ -262,221 +392,145 @@ exports.getStudents = asyncHandler(async (req, res) => {
 
   const status = req.query.status || "";
 
-
-
   const skip = (page - 1) * limit;
-
-
-
 
   const query = {};
 
-
-
-
   /*
-    Default behaviour:
-    If no status filter is provided,
-    show only active students
+  |--------------------------------------------------------------------------
+  | Default Status
+  |--------------------------------------------------------------------------
   */
 
   if (!status) {
-
     query.isActive = true;
-
   }
 
-
-
-
   /*
-    Status Filter
+  |--------------------------------------------------------------------------
+  | Status Filter
+  |--------------------------------------------------------------------------
   */
 
   if (status === "active") {
-
     query.isActive = true;
-
   }
-
 
   if (status === "archived") {
-
     query.isActive = false;
-
   }
 
-
-
-
-
-
   /*
-    Search by:
-    - First Name
-    - Last Name
-    - Other Name
-    - Student ID
+  |--------------------------------------------------------------------------
+  | Search
+  |--------------------------------------------------------------------------
   */
 
   if (search) {
-
+    const escapedSearch = escapeRegex(search);
 
     query.$or = [
-
-
       {
         firstName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
-
 
       {
         lastName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
-
 
       {
         otherName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
-
 
       {
         studentId: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
-
-
     ];
-
-
   }
 
-
-
-
-
-
-
   /*
-    Class Filter
+  |--------------------------------------------------------------------------
+  | Class Filter
+  |--------------------------------------------------------------------------
   */
 
   if (currentClass) {
-
     query.currentClass = currentClass;
-
   }
 
-
-
-
-
   /*
-    Gender Filter
+  |--------------------------------------------------------------------------
+  | Gender Filter
+  |--------------------------------------------------------------------------
   */
 
   if (gender) {
-
     query.gender = gender;
-
   }
 
-
-
-
-
-
   /*
-    Session Filter
+  |--------------------------------------------------------------------------
+  | Session Filter
+  |--------------------------------------------------------------------------
   */
 
   if (session) {
-
     query.session = session;
-
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Students
+  |--------------------------------------------------------------------------
+  */
 
-
-
-
-
-
-  const students = await Student.find(query)
-
-    .skip(skip)
-
-    .limit(limit)
-
-    .sort({
-      createdAt: -1,
-    });
-
-
-
-
-
-
+  const students = await Student.find(query).skip(skip).limit(limit).sort({
+    createdAt: -1,
+  });
 
   const totalStudents = await Student.countDocuments(query);
 
-
-
-
-
-
-  res.status(200).json({
-
-
+  return res.status(200).json({
     success: true,
-
 
     students,
 
-
-
     pagination: {
-
-
       currentPage: page,
-
 
       limit,
 
-
       totalStudents,
 
-
-      totalPages: Math.ceil(
-        totalStudents / limit
-      ),
-
-
+      totalPages: Math.ceil(totalStudents / limit),
     },
-
-
   });
-
-
-
 });
+
+/*
+|--------------------------------------------------------------------------
+| Get Single Student
+|--------------------------------------------------------------------------
+*/
 
 exports.getStudent = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
   const student = await Student.findOne({
     studentId,
+
     isActive: true,
   })
     .populate("createdBy", "fullName email -_id")
@@ -484,134 +538,315 @@ exports.getStudent = asyncHandler(async (req, res) => {
 
   if (!student) {
     res.status(404);
+
     throw new Error("Student not found.");
   }
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
+
     student,
   });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Update Student
+|--------------------------------------------------------------------------
+*/
+
 exports.updateStudent = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
-  delete req.body.studentId;
+  /*
+   * Only these fields are allowed to be updated
+   * through the student update endpoint.
+   */
+  const allowedFields = [
+    "firstName",
+    "lastName",
+    "otherName",
+    "gender",
+    "dateOfBirth",
+    "currentClass",
+    "session",
+    "parentName",
+    "parentPhone",
+  ];
+
+  const updateData = {};
+
+  /*
+   * Build the update object from the whitelist.
+   *
+   * This prevents system-controlled fields such as:
+   * studentId, isActive, createdBy, photo, password,
+   * passwordHash, username, etc. from being modified here.
+   */
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      updateData[field] = req.body[field];
+    }
+  }
+
+  /*
+   * At least one editable field must be supplied.
+   */
+  if (Object.keys(updateData).length === 0) {
+    res.status(400);
+
+    throw new Error("At least one student field must be provided for update.");
+  }
 
   const student = await Student.findOneAndUpdate(
-    { studentId },
     {
-      ...req.body,
-      updatedBy: req.admin._id,
+      studentId,
     },
+
+    {
+      $set: {
+        ...updateData,
+
+        updatedBy: req.admin._id,
+      },
+    },
+
     {
       returnDocument: "after",
+
       runValidators: true,
     },
   );
 
   if (!student) {
     res.status(404);
+
     throw new Error("Student not found.");
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Audit Log
+  |--------------------------------------------------------------------------
+  */
+
   await createAuditLog({
+    user: req.admin._id,
 
-adminId: req.admin._id,
+    action: "UPDATE",
 
-action:"UPDATE",
+    module: "STUDENT",
 
-module:"STUDENT",
+    description:
+      `${req.admin.fullName} updated student ` +
+      `${student.firstName} ${student.lastName}`,
 
-description:
-`${req.admin.fullName} updated student ${student.firstName} ${student.lastName}`,
+    req,
+  });
 
-req,
-
-});
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
 
   await logActivity({
     adminId: req.admin._id,
+
     action: "UPDATE_STUDENT",
+
     studentId: student.studentId,
+
     details: `${student.firstName} ${student.lastName}`,
   });
 
   return res.status(200).json({
     success: true,
+
     message: "Student updated successfully.",
+
     student,
   });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Delete / Archive Student
+|--------------------------------------------------------------------------
+*/
 
 exports.deleteStudent = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
   const student = await Student.findOneAndUpdate(
-    { studentId },
-    { isActive: false },
-    { returnDocument: "after" }
+    {
+      studentId,
+    },
+
+    {
+      isActive: false,
+    },
+
+    {
+      returnDocument: "after",
+    },
   );
 
   if (!student) {
     return res.status(404).json({
       success: false,
+
       message: "Student not found.",
     });
   }
 
-  // Create audit log
+  /*
+  |--------------------------------------------------------------------------
+  | Disable Student Login
+  |--------------------------------------------------------------------------
+  */
+
+  await StudentCredential.findOneAndUpdate(
+    {
+      student: student._id,
+    },
+
+    {
+      isActive: false,
+
+      updatedBy: req.admin._id,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Audit Log
+  |--------------------------------------------------------------------------
+  */
+
   await createAuditLog({
     user: req.admin._id,
+
     action: "ARCHIVE",
+
     module: "STUDENT",
-    description: `${req.admin.fullName} archived student ${student.firstName} ${student.lastName}`,
+
+    description:
+      `${req.admin.fullName} archived student ` +
+      `${student.firstName} ${student.lastName}`,
+
     req,
   });
 
-  // Create student activity log
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
+
   await logActivity({
     adminId: req.admin._id,
-    action: "DELETE_STUDENT",
+
+    action: "ARCHIVE_STUDENT",
+
     studentId: student.studentId,
+
     details: `${student.firstName} ${student.lastName}`,
   });
 
   return res.status(200).json({
     success: true,
+
     message: "Student archived successfully",
   });
 });
 
-exports.restoreStudent = asyncHandler(async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Restore Student
+|--------------------------------------------------------------------------
+*/
 
+exports.restoreStudent = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
-
-  const student = await Student.findOneAndUpdate(
-
-    { studentId },
-
-    { isActive: true },
-
-    { returnDocument: "after" }
-
-  );
-
-
+  const student = await Student.findOne({
+    studentId,
+  });
 
   if (!student) {
-
     res.status(404);
 
     throw new Error("Student not found.");
-
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Verify Student Login Credential
+  |--------------------------------------------------------------------------
+  */
 
+  const credential = await StudentCredential.findOne({
+    student: student._id,
+  });
+
+  if (!credential) {
+    res.status(409);
+
+    throw new Error(
+      "Student cannot be restored because the login credential is missing.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Restore Student
+  |--------------------------------------------------------------------------
+  */
+
+  student.isActive = true;
+  student.updatedBy = req.admin._id;
+
+  await student.save();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Reactivate Student Login
+  |--------------------------------------------------------------------------
+  */
+
+  credential.isActive = true;
+  credential.updatedBy = req.admin._id;
+
+  await credential.save();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Audit Log
+  |--------------------------------------------------------------------------
+  */
+
+  await createAuditLog({
+    user: req.admin._id,
+
+    action: "RESTORE",
+
+    module: "STUDENT",
+
+    description:
+      `${req.admin.fullName} restored student ` +
+      `${student.firstName} ${student.lastName}`,
+
+    req,
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
 
   await logActivity({
-
     adminId: req.admin._id,
 
     action: "RESTORE_STUDENT",
@@ -619,65 +854,90 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
     studentId: student.studentId,
 
     details: `${student.firstName} ${student.lastName}`,
-
   });
 
-
-
-  res.status(200).json({
-
+  return res.status(200).json({
     success: true,
 
     message: "Student restored successfully",
-
   });
-
-
 });
 
-exports.getArchivedStudents = asyncHandler(async (req, res) => {
-  const students = await Student.find({
-    isActive: false,
-  }).sort({
-    createdAt: -1,
-  });
+/*
+|--------------------------------------------------------------------------
+| Get Archived Students
+|--------------------------------------------------------------------------
+*/
 
-  res.status(200).json({
+exports.getArchivedStudents = asyncHandler(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+
+  const skip = (page - 1) * limit;
+
+  const [students, totalStudents] = await Promise.all([
+    Student.find({
+      isActive: false,
+    })
+      .sort({
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit),
+
+    Student.countDocuments({
+      isActive: false,
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalStudents / limit);
+
+  return res.status(200).json({
     success: true,
-    totalStudents: students.length,
+
+    totalStudents,
+
+    page,
+
+    limit,
+
+    totalPages,
+
     students,
   });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Verify Student
+|--------------------------------------------------------------------------
+*/
+
 exports.verifyStudent = async (req, res) => {
   try {
-
     const student = await Student.findOne({
       studentId: req.params.studentId,
     });
 
-
     if (!student || student.isActive === false) {
-
       return res.status(404).json({
         success: false,
+
         verified: false,
+
         exists: false,
+
         message: "Student not found",
       });
-
     }
 
-
-
-    res.status(200).json({
-
+    return res.status(200).json({
       success: true,
 
       verified: true,
 
       student: {
-
         studentId: student.studentId,
 
         firstName: student.firstName,
@@ -693,24 +953,24 @@ exports.verifyStudent = async (req, res) => {
         session: student.session,
 
         photo: student.photo,
-
       },
-
     });
+  } catch (error) {
+    console.error("Student verification error:", error);
 
-
-  } catch(error) {
-
-    res.status(500).json({
-
+    return res.status(500).json({
       success: false,
 
-      message: error.message,
-
+      message: "Unable to verify student at this time",
     });
-
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard
+|--------------------------------------------------------------------------
+*/
 
 exports.dashboard = asyncHandler(async (req, res) => {
   const totalStudents = await Student.countDocuments();
@@ -725,35 +985,53 @@ exports.dashboard = asyncHandler(async (req, res) => {
 
   const maleStudents = await Student.countDocuments({
     gender: "Male",
+
     isActive: true,
   });
 
   const femaleStudents = await Student.countDocuments({
     gender: "Female",
+
     isActive: true,
   });
 
-  const recentStudents = await Student.find({ isActive: true })
+  const recentStudents = await Student.find({
+    isActive: true,
+  })
     .select("studentId firstName lastName currentClass createdAt")
-    .sort({ createdAt: -1 })
+    .sort({
+      createdAt: -1,
+    })
     .limit(5);
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
+
     message: "Dashboard statistics retrieved successfully.",
+
     data: {
       totalStudents,
+
       activeStudents,
+
       inactiveStudents,
+
       maleStudents,
+
       femaleStudents,
+
       recentStudents,
     },
   });
 });
 
-exports.bulkImportStudents = asyncHandler(async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Bulk Import Students
+|--------------------------------------------------------------------------
+*/
 
+exports.bulkImportStudents = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
       success: false,
@@ -761,38 +1039,37 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     });
   }
 
-
-
   const workbook = XLSX.readFile(req.file.path);
-
 
   const sheetName = workbook.SheetNames[0];
 
-
   const worksheet = workbook.Sheets[sheetName];
 
+  const students = XLSX.utils.sheet_to_json(worksheet);
 
-  const students = XLSX.utils.sheet_to_json(
-    worksheet
-  );
+  /*
+  |--------------------------------------------------------------------------
+  | Delete Uploaded File
+  |--------------------------------------------------------------------------
+  */
 
-
-
-  // Delete uploaded file after reading it
-  fs.unlinkSync(req.file.path);
-
-
+  try {
+    fs.unlinkSync(req.file.path);
+  } catch (error) {
+    console.log("Uploaded file deletion error:", error.message);
+  }
 
   const importedStudents = [];
 
   const skippedStudents = [];
 
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Process Each Student
+  |--------------------------------------------------------------------------
+  */
 
   for (const student of students) {
-
-
     const {
       firstName,
       lastName,
@@ -805,11 +1082,11 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       parentPhone,
     } = student;
 
-
-
-
-
-    // Required field validation
+    /*
+    |--------------------------------------------------------------------------
+    | Required Fields
+    |--------------------------------------------------------------------------
+    */
 
     if (
       !firstName ||
@@ -819,446 +1096,411 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       !currentClass ||
       !session
     ) {
-
-
       skippedStudents.push({
-
         student,
-
         reason: "Missing required fields.",
-
       });
 
-
       continue;
-
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Parse Date
+    |--------------------------------------------------------------------------
+    */
 
-
-
-
-    // Parse date from Excel
-
-    const parsedDateOfBirth = parseExcelDate(
-      dateOfBirth
-    );
-
-
-
+    const parsedDateOfBirth = parseExcelDate(dateOfBirth);
 
     if (!parsedDateOfBirth) {
-
-
       skippedStudents.push({
-
         student,
-
         reason: "Invalid date of birth format.",
-
       });
 
-
       continue;
-
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gender Validation
+    |--------------------------------------------------------------------------
+    */
 
-
-
-
-
-    // Gender validation
-
-    if (
-      !["Male", "Female"].includes(gender)
-    ) {
-
-
+    if (!["Male", "Female"].includes(gender)) {
       skippedStudents.push({
-
         student: {
-
           firstName,
-
           lastName,
-
           gender,
-
         },
-
-        reason:
-          "Gender must be Male or Female.",
-
+        reason: "Gender must be Male or Female.",
       });
 
-
       continue;
-
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Duplicate Check
+    |--------------------------------------------------------------------------
+    */
 
+    const startOfDay = new Date(parsedDateOfBirth);
 
+    startOfDay.setHours(0, 0, 0, 0);
 
+    const endOfDay = new Date(parsedDateOfBirth);
 
+    endOfDay.setHours(23, 59, 59, 999);
 
+    const escapedFirstName = escapeRegex(firstName.trim());
 
+    const escapedLastName = escapeRegex(lastName.trim());
 
-    // Duplicate check
+    const existingStudent = await Student.findOne({
+      firstName: {
+        $regex: new RegExp(`^${escapedFirstName}$`, "i"),
+      },
 
-   const startOfDay = new Date(parsedDateOfBirth);
-startOfDay.setHours(0, 0, 0, 0);
+      lastName: {
+        $regex: new RegExp(`^${escapedLastName}$`, "i"),
+      },
 
-const endOfDay = new Date(parsedDateOfBirth);
-endOfDay.setHours(23, 59, 59, 999);
+      dateOfBirth: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      },
 
-const existingStudent = await Student.findOne({
-  firstName: {
-    $regex: new RegExp(
-      `^${firstName.trim()}$`,
-      "i"
-    ),
-  },
-
-  lastName: {
-    $regex: new RegExp(
-      `^${lastName.trim()}$`,
-      "i"
-    ),
-  },
-
-  dateOfBirth: {
-    $gte: startOfDay,
-    $lte: endOfDay,
-  },
-
-  isActive: true,
-});
-
-
-
-
+      isActive: true,
+    });
 
     if (existingStudent) {
-
-
       skippedStudents.push({
-
         student: {
-
           firstName,
-
           lastName,
-
           dateOfBirth,
-
         },
 
+        existingStudentId: existingStudent.studentId,
 
-        existingStudentId:
-          existingStudent.studentId,
-
-
-        reason:
-          "Student already exists.",
-
+        reason: "Student already exists.",
       });
 
-
       continue;
-
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Generate Student ID
+    |--------------------------------------------------------------------------
+    */
 
+    const studentId = await generateStudentId();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create Student
+    |--------------------------------------------------------------------------
+    */
 
+    let newStudent;
 
+    let newCredential;
 
-
-
-    // Generate Student ID
-
-    const studentId =
-      await generateStudentId();
-
-
-
-
-
-
-    // Create student
-
-    const newStudent =
-      await Student.create({
-
+    try {
+      newStudent = await Student.create({
         studentId,
-
 
         firstName,
 
-
         lastName,
-
 
         otherName,
 
-
         gender,
 
-
-        dateOfBirth:
-          parsedDateOfBirth,
-
+        dateOfBirth: parsedDateOfBirth,
 
         currentClass,
 
-
         session,
-
 
         parentName,
 
-
         parentPhone,
 
+        createdBy: req.admin._id,
 
-        createdBy:
-          req.admin._id,
-
-
-        updatedBy:
-          req.admin._id,
-
+        updatedBy: req.admin._id,
       });
 
+      /*
+      |--------------------------------------------------------------------------
+      | Create Student Credential
+      |--------------------------------------------------------------------------
+      */
 
+      const credentialResult = await createBulkStudentCredential({
+        student: newStudent,
 
+        adminId: req.admin._id,
+      });
 
+      newCredential = credentialResult.credential;
 
+      /*
+      |--------------------------------------------------------------------------
+      | Store Imported Student
+      |--------------------------------------------------------------------------
+      |
+      | IMPORTANT:
+      |
+      | The temporary plaintext password is intentionally NOT returned.
+      |
+      | The credential is still created using the generated password,
+      | but the password itself is never included in the API response.
+      |
+      */
 
+      importedStudents.push({
+        studentId: newStudent.studentId,
 
-    // Store imported student information
+        firstName: newStudent.firstName,
 
-    importedStudents.push({
+        lastName: newStudent.lastName,
 
-      studentId:
-        newStudent.studentId,
+        currentClass: newStudent.currentClass,
 
+        session: newStudent.session,
 
-      firstName:
-        newStudent.firstName,
+        username: credentialResult.credential.username,
 
+        mustChangePassword: credentialResult.credential.mustChangePassword,
+      });
+    } catch (error) {
+      /*
+      |--------------------------------------------------------------------------
+      | Roll Back Credential
+      |--------------------------------------------------------------------------
+      */
 
-      lastName:
-        newStudent.lastName,
+      if (newCredential?._id) {
+        try {
+          await StudentCredential.deleteOne({
+            _id: newCredential._id,
+          });
+        } catch (rollbackError) {
+          console.log(
+            "Bulk import credential rollback error:",
+            rollbackError.message,
+          );
+        }
+      }
 
+      /*
+      |--------------------------------------------------------------------------
+      | Roll Back Student
+      |--------------------------------------------------------------------------
+      */
 
-      currentClass:
-        newStudent.currentClass,
+      if (newStudent?._id) {
+        try {
+          await Student.deleteOne({
+            _id: newStudent._id,
+          });
+        } catch (rollbackError) {
+          console.log(
+            "Bulk import student rollback error:",
+            rollbackError.message,
+          );
+        }
+      }
 
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          gender,
+          currentClass,
+          session,
+        },
 
-      session:
-        newStudent.session,
-
-    });
-
-
-
+        reason: error.message || "Unable to create student account.",
+      });
+    }
   }
 
-
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
 
   await logActivity({
+    adminId: req.admin._id,
 
-    adminId:
-      req.admin._id,
+    action: "BULK_IMPORT_STUDENTS",
 
-
-    action:
-      "Bulk Import",
-
-
-    details:
-      `${importedStudents.length} students imported`,
-
+    details: `${importedStudents.length} students imported`,
   });
 
+  /*
+  |--------------------------------------------------------------------------
+  | Response
+  |--------------------------------------------------------------------------
+  */
 
-
-
-
-
-
-  res.status(201).json({
-
+  return res.status(201).json({
     success: true,
 
-
-    message:
-      "Bulk import completed successfully.",
-
-
+    message: "Bulk import completed successfully.",
 
     summary: {
+      totalRows: students.length,
 
-      totalRows:
-        students.length,
+      imported: importedStudents.length,
 
-
-      imported:
-        importedStudents.length,
-
-
-      skipped:
-        skippedStudents.length,
-
+      skipped: skippedStudents.length,
     },
-
 
     importedStudents,
 
-
     skippedStudents,
-
   });
-
-
-
 });
 
+/*
+|--------------------------------------------------------------------------
+| Export Students
+|--------------------------------------------------------------------------
+*/
+
 exports.exportStudents = asyncHandler(async (req, res) => {
+  const { search, class: currentClass, gender, session, status } = req.query;
 
-  const {
-    search,
-    class: currentClass,
-    gender,
-    session,
-    status,
-  } = req.query;
-
-
+  const MAX_EXPORT_ROWS = 10000;
 
   const query = {};
 
-
-
   /*
-    Default:
-    export active students only
+  |--------------------------------------------------------------------------
+  | Default: Active Students
+  |--------------------------------------------------------------------------
   */
 
   if (!status) {
-
     query.isActive = true;
-
   }
-
-
 
   if (status === "active") {
-
     query.isActive = true;
-
   }
-
-
 
   if (status === "archived") {
-
     query.isActive = false;
-
   }
 
-
-
-
-
-  // Search filter
+  /*
+  |--------------------------------------------------------------------------
+  | Search
+  |--------------------------------------------------------------------------
+  */
 
   if (search) {
+    const escapedSearch = escapeRegex(search);
 
     query.$or = [
-
       {
         firstName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
 
       {
         lastName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
 
       {
         otherName: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
 
       {
         studentId: {
-          $regex: search,
+          $regex: escapedSearch,
           $options: "i",
         },
       },
-
     ];
-
   }
 
-
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Filters
+  |--------------------------------------------------------------------------
+  */
 
   if (currentClass) {
-
     query.currentClass = currentClass;
-
   }
-
-
 
   if (gender) {
-
     query.gender = gender;
-
   }
-
-
 
   if (session) {
-
     query.session = session;
-
   }
 
-
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Students
+  |--------------------------------------------------------------------------
+  |
+  | Fetch one extra record so we can determine whether the export would
+  | exceed the maximum allowed number of rows.
+  |
+  */
 
   const students = await Student.find(query)
-
     .select(
-      "studentId firstName lastName otherName gender dateOfBirth currentClass session parentName parentPhone admissionDate"
+      "studentId firstName lastName otherName gender dateOfBirth currentClass session parentName parentPhone admissionDate",
     )
-
     .sort({
       createdAt: -1,
+    })
+    .limit(MAX_EXPORT_ROWS + 1);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Prevent Oversized Exports
+  |--------------------------------------------------------------------------
+  */
+
+  if (students.length > MAX_EXPORT_ROWS) {
+    return res.status(413).json({
+      success: false,
+      message:
+        `Export is too large. Please narrow your filters to ` +
+        `no more than ${MAX_EXPORT_ROWS} students.`,
     });
+  }
 
-
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Convert to Excel Data
+  |--------------------------------------------------------------------------
+  */
 
   const data = students.map((student) => ({
-
     StudentID: student.studentId,
 
     FirstName: student.firstName,
@@ -1280,74 +1522,147 @@ exports.exportStudents = asyncHandler(async (req, res) => {
     ParentPhone: student.parentPhone,
 
     AdmissionDate: student.admissionDate,
-
   }));
 
-
-
-
+  /*
+  |--------------------------------------------------------------------------
+  | Create Workbook
+  |--------------------------------------------------------------------------
+  */
 
   const workbook = XLSX.utils.book_new();
 
+  const worksheet = XLSX.utils.json_to_sheet(data);
 
-  const worksheet =
-    XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
 
+  /*
+  |--------------------------------------------------------------------------
+  | Create Unique Temporary Export File
+  |--------------------------------------------------------------------------
+  */
 
+  const fileName = `Students-${crypto.randomUUID()}.xlsx`;
 
-  XLSX.utils.book_append_sheet(
-    workbook,
-    worksheet,
-    "Students"
-  );
+  const filePath = `uploads/${fileName}`;
 
+  try {
+    XLSX.writeFile(workbook, filePath);
 
+    /*
+    |--------------------------------------------------------------------------
+    | Activity Log
+    |--------------------------------------------------------------------------
+    */
 
-  const filePath =
-    "uploads/Students.xlsx";
+    await logActivity({
+      adminId: req.admin._id,
 
+      action: "EXPORT_STUDENTS",
 
+      details: `${students.length} students exported`,
+    });
 
-  XLSX.writeFile(
-    workbook,
-    filePath
-  );
+    /*
+    |--------------------------------------------------------------------------
+    | Download
+    |--------------------------------------------------------------------------
+    */
 
+    return res.download(filePath, "Students.xlsx", (error) => {
+      /*
+      |--------------------------------------------------------------------------
+      | Clean Up Temporary Export File
+      |--------------------------------------------------------------------------
+      */
 
+      fs.unlink(filePath, (unlinkError) => {
+        if (unlinkError) {
+          console.log("Export file cleanup error:", unlinkError.message);
+        }
+      });
 
-  await logActivity({
+      /*
+      |--------------------------------------------------------------------------
+      | Handle Download Error
+      |--------------------------------------------------------------------------
+      */
 
-    adminId:req.admin._id,
+      if (error) {
+        console.log("Student export download error:", error.message);
 
-    action:"Export Students",
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: "Unable to download exported student data.",
+          });
+        }
+      }
+    });
+  } catch (error) {
+    /*
+    |--------------------------------------------------------------------------
+    | Clean Up File If Export Preparation Fails
+    |--------------------------------------------------------------------------
+    */
 
-    details:`${students.length} students exported`
+    fs.unlink(filePath, (unlinkError) => {
+      if (unlinkError && unlinkError.code !== "ENOENT") {
+        console.log("Export file cleanup error:", unlinkError.message);
+      }
+    });
 
-  });
-
-
-
-
-  res.download(
-    filePath,
-    "Students.xlsx"
-  );
-
-
+    throw error;
+  }
 });
-exports.getActivityLogs = asyncHandler(async (req, res) => {
-  const logs = await ActivityLog.find()
-    .populate("admin", "fullName email -_id")
-    .sort({ createdAt: -1 });
 
-  res.status(200).json({
+/*
+|--------------------------------------------------------------------------
+| Activity Logs
+|--------------------------------------------------------------------------
+*/
+
+exports.getActivityLogs = asyncHandler(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+
+  const skip = (page - 1) * limit;
+
+  const [logs, totalLogs] = await Promise.all([
+    ActivityLog.find()
+      .populate("admin", "fullName email -_id")
+      .sort({
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit),
+
+    ActivityLog.countDocuments(),
+  ]);
+
+  const totalPages = Math.ceil(totalLogs / limit);
+
+  return res.status(200).json({
     success: true,
-    count: logs.length,
+
+    count: totalLogs,
+
+    page,
+
+    limit,
+
+    totalPages,
+
     logs,
   });
 });
 
-
+/*
+|--------------------------------------------------------------------------
+| Download Student Slip
+|--------------------------------------------------------------------------
+*/
 
 exports.downloadStudentSlip = asyncHandler(async (req, res) => {
   const student = await Student.findOne({
@@ -1357,6 +1672,7 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
   if (!student) {
     return res.status(404).json({
       success: false,
+
       message: "Student not found",
     });
   }
@@ -1364,7 +1680,11 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
   return generateStudentSlip(student, res);
 });
 
-
+/*
+|--------------------------------------------------------------------------
+| Verify Student QR Code
+|--------------------------------------------------------------------------
+*/
 
 exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
   const student = await Student.findOne({
@@ -1385,133 +1705,218 @@ exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
     verified: true,
     student: {
       studentId: student.studentId,
+
+      name: [student.firstName, student.otherName, student.lastName]
+        .filter(Boolean)
+        .join(" "),
+
       firstName: student.firstName,
+
       lastName: student.lastName,
+
       otherName: student.otherName,
+
       gender: student.gender,
+
+      // Keep both fields for compatibility
+      class: student.currentClass,
+
       currentClass: student.currentClass,
+
       session: student.session,
+
       photo: student.photo,
     },
   });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Generate Student QR Code
+|--------------------------------------------------------------------------
+*/
 
 exports.generateStudentQRCode = asyncHandler(async (req, res) => {
-
   const { studentId } = req.params;
-
 
   const student = await Student.findOne({
     studentId,
+
     isActive: true,
   });
 
-
   if (!student) {
-
     res.status(404);
 
     throw new Error("Student not found.");
-
   }
 
+  const qrCode = await generateQRCode(student.studentId);
 
-
-  const qrCode = await generateQRCode(
-    student.studentId
-  );
-
-
-
-  res.status(200).json({
-
-    success:true,
+  return res.status(200).json({
+    success: true,
 
     qrCode,
-
   });
-
-
 });
 
+/*
+|--------------------------------------------------------------------------
+| Upload Student Photo
+|--------------------------------------------------------------------------
+*/
 
 exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
   if (!req.file) {
     res.status(400);
+
     throw new Error("Please upload a photo.");
   }
 
-  const student = await Student.findOne({ studentId });
+  const student = await Student.findOne({
+    studentId,
+  });
 
   if (!student) {
     res.status(404);
+
     throw new Error("Student not found.");
   }
 
-  // ===========================
-  // Delete previous Cloudinary image
-  // ===========================
+  /*
+  |--------------------------------------------------------------------------
+  | Preserve Previous Cloudinary Image
+  |--------------------------------------------------------------------------
+  |
+  | Do not delete the old image yet.
+  |
+  | The new image has already been uploaded by the upload middleware.
+  | We first save the new image reference to MongoDB. Only after that
+  | succeeds do we delete the old Cloudinary image.
+  |
+  | This prevents the database from pointing to an image that has already
+  | been deleted if the database save fails.
+  |
+  */
 
-  if (student.photo?.publicId) {
-    try {
-      await cloudinary.uploader.destroy(student.photo.publicId);
-    } catch (error) {
-      console.log(
-        "Cloudinary delete error:",
-        error.message
-      );
-    }
-  }
+  const previousPhoto = student.photo
+    ? {
+        url: student.photo.url || "",
+        publicId: student.photo.publicId || "",
+      }
+    : {
+        url: "",
+        publicId: "",
+      };
 
-  // ===========================
-  // Save new image
-  // ===========================
+  /*
+  |--------------------------------------------------------------------------
+  | Save New Image Reference
+  |--------------------------------------------------------------------------
+  */
 
   student.photo = {
     url: req.file.path,
+
     publicId: req.file.filename,
   };
 
-  await student.save();
+  try {
+    await student.save();
+  } catch (error) {
+    /*
+     * The new Cloudinary image is no longer referenced by MongoDB.
+     *
+     * Delete it to prevent an orphaned Cloudinary image.
+     *
+     * The old image remains untouched because we have not deleted it yet.
+     */
+    if (req.file.filename) {
+      try {
+        await cloudinary.uploader.destroy(req.file.filename);
+      } catch (cleanupError) {
+        console.log(
+          "New Cloudinary image cleanup error:",
+          cleanupError.message,
+        );
+      }
+    }
+
+    throw error;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Delete Previous Cloudinary Image
+  |--------------------------------------------------------------------------
+  |
+  | At this point MongoDB successfully references the new image.
+  |
+  | If deletion of the old image fails, the database remains consistent:
+  | it still points to the new image. The old Cloudinary image may remain
+  | temporarily and can be cleaned up later.
+  |
+  */
+
+  if (
+    previousPhoto.publicId &&
+    previousPhoto.publicId !== student.photo.publicId
+  ) {
+    try {
+      await cloudinary.uploader.destroy(previousPhoto.publicId);
+    } catch (error) {
+      console.log("Previous Cloudinary delete error:", error.message);
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Activity Log
+  |--------------------------------------------------------------------------
+  */
 
   await logActivity({
     adminId: req.admin._id,
+
     action: "UPLOAD_STUDENT_PHOTO",
+
     studentId: student.studentId,
+
     details: `${student.firstName} ${student.lastName}`,
   });
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
+
     message: "Student photo uploaded successfully.",
+
     photo: student.photo,
   });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Monthly Registration Analytics
+|--------------------------------------------------------------------------
+*/
 
 exports.monthlyRegistrationAnalytics = asyncHandler(async (req, res) => {
-
   const currentYear = new Date().getFullYear();
 
-
   const analytics = await Student.aggregate([
-
     {
       $match: {
         createdAt: {
           $gte: new Date(`${currentYear}-01-01`),
-          $lte: new Date(`${currentYear}-12-31`),
+          $lt: new Date(`${currentYear + 1}-01-01`),
         },
       },
     },
 
-
     {
       $group: {
-
         _id: {
           month: {
             $month: "$createdAt",
@@ -1521,20 +1926,15 @@ exports.monthlyRegistrationAnalytics = asyncHandler(async (req, res) => {
         count: {
           $sum: 1,
         },
-
       },
     },
-
 
     {
       $sort: {
         "_id.month": 1,
       },
     },
-
   ]);
-
-
 
   const months = [
     "January",
@@ -1551,61 +1951,46 @@ exports.monthlyRegistrationAnalytics = asyncHandler(async (req, res) => {
     "December",
   ];
 
+  const formattedData = months.map((month, index) => {
+    const found = analytics.find((item) => item._id.month === index + 1);
 
-
-  const formattedData = months.map(
-    (month, index) => {
-
-      const found = analytics.find(
-        (item) =>
-          item._id.month === index + 1
-      );
-
-
-      return {
-
-        month,
-
-        count: found
-          ? found.count
-          : 0,
-
-      };
-
-    }
-  );
-
-
-
-  res.status(200).json({
-
-    success: true,
-
-    year: currentYear,
-
-    data: formattedData,
-
+    return {
+      month,
+      count: found ? found.count : 0,
+    };
   });
 
-
+  return res.status(200).json({
+    success: true,
+    year: currentYear,
+    data: formattedData,
+  });
 });
 
-exports.classAnalytics = asyncHandler(async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Class Analytics
+|--------------------------------------------------------------------------
+*/
 
+exports.classAnalytics = asyncHandler(async (req, res) => {
   const data = await Student.aggregate([
     {
       $match: {
         isActive: true,
       },
     },
+
     {
       $group: {
         _id: "$currentClass",
+
         count: {
           $sum: 1,
         },
       },
     },
+
     {
       $sort: {
         _id: 1,
@@ -1613,9 +1998,9 @@ exports.classAnalytics = asyncHandler(async (req, res) => {
     },
   ]);
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
+
     data,
   });
-
 });

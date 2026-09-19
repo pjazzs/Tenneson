@@ -2,6 +2,7 @@ const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 describe("Admin Management API", () => {
   let superAdminToken;
@@ -26,11 +27,7 @@ describe("Admin Management API", () => {
       email: `management${Date.now()}@test.com`,
       password,
       role: "admin",
-      permissions: [
-        "admins.manage",
-        "admins.update",
-        "admins.delete",
-      ],
+      permissions: ["admins.manage", "admins.update", "admins.delete"],
     });
 
     // Create target admin
@@ -43,23 +40,19 @@ describe("Admin Management API", () => {
     });
 
     // Login super admin
-    const superLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: superAdmin.email,
-        password: "password123",
-      });
+    const superLogin = await request(app).post("/api/v1/auth/login").send({
+      email: superAdmin.email,
+      password: "password123",
+    });
 
     expect(superLogin.statusCode).toBe(200);
     superAdminToken = superLogin.body.token;
 
     // Login management admin
-    const adminLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: admin.email,
-        password: "password123",
-      });
+    const adminLogin = await request(app).post("/api/v1/auth/login").send({
+      email: admin.email,
+      password: "password123",
+    });
 
     expect(adminLogin.statusCode).toBe(200);
     adminToken = adminLogin.body.token;
@@ -80,7 +73,7 @@ describe("Admin Management API", () => {
     expect(response.body.count).toBeGreaterThan(0);
 
     const returnedAdmin = response.body.admins.find(
-      (admin) => admin._id === targetAdmin._id.toString()
+      (admin) => admin._id === targetAdmin._id.toString(),
     );
 
     expect(returnedAdmin).toBeDefined();
@@ -88,8 +81,7 @@ describe("Admin Management API", () => {
   });
 
   test("Should reject getting admins without authentication", async () => {
-    const response = await request(app)
-      .get("/api/v1/admins");
+    const response = await request(app).get("/api/v1/admins");
 
     expect(response.statusCode).toBe(401);
     expect(response.body.success).toBe(false);
@@ -106,12 +98,10 @@ describe("Admin Management API", () => {
       permissions: [],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: noPermissionAdmin.email,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: noPermissionAdmin.email,
+      password: "password123",
+    });
 
     const token = loginResponse.body.token;
 
@@ -132,10 +122,7 @@ describe("Admin Management API", () => {
       .patch(`/api/v1/admins/${targetAdmin._id}/permissions`)
       .set("Authorization", `Bearer ${adminToken}`)
       .send({
-        permissions: [
-          "students.view",
-          "students.create",
-        ],
+        permissions: ["students.view", "students.create"],
       });
 
     expect(response.statusCode).toBe(200);
@@ -177,9 +164,7 @@ describe("Admin Management API", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.body.success).toBe(false);
-    expect(response.body.message).toBe(
-      "Permissions must be an array."
-    );
+    expect(response.body.message).toBe("Permissions must be an array.");
   });
 
   test("Should return 404 when updating a non-existing admin", async () => {
@@ -212,7 +197,7 @@ describe("Admin Management API", () => {
     expect(response.statusCode).toBe(403);
     expect(response.body.success).toBe(false);
     expect(response.body.message).toBe(
-      "Super admin permissions cannot be modified."
+      "Super admin permissions cannot be modified.",
     );
   });
 
@@ -227,12 +212,10 @@ describe("Admin Management API", () => {
       permissions: [],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: noUpdateAdmin.email,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: noUpdateAdmin.email,
+      password: "password123",
+    });
 
     const token = loginResponse.body.token;
 
@@ -248,6 +231,99 @@ describe("Admin Management API", () => {
   });
 
   // =========================================================
+  // ADMIN JWT SECURITY
+  // =========================================================
+
+  test("Should reject a student token on an admin route", async () => {
+    const studentLikeToken = jwt.sign(
+      {
+        id: targetAdmin._id.toString(),
+        type: "student",
+        tokenVersion: 0,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      },
+    );
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${studentLikeToken}`);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe("Invalid admin authentication token.");
+  });
+
+  test("Should reject an admin token with an invalid token type", async () => {
+    const invalidToken = jwt.sign(
+      {
+        id: targetAdmin._id.toString(),
+        type: "something_else",
+        tokenVersion: 0,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      },
+    );
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${invalidToken}`);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe("Invalid admin authentication token.");
+  });
+
+  test("Should reject an admin token with an invalid token version", async () => {
+    const admin = await Admin.findById(targetAdmin._id);
+
+    admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+    await admin.save();
+
+    const invalidatedToken = jwt.sign(
+      {
+        id: admin._id.toString(),
+        type: "admin",
+        tokenVersion: 0,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      },
+    );
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${invalidatedToken}`);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe(
+      "Admin authentication token is no longer valid.",
+    );
+  });
+
+  test("Should accept a valid admin token", async () => {
+    const decoded = jwt.decode(adminToken);
+
+    expect(decoded).toBeDefined();
+    expect(decoded.type).toBe("admin");
+    expect(decoded.id).toBeDefined();
+    expect(decoded.tokenVersion).toBe(0);
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.success).toBe(true);
+  });
+
+  // =========================================================
   // DELETE ADMIN
   // =========================================================
 
@@ -258,9 +334,7 @@ describe("Admin Management API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.message).toBe(
-      "Admin deleted successfully."
-    );
+    expect(response.body.message).toBe("Admin deleted successfully.");
 
     const deletedAdmin = await Admin.findById(targetAdmin._id);
 
@@ -300,9 +374,7 @@ describe("Admin Management API", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.body.success).toBe(false);
-    expect(response.body.message).toBe(
-      "You cannot delete your own account."
-    );
+    expect(response.body.message).toBe("You cannot delete your own account.");
   });
 
   test("Should not allow deletion of a super admin", async () => {
@@ -317,7 +389,7 @@ describe("Admin Management API", () => {
     expect(response.statusCode).toBe(403);
     expect(response.body.success).toBe(false);
     expect(response.body.message).toBe(
-      "Super admin accounts cannot be deleted."
+      "Super admin accounts cannot be deleted.",
     );
   });
 
@@ -332,12 +404,10 @@ describe("Admin Management API", () => {
       permissions: [],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: noDeleteAdmin.email,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: noDeleteAdmin.email,
+      password: "password123",
+    });
 
     const token = loginResponse.body.token;
 

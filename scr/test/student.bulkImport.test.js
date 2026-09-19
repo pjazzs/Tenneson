@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
-const Student = require("../models/Student");
+const Student = require("../models/student");
 const ActivityLog = require("../models/activityLog");
 const bcrypt = require("bcrypt");
 const XLSX = require("xlsx");
@@ -21,19 +21,13 @@ describe("Student Bulk Import API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-        "students.import",
-      ],
+      permissions: ["students.create", "students.view", "students.import"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -45,11 +39,7 @@ describe("Student Bulk Import API", () => {
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "Students"
-    );
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
 
     const filePath = path.join(__dirname, filename);
 
@@ -100,7 +90,7 @@ describe("Student Bulk Import API", () => {
           parentPhone: "08087654321",
         },
       ],
-      "students.xlsx"
+      "students.xlsx",
     );
 
     const response = await request(app)
@@ -112,9 +102,7 @@ describe("Student Bulk Import API", () => {
 
     expect(response.body.success).toBe(true);
 
-    expect(response.body.message).toBe(
-      "Bulk import completed successfully."
-    );
+    expect(response.body.message).toBe("Bulk import completed successfully.");
 
     expect(response.body.summary.totalRows).toBe(2);
 
@@ -138,9 +126,7 @@ describe("Student Bulk Import API", () => {
 
     expect(response.body.success).toBe(false);
 
-    expect(response.body.message).toBe(
-      "Please upload an Excel file."
-    );
+    expect(response.body.message).toBe("Please upload an Excel file.");
   });
 
   test("Should skip students with missing required fields", async () => {
@@ -163,7 +149,7 @@ describe("Student Bulk Import API", () => {
           session: "2025/2026",
         },
       ],
-      "students-missing-fields.xlsx"
+      "students-missing-fields.xlsx",
     );
 
     const response = await request(app)
@@ -183,9 +169,9 @@ describe("Student Bulk Import API", () => {
 
     expect(response.body.skippedStudents).toHaveLength(1);
 
-    expect(
-      response.body.skippedStudents[0].reason
-    ).toBe("Missing required fields.");
+    expect(response.body.skippedStudents[0].reason).toBe(
+      "Missing required fields.",
+    );
 
     const students = await Student.find();
 
@@ -204,7 +190,7 @@ describe("Student Bulk Import API", () => {
           session: "2025/2026",
         },
       ],
-      "students-invalid-gender.xlsx"
+      "students-invalid-gender.xlsx",
     );
 
     const response = await request(app)
@@ -223,7 +209,7 @@ describe("Student Bulk Import API", () => {
     expect(response.body.summary.skipped).toBe(1);
 
     expect(response.body.skippedStudents[0].reason).toBe(
-      "Gender must be Male or Female."
+      "Gender must be Male or Female.",
     );
 
     const students = await Student.find();
@@ -254,7 +240,7 @@ describe("Student Bulk Import API", () => {
           session: "2025/2026",
         },
       ],
-      "students-duplicate.xlsx"
+      "students-duplicate.xlsx",
     );
 
     const response = await request(app)
@@ -273,12 +259,10 @@ describe("Student Bulk Import API", () => {
     expect(response.body.summary.skipped).toBe(1);
 
     expect(response.body.skippedStudents[0].reason).toBe(
-      "Student already exists."
+      "Student already exists.",
     );
 
-    expect(
-      response.body.skippedStudents[0].existingStudentId
-    ).toBe("TCC00001");
+    expect(response.body.skippedStudents[0].existingStudentId).toBe("TCC00001");
 
     const students = await Student.find();
 
@@ -297,7 +281,7 @@ describe("Student Bulk Import API", () => {
           session: "2025/2026",
         },
       ],
-      "students-invalid-date.xlsx"
+      "students-invalid-date.xlsx",
     );
 
     const response = await request(app)
@@ -315,9 +299,9 @@ describe("Student Bulk Import API", () => {
 
     expect(response.body.summary.skipped).toBe(1);
 
-    expect(
-      response.body.skippedStudents[0].reason
-    ).toBe("Invalid date of birth format.");
+    expect(response.body.skippedStudents[0].reason).toBe(
+      "Invalid date of birth format.",
+    );
 
     const students = await Student.find();
 
@@ -325,10 +309,7 @@ describe("Student Bulk Import API", () => {
   });
 
   test("Should require students.import permission", async () => {
-    const hashedPassword = await bcrypt.hash(
-      "password123",
-      12
-    );
+    const hashedPassword = await bcrypt.hash("password123", 12);
 
     const adminEmail = `noimport${Date.now()}@test.com`;
 
@@ -337,23 +318,17 @@ describe("Student Bulk Import API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-      ],
+      permissions: ["students.create", "students.view"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
-    const noPermissionToken =
-      loginResponse.body.token;
+    const noPermissionToken = loginResponse.body.token;
 
     const filePath = createExcelFile([
       {
@@ -368,10 +343,7 @@ describe("Student Bulk Import API", () => {
 
     const response = await request(app)
       .post("/api/v1/students/import")
-      .set(
-        "Authorization",
-        `Bearer ${noPermissionToken}`
-      )
+      .set("Authorization", `Bearer ${noPermissionToken}`)
       .attach("file", filePath);
 
     expect(response.statusCode).toBe(403);
@@ -396,17 +368,15 @@ describe("Student Bulk Import API", () => {
       .set("Authorization", `Bearer ${token}`)
       .attach("file", filePath);
 
-     
-
     expect(response.statusCode).toBe(201);
 
     const log = await ActivityLog.findOne({
-      action: "Bulk Import",
+      action: "BULK_IMPORT_STUDENTS",
     });
 
     expect(log).toBeDefined();
 
-    expect(log.action).toBe("Bulk Import");
+    expect(log.action).toBe("BULK_IMPORT_STUDENTS");
 
     expect(log.details).toBe("1 students imported");
   });

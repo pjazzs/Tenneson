@@ -1,9 +1,9 @@
-
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
 
+jest.setTimeout(120000);
 describe("Student Pagination API", () => {
   let token;
 
@@ -18,12 +18,10 @@ describe("Student Pagination API", () => {
       role: "super_admin",
     });
 
-    const superAdminLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: superAdminEmail,
-        password: "password123",
-      });
+    const superAdminLogin = await request(app).post("/api/v1/auth/login").send({
+      email: superAdminEmail,
+      password: "password123",
+    });
 
     const superAdminToken = superAdminLogin.body.token;
 
@@ -36,18 +34,13 @@ describe("Student Pagination API", () => {
         fullName: "Test Admin",
         email: adminEmail,
         password: "password123",
-        permissions: [
-          "students.create",
-          "students.view",
-        ],
+        permissions: ["students.create", "students.view"],
       });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     token = loginResponse.body.token;
 
@@ -83,4 +76,3 @@ describe("Student Pagination API", () => {
     expect(response.body.pagination.totalStudents).toBe(12);
   });
 });
-

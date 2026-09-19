@@ -3,13 +3,13 @@ const jwt = require("jsonwebtoken");
 const generateToken = (admin) => {
   return jwt.sign(
     {
-      id: admin._id,
-      role: admin.role,
-      permissions: admin.permissions,
+      id: admin._id.toString(),
+      type: "admin",
+      tokenVersion: admin.tokenVersion || 0,
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: process.env.JWT_EXPIRES_IN,
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     },
   );
 };

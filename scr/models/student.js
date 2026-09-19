@@ -69,6 +69,7 @@ const studentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
@@ -78,31 +79,47 @@ const studentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
     },
-    admissionDate:{
- type:Date,
- default:Date.now
-},
-photo: {
 
-  url: {
-    type: String,
-    default: "",
-  },
+    photo: {
+      url: {
+        type: String,
+        default: "",
+      },
 
-  publicId: {
-    type: String,
-    default: "",
-  },
-
-},
+      publicId: {
+        type: String,
+        default: "",
+      },
+    },
   },
   {
     timestamps: true,
   },
 );
 
+/*
+ * Prevent two active students with the same
+ * first name, last name, and date of birth.
+ *
+ * Archived students are excluded from this constraint,
+ * so an archived student can coexist with a newly
+ * registered active student having the same details.
+ */
+studentSchema.index(
+  {
+    firstName: 1,
+    lastName: 1,
+    dateOfBirth: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isActive: true,
+    },
+  },
+);
+
 const Student =
-  mongoose.models.Student ||
-  mongoose.model("Student", studentSchema);
+  mongoose.models.Student || mongoose.model("Student", studentSchema);
 
 module.exports = Student;

@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
-const Student = require("../models/Student");
+const Student = require("../models/student");
 const bcrypt = require("bcrypt");
 
 describe("Student QR Code API", () => {
@@ -18,18 +18,13 @@ describe("Student QR Code API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-      ],
+      permissions: ["students.create", "students.view"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -79,15 +74,17 @@ describe("Student QR Code API", () => {
   });
 
   test("Should require authentication to generate QR code", async () => {
-    const response = await request(app)
-      .get(`/api/v1/students/${studentId}/qrcode`);
+    const response = await request(app).get(
+      `/api/v1/students/${studentId}/qrcode`,
+    );
 
     expect(response.statusCode).toBe(401);
   });
 
   test("Should verify a valid student successfully", async () => {
-    const response = await request(app)
-      .get(`/api/v1/students/qrcode/verify/${studentId}`);
+    const response = await request(app).get(
+      `/api/v1/students/qrcode/verify/${studentId}`,
+    );
 
     expect(response.statusCode).toBe(200);
 
@@ -109,8 +106,9 @@ describe("Student QR Code API", () => {
   });
 
   test("Should reject an invalid student ID during QR verification", async () => {
-    const response = await request(app)
-      .get("/api/v1/students/qrcode/verify/TCC99999");
+    const response = await request(app).get(
+      "/api/v1/students/qrcode/verify/TCC99999",
+    );
 
     expect(response.statusCode).toBe(404);
 
@@ -122,13 +120,11 @@ describe("Student QR Code API", () => {
   });
 
   test("Should not verify an archived student", async () => {
-    await Student.findOneAndUpdate(
-      { studentId },
-      { isActive: false }
-    );
+    await Student.findOneAndUpdate({ studentId }, { isActive: false });
 
-    const response = await request(app)
-      .get(`/api/v1/students/qrcode/verify/${studentId}`);
+    const response = await request(app).get(
+      `/api/v1/students/qrcode/verify/${studentId}`,
+    );
 
     expect(response.statusCode).toBe(404);
 
@@ -140,10 +136,7 @@ describe("Student QR Code API", () => {
   });
 
   test("Should not generate QR code for an archived student", async () => {
-    await Student.findOneAndUpdate(
-      { studentId },
-      { isActive: false }
-    );
+    await Student.findOneAndUpdate({ studentId }, { isActive: false });
 
     const response = await request(app)
       .get(`/api/v1/students/${studentId}/qrcode`)
