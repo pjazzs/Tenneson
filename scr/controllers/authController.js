@@ -1,7 +1,8 @@
 const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
 const generateToken = require("../utils/generateToken");
-
+const createAuditLog = require("../utils/createAuditLog");
+const asyncHandler = require("express-async-handler");
 exports.registerAdmin = async (req, res) => {
   try {
     const { fullName, email, password, role, permissions } = req.body;
@@ -94,7 +95,6 @@ exports.loginAdmin = async (req, res) => {
     const token = generateToken(admin);
 
     // Create audit log
-    const createAuditLog = require("../utils/createAuditLog");
 
     await createAuditLog({
       user: admin._id,
@@ -152,3 +152,124 @@ exports.deleteAdmin = async (req, res) => {
     });
   }
 };
+
+exports.changeAdminPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  // 1. Validate required fields
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Current password and new password are required.",
+    });
+  }
+
+  // 2. Get the currently authenticated admin
+  const admin = await Admin.findById(req.admin._id);
+
+  if (!admin) {
+    return res.status(404).json({
+      success: false,
+      message: "Admin not found.",
+    });
+  }
+
+  // 3. Verify the current password
+  const isCurrentPasswordValid = await bcrypt.compare(
+    currentPassword,
+    admin.password,
+  );
+
+  if (!isCurrentPasswordValid) {
+    return res.status(401).json({
+      success: false,
+      message: "Current password is incorrect.",
+    });
+  }
+
+  // 4. Prevent password reuse
+  // This must happen BEFORE password-strength validation.
+  const isPasswordReused = await bcrypt.compare(newPassword, admin.password);
+
+  if (isPasswordReused) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must be different from your current password.",
+    });
+  }
+
+  // 5. Validate new password length
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must be at least 8 characters long.",
+    });
+  }
+
+  if (newPassword.length > 128) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must not exceed 128 characters.",
+    });
+  }
+
+  // 6. Validate password complexity
+  if (!/[A-Z]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must contain at least one uppercase letter.",
+    });
+  }
+
+  if (!/[a-z]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must contain at least one lowercase letter.",
+    });
+  }
+
+  if (!/[0-9]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must contain at least one number.",
+    });
+  }
+
+  if (!/[^A-Za-z0-9]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: "New password must contain at least one special character.",
+    });
+  }
+
+  // 7. Hash the new password
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  admin.password = hashedPassword;
+
+  // 8. Increment token version
+  // This invalidates all previously issued admin tokens.
+  admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+
+  // 9. Save the updated admin
+  await admin.save();
+
+  // 10. Create audit log
+  await createAuditLog({
+    user: admin._id,
+    action: "CHANGE_PASSWORD",
+    module: "AUTH",
+    description: `${admin.fullName} changed their password`,
+    req,
+  });
+
+  // 11. Generate a fresh token
+  const token = generateToken(admin);
+
+  // 12. Return response
+  return res.status(200).json({
+    success: true,
+    message: "Password changed successfully.",
+    token,
+  });
+});

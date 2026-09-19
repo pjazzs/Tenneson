@@ -10,7 +10,7 @@ describe("Admin Management API", () => {
   let targetAdmin;
 
   beforeEach(async () => {
-    const password = await bcrypt.hash("password123", 10);
+    const password = await bcrypt.hash("Password123!", 10);
 
     // Create super admin
     const superAdmin = await Admin.create({
@@ -42,7 +42,7 @@ describe("Admin Management API", () => {
     // Login super admin
     const superLogin = await request(app).post("/api/v1/auth/login").send({
       email: superAdmin.email,
-      password: "password123",
+      password: "Password123!",
     });
 
     expect(superLogin.statusCode).toBe(200);
@@ -51,7 +51,7 @@ describe("Admin Management API", () => {
     // Login management admin
     const adminLogin = await request(app).post("/api/v1/auth/login").send({
       email: admin.email,
-      password: "password123",
+      password: "Password123!",
     });
 
     expect(adminLogin.statusCode).toBe(200);
@@ -88,7 +88,7 @@ describe("Admin Management API", () => {
   });
 
   test("Should require admins.manage permission", async () => {
-    const password = await bcrypt.hash("password123", 10);
+    const password = await bcrypt.hash("Password123!", 10);
 
     const noPermissionAdmin = await Admin.create({
       fullName: "No Management Permission",
@@ -100,7 +100,7 @@ describe("Admin Management API", () => {
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: noPermissionAdmin.email,
-      password: "password123",
+      password: "Password123!",
     });
 
     const token = loginResponse.body.token;
@@ -202,7 +202,7 @@ describe("Admin Management API", () => {
   });
 
   test("Should require admins.update permission", async () => {
-    const password = await bcrypt.hash("password123", 10);
+    const password = await bcrypt.hash("Password123!", 10);
 
     const noUpdateAdmin = await Admin.create({
       fullName: "No Update Permission",
@@ -214,7 +214,7 @@ describe("Admin Management API", () => {
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: noUpdateAdmin.email,
-      password: "password123",
+      password: "Password123!",
     });
 
     const token = loginResponse.body.token;
@@ -324,6 +324,144 @@ describe("Admin Management API", () => {
   });
 
   // =========================================================
+  // ADMIN PASSWORD CHANGE
+  // =========================================================
+
+  test("Should change admin password successfully", async () => {
+    const response = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        currentPassword: "Password123!",
+        newPassword: "NewPassword123!",
+      });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.message).toBe("Password changed successfully.");
+    expect(response.body.token).toBeDefined();
+
+    const admin = await Admin.findOne({
+      email: { $regex: /^management/ },
+    });
+
+    expect(admin.tokenVersion).toBe(1);
+
+    const passwordMatches = await bcrypt.compare(
+      "NewPassword123!",
+      admin.password,
+    );
+
+    expect(passwordMatches).toBe(true);
+  });
+
+  test("Should reject password change without authentication", async () => {
+    const response = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .send({
+        currentPassword: "password123",
+        newPassword: "NewPassword123!",
+      });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
+
+  test("Should reject incorrect current password", async () => {
+    const response = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        currentPassword: "WrongPassword123!",
+        newPassword: "NewPassword123!",
+      });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe("Current password is incorrect.");
+  });
+
+  test("Should reject reusing the current password", async () => {
+    const response = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        currentPassword: "Password123!",
+        newPassword: "Password123!",
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe(
+      "New password must be different from your current password.",
+    );
+  });
+
+  test("Should reject weak admin password", async () => {
+    const response = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        currentPassword: "Password123!",
+        newPassword: "weakpassword",
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.success).toBe(false);
+  });
+
+  test("Should invalidate the old admin token after password change", async () => {
+    const oldToken = adminToken;
+
+    const changeResponse = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${oldToken}`)
+      .send({
+        currentPassword: "Password123!",
+        newPassword: "NewPassword123!",
+      });
+
+    expect(changeResponse.statusCode).toBe(200);
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${oldToken}`);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe(
+      "Admin authentication token is no longer valid.",
+    );
+  });
+
+  test("Should accept the new admin token after password change", async () => {
+    const changeResponse = await request(app)
+      .patch("/api/v1/auth/change-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        currentPassword: "Password123!",
+        newPassword: "NewPassword123!",
+      });
+
+    expect(changeResponse.statusCode).toBe(200);
+
+    const newToken = changeResponse.body.token;
+
+    const decoded = jwt.decode(newToken);
+
+    expect(decoded).toBeDefined();
+    expect(decoded.type).toBe("admin");
+    expect(decoded.tokenVersion).toBe(1);
+
+    const response = await request(app)
+      .get("/api/v1/admins")
+      .set("Authorization", `Bearer ${newToken}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.success).toBe(true);
+  });
+
+  // =========================================================
   // DELETE ADMIN
   // =========================================================
 
@@ -394,7 +532,7 @@ describe("Admin Management API", () => {
   });
 
   test("Should require admins.delete permission", async () => {
-    const password = await bcrypt.hash("password123", 10);
+    const password = await bcrypt.hash("Password123!", 10);
 
     const noDeleteAdmin = await Admin.create({
       fullName: "No Delete Permission",
@@ -406,7 +544,7 @@ describe("Admin Management API", () => {
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: noDeleteAdmin.email,
-      password: "password123",
+      password: "Password123!",
     });
 
     const token = loginResponse.body.token;

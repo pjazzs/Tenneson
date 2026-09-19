@@ -36,8 +36,7 @@ exports.authLimiter = rateLimit({
 
   message: {
     success: false,
-    message:
-      "Too many login attempts. Please try again in 15 minutes.",
+    message: "Too many login attempts. Please try again in 15 minutes.",
   },
 
   skip: () => process.env.NODE_ENV === "test",
@@ -55,7 +54,21 @@ exports.verifyLimiter = rateLimit({
 
   message: {
     success: false,
-    message:
-      "Too many verification attempts. Please try again later.",
+    message: "Too many verification attempts. Please try again later.",
   },
+});
+
+// ===============================
+// Password Change Rate Limiter
+// ===============================
+
+exports.passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  ...limiterOptions,
+  message: {
+    success: false,
+    message: "Too many password change attempts. Please try again later.",
+  },
+  skip: () => process.env.NODE_ENV === "test",
 });

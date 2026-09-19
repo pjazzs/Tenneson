@@ -7,7 +7,6 @@ let superAdminToken;
 let adminToken;
 
 beforeEach(async () => {
-
   const password = await bcrypt.hash("password123", 10);
 
   // Create super admin
@@ -24,38 +23,34 @@ beforeEach(async () => {
     email: "admin@test.com",
     password,
     role: "admin",
+    permissions: [],
   });
 
-
   // Login super admin
-  const superLogin = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email: "superadmin@test.com",
-      password: "password123",
-    });
+  const superLogin = await request(app).post("/api/v1/auth/login").send({
+    email: "superadmin@test.com",
+    password: "password123",
+  });
+
+  expect(superLogin.statusCode).toBe(200);
+  expect(superLogin.body.token).toBeDefined();
 
   superAdminToken = superLogin.body.token;
 
-
   // Login normal admin
-  const adminLogin = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email: "admin@test.com",
-      password: "password123",
-    });
+  const adminLogin = await request(app).post("/api/v1/auth/login").send({
+    email: "admin@test.com",
+    password: "password123",
+  });
+
+  expect(adminLogin.statusCode).toBe(200);
+  expect(adminLogin.body.token).toBeDefined();
 
   adminToken = adminLogin.body.token;
-
 });
 
-
 describe("Authorization Middleware", () => {
-
-
   test("Should allow super admin access", async () => {
-
     const response = await request(app)
       .post("/api/v1/auth/register")
       .set("Authorization", `Bearer ${superAdminToken}`)
@@ -66,15 +61,11 @@ describe("Authorization Middleware", () => {
         role: "admin",
       });
 
-
     expect(response.statusCode).toBe(201);
-
+    expect(response.body.success).toBe(true);
   });
 
-
-
   test("Should block normal admin from super admin route", async () => {
-
     const response = await request(app)
       .post("/api/v1/auth/register")
       .set("Authorization", `Bearer ${adminToken}`)
@@ -85,31 +76,23 @@ describe("Authorization Middleware", () => {
         role: "admin",
       });
 
-
     expect(response.statusCode).toBe(403);
 
-    expect(response.body.message)
-      .toBe("You do not have permission to perform this action.");
-
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toBe(
+      "You do not have permission to perform this action.",
+    );
   });
-
-
 
   test("Should block request without token", async () => {
-
-    const response = await request(app)
-      .post("/api/v1/auth/register")
-      .send({
-        fullName: "Another Admin",
-        email: "another@test.com",
-        password: "password123",
-        role: "admin",
-      });
-
+    const response = await request(app).post("/api/v1/auth/register").send({
+      fullName: "Another Admin",
+      email: "another@test.com",
+      password: "password123",
+      role: "admin",
+    });
 
     expect(response.statusCode).toBe(401);
-
+    expect(response.body.success).toBe(false);
   });
-
-
 });

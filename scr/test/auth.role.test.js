@@ -1,6 +1,5 @@
 const request = require("supertest");
 const app = require("../app");
-const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
 let superAdminToken;
@@ -19,17 +18,16 @@ beforeEach(async () => {
     role: "super_admin",
   });
 
-
   // Login super admin
-  const superLogin = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email: "superadmin@test.com",
-      password: "password123",
-    });
+  const superLogin = await request(app).post("/api/v1/auth/login").send({
+    email: "superadmin@test.com",
+    password: "password123",
+  });
+
+  expect(superLogin.statusCode).toBe(200);
+  expect(superLogin.body.token).toBeDefined();
 
   superAdminToken = superLogin.body.token;
-
 
   // Create normal admin
   await Admin.create({
@@ -39,27 +37,22 @@ beforeEach(async () => {
     role: "admin",
   });
 
-
   // Login normal admin
-  const adminLogin = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email: "admin@test.com",
-      password: "password123",
-    });
+  const adminLogin = await request(app).post("/api/v1/auth/login").send({
+    email: "admin@test.com",
+    password: "password123",
+  });
+
+  expect(adminLogin.statusCode).toBe(200);
+  expect(adminLogin.body.token).toBeDefined();
 
   normalAdminToken = adminLogin.body.token;
 });
 
-
 test("Super admin should register admin", async () => {
-
   const response = await request(app)
     .post("/api/v1/auth/register")
-    .set(
-      "Authorization",
-      `Bearer ${superAdminToken}`
-    )
+    .set("Authorization", `Bearer ${superAdminToken}`)
     .send({
       fullName: "New Admin",
       email: "newadmin@test.com",
@@ -67,19 +60,13 @@ test("Super admin should register admin", async () => {
       role: "admin",
     });
 
-
   expect(response.statusCode).toBe(201);
 });
 
-
 test("Normal admin should not register admin", async () => {
-
   const response = await request(app)
     .post("/api/v1/auth/register")
-    .set(
-      "Authorization",
-      `Bearer ${normalAdminToken}`
-    )
+    .set("Authorization", `Bearer ${normalAdminToken}`)
     .send({
       fullName: "Blocked Admin",
       email: "blocked@test.com",
@@ -87,7 +74,5 @@ test("Normal admin should not register admin", async () => {
       role: "admin",
     });
 
-
   expect(response.statusCode).toBe(403);
-
 });

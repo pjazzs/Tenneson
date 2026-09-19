@@ -1,4 +1,3 @@
-
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
@@ -19,12 +18,10 @@ describe("Audit Logs API", () => {
       role: "admin",
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: admin.email,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: admin.email,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -32,41 +29,37 @@ describe("Audit Logs API", () => {
   });
 
   test("Should return audit logs in newest-first order", async () => {
-  const olderLog = await AuditLog.create({
-    user: admin._id,
-    action: "OLDER_ACTION",
-    module: "TEST",
-    description: "Older audit log",
-    createdAt: new Date("2026-01-01T10:00:00.000Z"),
+    const olderLog = await AuditLog.create({
+      user: admin._id,
+      action: "OLDER_ACTION",
+      module: "TEST",
+      description: "Older audit log",
+      createdAt: new Date("2026-01-01T10:00:00.000Z"),
+    });
+
+    const newerLog = await AuditLog.create({
+      user: admin._id,
+      action: "NEWER_ACTION",
+      module: "TEST",
+      description: "Newer audit log",
+      createdAt: new Date("2026-08-01T10:00:00.000Z"),
+    });
+
+    const response = await request(app)
+      .get("/api/v1/audit")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const logs = response.body.logs;
+
+    const olderIndex = logs.findIndex((log) => log.action === "OLDER_ACTION");
+
+    const newerIndex = logs.findIndex((log) => log.action === "NEWER_ACTION");
+
+    expect(newerIndex).toBeLessThan(olderIndex);
   });
-
-  const newerLog = await AuditLog.create({
-    user: admin._id,
-    action: "NEWER_ACTION",
-    module: "TEST",
-    description: "Newer audit log",
-    createdAt: new Date("2026-08-01T10:00:00.000Z"),
-  });
-
-  const response = await request(app)
-    .get("/api/v1/audit")
-    .set("Authorization", `Bearer ${token}`);
-
-  expect(response.statusCode).toBe(200);
-  expect(response.body.success).toBe(true);
-
-  const logs = response.body.logs;
-
-  const olderIndex = logs.findIndex(
-    (log) => log.action === "OLDER_ACTION"
-  );
-
-  const newerIndex = logs.findIndex(
-    (log) => log.action === "NEWER_ACTION"
-  );
-
-  expect(newerIndex).toBeLessThan(olderIndex);
-});
 
   test("Should get audit logs successfully", async () => {
     await AuditLog.create({
@@ -87,8 +80,7 @@ describe("Audit Logs API", () => {
   });
 
   test("Should reject audit logs request without authentication", async () => {
-    const response = await request(app)
-      .get("/api/v1/audit");
+    const response = await request(app).get("/api/v1/audit");
 
     expect(response.statusCode).toBe(401);
     expect(response.body.success).toBe(false);
@@ -109,7 +101,7 @@ describe("Audit Logs API", () => {
     expect(response.statusCode).toBe(200);
 
     const log = response.body.logs.find(
-      (item) => item.action === "TEST_ACTION"
+      (item) => item.action === "TEST_ACTION",
     );
 
     expect(log).toBeDefined();
