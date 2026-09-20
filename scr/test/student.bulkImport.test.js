@@ -330,27 +330,13 @@ describe("Student Bulk Import API", () => {
 
     const noPermissionToken = loginResponse.body.token;
 
-    const filePath = createExcelFile([
-      {
-        firstName: "John",
-        lastName: "Doe",
-        gender: "Male",
-        dateOfBirth: "2012-05-10",
-        currentClass: "JSS1",
-        session: "2025/2026",
-      },
-    ]);
-
     const response = await request(app)
       .post("/api/v1/students/import")
-      .set("Authorization", `Bearer ${noPermissionToken}`)
-      .attach("file", filePath);
+      .set("Authorization", `Bearer ${noPermissionToken}`);
 
     expect(response.statusCode).toBe(403);
-
     expect(response.body.success).toBe(false);
   });
-
   test("Should create activity log after bulk import", async () => {
     const filePath = createExcelFile([
       {
