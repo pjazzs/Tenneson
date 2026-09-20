@@ -9,6 +9,13 @@ const studentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    admissionYear: {
+      type: Number,
+      default: null,
+      min: [1900, "Admission year must be a valid year."],
+      max: [2100, "Admission year must be a valid year."],
+    },
+
     firstName: {
       type: String,
       required: [true, "First name is required..."],
@@ -41,11 +48,14 @@ const studentSchema = new mongoose.Schema(
     currentClass: {
       type: String,
       required: true,
+      enum: ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
     },
 
     session: {
       type: String,
       required: true,
+      trim: true,
+      match: [/^\d{4}\/\d{4}$/, "Session must be in the format YYYY/YYYY."],
     },
 
     parentName: {
@@ -58,6 +68,10 @@ const studentSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true,
+      match: [
+        /^\d{1,11}$/,
+        "Parent phone must contain only digits and a maximum of 11 digits.",
+      ],
     },
 
     admissionDate: {

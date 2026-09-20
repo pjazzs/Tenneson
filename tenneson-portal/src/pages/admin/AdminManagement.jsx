@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import useAuth from "../../hooks/useAuth";
 
-import {
-  FaUserShield,
-  FaTimes,
-  FaPlus,
-  FaArrowLeft,
-} from "react-icons/fa";
+import { FaUserShield, FaTimes, FaPlus, FaArrowLeft } from "react-icons/fa";
 
 import { useNavigate } from "react-router-dom";
 
@@ -54,8 +49,7 @@ function AdminManagement() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const [showPermissionModal, setShowPermissionModal] =
-    useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
   const [admins, setAdmins] = useState([]);
 
@@ -116,6 +110,13 @@ function AdminManagement() {
       },
     ],
 
+    Promotions: [
+      {
+        key: "promotion.apply",
+        label: "Apply Student Promotion",
+      },
+    ],
+
     Admins: [
       {
         key: "admins.manage",
@@ -164,7 +165,7 @@ function AdminManagement() {
       } catch (error) {
         console.log(
           "Admin fetch error:",
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
 
         setAdmins([]);
@@ -184,9 +185,7 @@ function AdminManagement() {
 
   const createAdmin = async () => {
     if (!canCreateAdmins) {
-      console.log(
-        "You do not have permission to create admins."
-      );
+      console.log("You do not have permission to create admins.");
 
       return;
     }
@@ -196,18 +195,13 @@ function AdminManagement() {
       !newAdmin.email.trim() ||
       !newAdmin.password.trim()
     ) {
-      console.log(
-        "Full name, email and password are required."
-      );
+      console.log("Full name, email and password are required.");
 
       return;
     }
 
     try {
-      const response = await api.post(
-        "/auth/register",
-        newAdmin
-      );
+      const response = await api.post("/auth/register", newAdmin);
 
       /*
       =========================================
@@ -217,10 +211,7 @@ function AdminManagement() {
       */
 
       if (response.data.admin) {
-        setAdmins((prev) => [
-          response.data.admin,
-          ...prev,
-        ]);
+        setAdmins((prev) => [response.data.admin, ...prev]);
       }
 
       setShowCreateModal(false);
@@ -232,10 +223,7 @@ function AdminManagement() {
         role: "admin",
       });
     } catch (error) {
-      console.log(
-        "Create admin error:",
-        error.response?.data || error.message
-      );
+      console.log("Create admin error:", error.response?.data || error.message);
     }
   };
 
@@ -253,9 +241,7 @@ function AdminManagement() {
     */
 
     if (!canDeleteAdmins) {
-      console.log(
-        "You do not have permission to delete admins."
-      );
+      console.log("You do not have permission to delete admins.");
 
       return;
     }
@@ -267,15 +253,13 @@ function AdminManagement() {
     */
 
     if (!adminId) {
-      console.error(
-        "Cannot delete admin: missing admin ID."
-      );
+      console.error("Cannot delete admin: missing admin ID.");
 
       return;
     }
 
     const confirmDelete = window.confirm(
-      "Are you sure you want to delete this admin?"
+      "Are you sure you want to delete this admin?",
     );
 
     if (!confirmDelete) {
@@ -286,16 +270,10 @@ function AdminManagement() {
       await api.delete(`/admins/${adminId}`);
 
       setAdmins((prev) =>
-        prev.filter(
-          (adminItem) =>
-            adminItem._id !== adminId
-        )
+        prev.filter((adminItem) => adminItem._id !== adminId),
       );
     } catch (error) {
-      console.log(
-        "Delete admin error:",
-        error.response?.data || error.message
-      );
+      console.log("Delete admin error:", error.response?.data || error.message);
     }
   };
 
@@ -307,17 +285,13 @@ function AdminManagement() {
 
   const openPermissionModal = (adminToEdit) => {
     if (!canUpdateAdmins) {
-      console.log(
-        "You do not have permission to update admin permissions."
-      );
+      console.log("You do not have permission to update admin permissions.");
 
       return;
     }
 
     if (!adminToEdit?._id) {
-      console.error(
-        "Cannot manage admin: missing admin ID."
-      );
+      console.error("Cannot manage admin: missing admin ID.");
 
       return;
     }
@@ -329,9 +303,7 @@ function AdminManagement() {
     setSelectedAdmin(adminToEdit);
 
     setPermissions(
-      Array.isArray(adminToEdit.permissions)
-        ? adminToEdit.permissions
-        : []
+      Array.isArray(adminToEdit.permissions) ? adminToEdit.permissions : [],
     );
 
     setShowPermissionModal(true);
@@ -346,10 +318,8 @@ function AdminManagement() {
   const togglePermission = (permission) => {
     setPermissions((prev) =>
       prev.includes(permission)
-        ? prev.filter(
-            (item) => item !== permission
-          )
-        : [...prev, permission]
+        ? prev.filter((item) => item !== permission)
+        : [...prev, permission],
     );
   };
 
@@ -360,10 +330,7 @@ function AdminManagement() {
   */
 
   const toggleAllPermissions = () => {
-    if (
-      permissions.length ===
-      allPermissions.length
-    ) {
+    if (permissions.length === allPermissions.length) {
       setPermissions([]);
     } else {
       setPermissions([...allPermissions]);
@@ -377,30 +344,20 @@ function AdminManagement() {
   */
 
   const toggleGroupPermissions = (group) => {
-    const groupPermissions =
-      permissionGroups[group].map(
-        (permission) => permission.key
-      );
+    const groupPermissions = permissionGroups[group].map(
+      (permission) => permission.key,
+    );
 
-    const hasAll = groupPermissions.every(
-      (permission) =>
-        permissions.includes(permission)
+    const hasAll = groupPermissions.every((permission) =>
+      permissions.includes(permission),
     );
 
     if (hasAll) {
       setPermissions((prev) =>
-        prev.filter(
-          (item) =>
-            !groupPermissions.includes(item)
-        )
+        prev.filter((item) => !groupPermissions.includes(item)),
       );
     } else {
-      setPermissions((prev) => [
-        ...new Set([
-          ...prev,
-          ...groupPermissions,
-        ]),
-      ]);
+      setPermissions((prev) => [...new Set([...prev, ...groupPermissions])]);
     }
   };
 
@@ -412,28 +369,21 @@ function AdminManagement() {
 
   const savePermissions = async () => {
     if (!canUpdateAdmins) {
-      console.log(
-        "You do not have permission to update admin permissions."
-      );
+      console.log("You do not have permission to update admin permissions.");
 
       return;
     }
 
     if (!selectedAdmin?._id) {
-      console.error(
-        "Cannot update permissions: missing admin ID."
-      );
+      console.error("Cannot update permissions: missing admin ID.");
 
       return;
     }
 
     try {
-      await api.patch(
-        `/admins/${selectedAdmin._id}/permissions`,
-        {
-          permissions,
-        }
-      );
+      await api.patch(`/admins/${selectedAdmin._id}/permissions`, {
+        permissions,
+      });
 
       setAdmins((prev) =>
         prev.map((adminItem) =>
@@ -442,8 +392,8 @@ function AdminManagement() {
                 ...adminItem,
                 permissions,
               }
-            : adminItem
-        )
+            : adminItem,
+        ),
       );
 
       setShowPermissionModal(false);
@@ -452,7 +402,7 @@ function AdminManagement() {
     } catch (error) {
       console.log(
         "Permission update error:",
-        error.response?.data || error.message
+        error.response?.data || error.message,
       );
     }
   };
@@ -546,15 +496,12 @@ function AdminManagement() {
               mb-6
             "
           >
-            You do not have permission to
-            manage administrators.
+            You do not have permission to manage administrators.
           </p>
 
           <button
             type="button"
-            onClick={() =>
-              navigate("/dashboard")
-            }
+            onClick={() => navigate("/dashboard")}
             className="
               bg-green-600
               hover:bg-green-700
@@ -613,7 +560,6 @@ function AdminManagement() {
             "
           >
             <FaUserShield />
-
             Admin Management
           </h1>
 
@@ -623,8 +569,7 @@ function AdminManagement() {
               mt-2
             "
           >
-            Manage administrators and their
-            permissions.
+            Manage administrators and their permissions.
           </p>
         </div>
 
@@ -651,7 +596,6 @@ function AdminManagement() {
             "
           >
             <FaArrowLeft />
-
             Back
           </button>
 
@@ -665,9 +609,7 @@ function AdminManagement() {
           {canCreateAdmins && (
             <button
               type="button"
-              onClick={() =>
-                setShowCreateModal(true)
-              }
+              onClick={() => setShowCreateModal(true)}
               className="
                 bg-green-600
                 hover:bg-green-700
@@ -681,7 +623,6 @@ function AdminManagement() {
               "
             >
               <FaPlus />
-
               Add Admin
             </button>
           )}
@@ -711,25 +652,15 @@ function AdminManagement() {
                   text-gray-300
                 "
               >
-                <th className="p-4 text-left">
-                  Name
-                </th>
+                <th className="p-4 text-left">Name</th>
 
-                <th className="p-4 text-left">
-                  Email
-                </th>
+                <th className="p-4 text-left">Email</th>
 
-                <th className="p-4 text-left">
-                  Role
-                </th>
+                <th className="p-4 text-left">Role</th>
 
-                <th className="p-4 text-left">
-                  Permissions
-                </th>
+                <th className="p-4 text-left">Permissions</th>
 
-                <th className="p-4 text-left">
-                  Action
-                </th>
+                <th className="p-4 text-left">Action</th>
               </tr>
             </thead>
 
@@ -757,13 +688,9 @@ function AdminManagement() {
                       hover:bg-white/5
                     "
                   >
-                    <td className="p-4">
-                      {adminItem.fullName}
-                    </td>
+                    <td className="p-4">{adminItem.fullName}</td>
 
-                    <td className="p-4">
-                      {adminItem.email}
-                    </td>
+                    <td className="p-4">{adminItem.email}</td>
 
                     <td className="p-4">
                       <span
@@ -791,9 +718,7 @@ function AdminManagement() {
                           text-sm
                         "
                       >
-                        {adminItem.permissions
-                          ?.length || 0}{" "}
-                        permissions
+                        {adminItem.permissions?.length || 0} permissions
                       </span>
                     </td>
 
@@ -804,15 +729,10 @@ function AdminManagement() {
                         ========================================= */}
 
                         {canUpdateAdmins &&
-                          adminItem.role !==
-                            "super_admin" && (
+                          adminItem.role !== "super_admin" && (
                             <button
                               type="button"
-                              onClick={() =>
-                                openPermissionModal(
-                                  adminItem
-                                )
-                              }
+                              onClick={() => openPermissionModal(adminItem)}
                               className="
                                 flex
                                 items-center
@@ -826,7 +746,6 @@ function AdminManagement() {
                               "
                             >
                               <FaUserShield />
-
                               Manage
                             </button>
                           )}
@@ -836,15 +755,10 @@ function AdminManagement() {
                         ========================================= */}
 
                         {canDeleteAdmins &&
-                          adminItem.role !==
-                            "super_admin" && (
+                          adminItem.role !== "super_admin" && (
                             <button
                               type="button"
-                              onClick={() =>
-                                deleteAdmin(
-                                  adminItem._id
-                                )
-                              }
+                              onClick={() => deleteAdmin(adminItem._id)}
                               className="
                                 bg-red-600
                                 hover:bg-red-700
@@ -862,17 +776,16 @@ function AdminManagement() {
                             NO ACTIONS AVAILABLE
                         ========================================= */}
 
-                        {!canUpdateAdmins &&
-                          !canDeleteAdmins && (
-                            <span
-                              className="
+                        {!canUpdateAdmins && !canDeleteAdmins && (
+                          <span
+                            className="
                                 text-gray-500
                                 text-sm
                               "
-                            >
-                              No actions
-                            </span>
-                          )}
+                          >
+                            No actions
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -919,16 +832,12 @@ function AdminManagement() {
                 mb-6
               "
             >
-              <h2 className="text-xl font-bold">
-                Create Admin
-              </h2>
+              <h2 className="text-xl font-bold">Create Admin</h2>
 
               <button
                 type="button"
                 aria-label="Close create admin modal"
-                onClick={() =>
-                  setShowCreateModal(false)
-                }
+                onClick={() => setShowCreateModal(false)}
                 className="
                   text-gray-400
                   hover:text-white
@@ -1044,9 +953,7 @@ function AdminManagement() {
                   focus:border-green-500
                 "
               >
-                <option value="admin">
-                  Admin
-                </option>
+                <option value="admin">Admin</option>
               </select>
             </div>
 
@@ -1109,9 +1016,7 @@ function AdminManagement() {
               "
             >
               <div>
-                <h2 className="text-xl font-bold">
-                  Manage Permissions
-                </h2>
+                <h2 className="text-xl font-bold">Manage Permissions</h2>
 
                 <p
                   className="
@@ -1127,9 +1032,7 @@ function AdminManagement() {
               <button
                 type="button"
                 aria-label="Close permissions modal"
-                onClick={
-                  closePermissionModal
-                }
+                onClick={closePermissionModal}
                 className="
                   text-gray-400
                   hover:text-white
@@ -1161,27 +1064,18 @@ function AdminManagement() {
                   id="select-all-permissions"
                   name="selectAllPermissions"
                   type="checkbox"
-                  checked={
-                    permissions.length ===
-                    allPermissions.length
-                  }
-                  onChange={
-                    toggleAllPermissions
-                  }
+                  checked={permissions.length === allPermissions.length}
+                  onChange={toggleAllPermissions}
                 />
 
-                <span className="font-semibold">
-                  Select All Permissions
-                </span>
+                <span className="font-semibold">Select All Permissions</span>
               </label>
 
               {/* =========================================
                   PERMISSION GROUPS
               ========================================= */}
 
-              {Object.keys(
-                permissionGroups
-              ).map((group) => (
+              {Object.keys(permissionGroups).map((group) => (
                 <div
                   key={group}
                   className="
@@ -1221,28 +1115,17 @@ function AdminManagement() {
                         id={`select-${group}`}
                         name={`select-${group}`}
                         type="checkbox"
-                        checked={permissionGroups[
-                          group
-                        ].every((item) =>
-                          permissions.includes(
-                            item.key
-                          )
+                        checked={permissionGroups[group].every((item) =>
+                          permissions.includes(item.key),
                         )}
-                        onChange={() =>
-                          toggleGroupPermissions(
-                            group
-                          )
-                        }
+                        onChange={() => toggleGroupPermissions(group)}
                       />
-
                       Select All
                     </label>
                   </div>
 
                   <div className="space-y-2">
-                    {permissionGroups[
-                      group
-                    ].map((permission) => (
+                    {permissionGroups[group].map((permission) => (
                       <label
                         key={permission.key}
                         htmlFor={`permission-${permission.key}`}
@@ -1260,19 +1143,11 @@ function AdminManagement() {
                           id={`permission-${permission.key}`}
                           name={`permission-${permission.key}`}
                           type="checkbox"
-                          checked={permissions.includes(
-                            permission.key
-                          )}
-                          onChange={() =>
-                            togglePermission(
-                              permission.key
-                            )
-                          }
+                          checked={permissions.includes(permission.key)}
+                          onChange={() => togglePermission(permission.key)}
                         />
 
-                        <span>
-                          {permission.label}
-                        </span>
+                        <span>{permission.label}</span>
                       </label>
                     ))}
                   </div>

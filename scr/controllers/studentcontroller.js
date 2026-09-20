@@ -134,6 +134,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
     otherName,
     gender,
     dateOfBirth,
+    admissionYear,
     currentClass,
     session,
     parentName,
@@ -141,12 +142,58 @@ exports.createStudent = asyncHandler(async (req, res) => {
     password,
   } = req.body;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Parse Date of Birth
-  |--------------------------------------------------------------------------
-  */
+  // ================================
+  // Validate admission year
+  // ================================
+  const parsedAdmissionYear = Number(admissionYear);
 
+  if (
+    !/^\d{4}$/.test(String(admissionYear)) ||
+    parsedAdmissionYear < 1900 ||
+    parsedAdmissionYear > 2100
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Admission year must be a valid 4-digit year.",
+    });
+  }
+
+  // ================================
+  // Validate current class
+  // ================================
+  const allowedClasses = ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
+
+  if (!allowedClasses.includes(currentClass)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Current class must be one of JSS1, JSS2, JSS3, SS1, SS2, or SS3.",
+    });
+  }
+
+  // ================================
+  // Validate session
+  // ================================
+  if (!/^\d{4}\/\d{4}$/.test(session)) {
+    return res.status(400).json({
+      success: false,
+      message: "Session must be in the format YYYY/YYYY.",
+    });
+  }
+
+  // ================================
+  // Validate parent phone
+  // ================================
+  if (!/^\d{11}$/.test(parentPhone)) {
+    return res.status(400).json({
+      success: false,
+      message: "Parent phone must contain exactly 11 digits.",
+    });
+  }
+
+  // ================================
+  // Parse date of birth
+  // ================================
   const parsedDateOfBirth = parseExcelDate(dateOfBirth);
 
   if (!parsedDateOfBirth) {
@@ -156,21 +203,9 @@ exports.createStudent = asyncHandler(async (req, res) => {
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Check Duplicate Student
-  |--------------------------------------------------------------------------
-  |
-  | This application-level check handles the normal case.
-  |
-  | The database-level unique index on:
-  |
-  | firstName + lastName + dateOfBirth
-  |
-  | provides the final protection against concurrent requests.
-  |
-  */
-
+  // ================================
+  // Check for duplicate student
+  // ================================
   const escapedFirstName = escapeRegex(firstName.trim());
   const escapedLastName = escapeRegex(lastName.trim());
 
@@ -178,13 +213,10 @@ exports.createStudent = asyncHandler(async (req, res) => {
     firstName: {
       $regex: new RegExp(`^${escapedFirstName}$`, "i"),
     },
-
     lastName: {
       $regex: new RegExp(`^${escapedLastName}$`, "i"),
     },
-
     dateOfBirth: parsedDateOfBirth,
-
     isActive: true,
   });
 
@@ -195,65 +227,36 @@ exports.createStudent = asyncHandler(async (req, res) => {
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Generate Student ID
-  |--------------------------------------------------------------------------
-  */
+  // ================================
+  // Generate official student ID
+  // ================================
+  const baseStudentId = await generateStudentId();
 
-  const studentId = await generateStudentId();
+  const studentId = `${parsedAdmissionYear}/${baseStudentId}`;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Create Student
-  |--------------------------------------------------------------------------
-  |
-  | The compound unique index protects this operation against a race
-  | condition where two identical registrations pass the duplicate
-  | check at almost the same time.
-  |
-  */
-
+  // ================================
+  // Create student
+  // ================================
   let student;
 
   try {
     student = await Student.create({
       studentId,
-
+      admissionYear: parsedAdmissionYear,
       firstName,
-
       lastName,
-
       otherName,
-
       gender,
-
       dateOfBirth: parsedDateOfBirth,
-
       currentClass,
-
       session,
-
       admissionDate: new Date(),
-
       parentName,
-
       parentPhone,
-
       createdBy: req.admin._id,
-
       updatedBy: req.admin._id,
     });
   } catch (error) {
-    /*
-     * MongoDB duplicate-key error.
-     *
-     * This occurs when another concurrent request created an
-     * active student with the same first name, last name,
-     * and date of birth between our duplicate check and
-     * Student.create().
-     */
-
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -264,12 +267,9 @@ exports.createStudent = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Create Student Login Credential
-  |--------------------------------------------------------------------------
-  */
-
+  // ================================
+  // Create student credentials
+  // ================================
   let credentialResult;
 
   try {
@@ -279,14 +279,8 @@ exports.createStudent = asyncHandler(async (req, res) => {
       adminId: req.admin._id,
     });
   } catch (error) {
-    /*
-     * Roll back the student if credential creation fails.
-     * This prevents students from existing without login credentials.
-     */
-
-    await Student.deleteOne({
-      _id: student._id,
-    });
+    // Roll back student creation if credential creation fails
+    await Student.deleteOne({ _id: student._id });
 
     if (error.statusCode) {
       return res.status(error.statusCode).json({
@@ -298,60 +292,39 @@ exports.createStudent = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Audit Log
-  |--------------------------------------------------------------------------
-  */
-
+  // ================================
+  // Create audit log
+  // ================================
   await createAuditLog({
     user: req.admin._id,
-
     action: "CREATE",
-
     module: "STUDENT",
-
     description:
       `${req.admin.fullName} created student ` +
       `${student.firstName} ${student.lastName}`,
-
     req,
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Activity Log
-  |--------------------------------------------------------------------------
-  */
-
+  // ================================
+  // Create activity log
+  // ================================
   await logActivity({
     adminId: req.admin._id,
-
     action: "CREATE_STUDENT",
-
     studentId: student.studentId,
-
     details: `Created student ${student.firstName} ${student.lastName}`,
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Response
-  |--------------------------------------------------------------------------
-  */
-
+  // ================================
+  // Response
+  // ================================
   return res.status(201).json({
     success: true,
-
     message: "Student created successfully.",
-
     student,
-
     studentCredential: {
       username: credentialResult.credential.username,
-
       temporaryPassword: credentialResult.temporaryPassword,
-
       mustChangePassword: credentialResult.credential.mustChangePassword,
     },
   });

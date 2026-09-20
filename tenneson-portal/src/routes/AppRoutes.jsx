@@ -4,6 +4,8 @@ import Layout from "../components/layout/Layout";
 
 import Login from "../pages/auth/Login";
 import Dashboard from "../pages/dashboard/Dashboard";
+import Promotions from "../pages/promotions/Promotions";
+import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 
@@ -20,35 +22,24 @@ import ActivityLogs from "../pages/activity/ActivityLogs";
 import AdminManagement from "../pages/admin/AdminManagement";
 import AuditLog from "../pages/admin/AuditLog";
 
-
 function AppRoutes() {
   return (
     <Routes>
-
       {/* =========================================
           PUBLIC ROUTES
       ========================================= */}
 
-      <Route
-        path="/login"
-        element={<Login />}
-      />
+      <Route path="/login" element={<Login />} />
 
       {/* Public student verification */}
-      <Route
-        path="/verify/:studentId"
-        element={<VerifyStudent />}
-      />
-
+      <Route path="/verify/:studentId" element={<VerifyStudent />} />
 
       {/* =========================================
           PROTECTED ADMIN PORTAL
       ========================================= */}
 
       <Route element={<ProtectedRoute />}>
-
         <Route element={<Layout />}>
-
           {/* =====================================
               DASHBOARD
           ===================================== */}
@@ -61,7 +52,6 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
-
 
           {/* =====================================
               STUDENTS
@@ -77,6 +67,14 @@ function AppRoutes() {
             }
           />
 
+          <Route
+            path="/results"
+            element={
+              <PermissionRoute permission="results.view">
+                <Results />
+              </PermissionRoute>
+            }
+          />
 
           {/* Add student */}
           <Route
@@ -88,7 +86,6 @@ function AppRoutes() {
             }
           />
 
-
           {/* Archived students */}
           <Route
             path="/students/archived"
@@ -98,7 +95,6 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
-
 
           {/* Student details */}
           <Route
@@ -110,7 +106,6 @@ function AppRoutes() {
             }
           />
 
-
           {/* Edit student */}
           <Route
             path="/students/:studentId/edit"
@@ -121,6 +116,7 @@ function AppRoutes() {
             }
           />
 
+          <Route path="/promotions" element={<Promotions />} />
 
           {/* =====================================
               ACTIVITY LOGS
@@ -135,7 +131,6 @@ function AppRoutes() {
             }
           />
 
-
           {/* =====================================
               ADMIN MANAGEMENT
           ===================================== */}
@@ -149,7 +144,6 @@ function AppRoutes() {
             }
           />
 
-
           {/* =====================================
               AUDIT LOGS
           ===================================== */}
@@ -162,24 +156,16 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
-
         </Route>
-
       </Route>
-
 
       {/* =========================================
           FALLBACK
       ========================================= */}
 
-      <Route
-        path="*"
-        element={<Login />}
-      />
-
+      <Route path="*" element={<Login />} />
     </Routes>
   );
 }
-
 
 export default AppRoutes;

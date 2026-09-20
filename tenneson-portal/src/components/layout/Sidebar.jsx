@@ -1,4 +1,3 @@
-
 import useAuth from "../../hooks/useAuth";
 
 import {
@@ -10,6 +9,8 @@ import {
   FaTimes,
   FaUserShield,
   FaClipboardList,
+  FaExchangeAlt,
+  FaFileAlt,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
@@ -17,50 +18,62 @@ import { NavLink } from "react-router-dom";
 function Sidebar({ isMobileOpen, onClose }) {
   const { admin, hasPermission } = useAuth();
   const menuItems = [
-  {
-    name: "Dashboard",
-    path: "/dashboard",
-    icon: <FaHome />,
-    visible: true,
-  },
+    {
+      name: "Dashboard",
+      path: "/dashboard",
+      icon: <FaHome />,
+      visible: true,
+    },
 
-  {
-    name: "Students",
-    path: "/students",
-    icon: <FaUserGraduate />,
-    visible: hasPermission("students.view"),
-  },
+    {
+      name: "Students",
+      path: "/students",
+      icon: <FaUserGraduate />,
+      visible: hasPermission("students.view"),
+    },
 
-  {
-    name: "Activity Logs",
-    path: "/activity-logs",
-    icon: <FaHistory />,
-    visible: hasPermission("students.view"),
-  },
+    {
+      name: "Results",
+      path: "/results",
+      icon: <FaFileAlt />,
+      visible: hasPermission("results.view"),
+    },
 
-  {
-    name: "Archived Students",
-    path: "/students/archived",
-    icon: <FaArchive />,
-    visible: hasPermission("students.view"),
-  },
+    {
+      name: "Promotions",
+      path: "/promotions",
+      icon: <FaExchangeAlt />,
+      visible: admin?.role === "admin" || admin?.role === "super_admin",
+    },
 
-  {
-    name: "Admin Management",
-    path: "/admins",
-    icon: <FaUserShield />,
-    visible: hasPermission("admins.manage"),
-  },
+    {
+      name: "Activity Logs",
+      path: "/activity-logs",
+      icon: <FaHistory />,
+      visible: hasPermission("students.view"),
+    },
 
-  {
-    name: "Audit Logs",
-    path: "/audit-logs",
-    icon: <FaClipboardList />,
-    visible:
-      admin?.role === "admin" ||
-      admin?.role === "super_admin",
-  },
-];
+    {
+      name: "Archived Students",
+      path: "/students/archived",
+      icon: <FaArchive />,
+      visible: hasPermission("students.view"),
+    },
+
+    {
+      name: "Admin Management",
+      path: "/admins",
+      icon: <FaUserShield />,
+      visible: hasPermission("admins.manage"),
+    },
+
+    {
+      name: "Audit Logs",
+      path: "/audit-logs",
+      icon: <FaClipboardList />,
+      visible: admin?.role === "admin" || admin?.role === "super_admin",
+    },
+  ];
 
   return (
     <>
@@ -164,13 +177,9 @@ function Sidebar({ isMobileOpen, onClose }) {
           </div>
 
           <div>
-            <h1 className="text-xl font-bold">
-              Tenneson
-            </h1>
+            <h1 className="text-xl font-bold">Tenneson</h1>
 
-            <p className="text-xs text-gray-400">
-              School Portal
-            </p>
+            <p className="text-xs text-gray-400">School Portal</p>
           </div>
         </div>
 
@@ -180,13 +189,13 @@ function Sidebar({ isMobileOpen, onClose }) {
 
         <nav className="space-y-3 flex-1">
           {menuItems
-          .filter((item) => item.visible)
-          .map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={onClose}
-              className={({ isActive }) => `
+            .filter((item) => item.visible)
+            .map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={onClose}
+                className={({ isActive }) => `
                 flex
                 items-center
                 gap-4
@@ -202,16 +211,12 @@ function Sidebar({ isMobileOpen, onClose }) {
                     : "text-gray-300 hover:bg-white/10 hover:text-white"
                 }
               `}
-            >
-              <span className="text-lg">
-                {item.icon}
-              </span>
+              >
+                <span className="text-lg">{item.icon}</span>
 
-              <span className="font-medium">
-                {item.name}
-              </span>
-            </NavLink>
-          ))}
+                <span className="font-medium">{item.name}</span>
+              </NavLink>
+            ))}
         </nav>
 
         {/* =========================================
@@ -237,8 +242,9 @@ function Sidebar({ isMobileOpen, onClose }) {
           </p>
         </div>
         <p className="text-xs italic text-gray-400 text-center mt-8 tracking-wide">
-  Crafted with ❤️ by <span className="font-semibold text-gray-600">Pjazz</span>
-</p>
+          Crafted with ❤️ by{" "}
+          <span className="font-semibold text-gray-600">Pjazz</span>
+        </p>
       </aside>
     </>
   );
