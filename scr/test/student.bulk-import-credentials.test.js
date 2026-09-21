@@ -49,6 +49,7 @@ describe("Student Bulk Import Credential Security", () => {
         otherName: "",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
         parentName: "Jane Doe",
@@ -94,6 +95,10 @@ describe("Student Bulk Import Credential Security", () => {
     expect(response.body.success).toBe(true);
 
     expect(response.body.summary.totalRows).toBe(1);
+    console.log(
+      "Bulk import response:",
+      JSON.stringify(response.body, null, 2),
+    );
 
     expect(response.body.summary.imported).toBe(1);
 

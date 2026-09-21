@@ -227,6 +227,12 @@ describe("Promotion Controller", () => {
         .patch(`/api/v1/promotions/${result._id}/apply`)
         .set("Authorization", `Bearer ${token}`);
 
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Graduation request failed: ${JSON.stringify(response.body, null, 2)}`,
+        );
+      }
+
       expect(response.statusCode).toBe(200);
 
       expect(response.body.success).toBe(true);
@@ -261,6 +267,12 @@ describe("Promotion Controller", () => {
         .patch(`/api/v1/promotions/${result._id}/apply`)
         .set("Authorization", `Bearer ${token}`);
 
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Graduation request failed: ${JSON.stringify(response.body, null, 2)}`,
+        );
+      }
+
       expect(response.statusCode).toBe(200);
 
       expect(response.body.success).toBe(true);
@@ -293,6 +305,12 @@ describe("Promotion Controller", () => {
         .patch(`/api/v1/promotions/${ss2Result._id}/apply`)
         .set("Authorization", `Bearer ${token}`);
 
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Graduation request failed: ${JSON.stringify(response.body, null, 2)}`,
+        );
+      }
+
       expect(response.statusCode).toBe(200);
 
       expect(response.body.promotion.decision).toBe("promoted");
@@ -323,6 +341,12 @@ describe("Promotion Controller", () => {
         .patch(`/api/v1/promotions/${ss3Result._id}/apply`)
         .set("Authorization", `Bearer ${token}`);
 
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Graduation request failed: ${JSON.stringify(response.body, null, 2)}`,
+        );
+      }
+
       expect(response.statusCode).toBe(200);
 
       expect(response.body.success).toBe(true);
@@ -331,11 +355,17 @@ describe("Promotion Controller", () => {
 
       expect(response.body.promotion.fromClass).toBe("SS3");
 
-      expect(response.body.promotion.toClass).toBe("Graduated");
+      expect(response.body.promotion.toClass).toBe("SS3");
 
-      expect(response.body.student.currentClass).toBe("Graduated");
+      expect(response.body.student.currentClass).toBe("SS3");
 
       expect(response.body.student.session).toBe("2026/2027");
+
+      const updatedStudent = await Student.findById(ss3Student._id);
+
+      expect(updatedStudent.currentClass).toBe("SS3");
+
+      expect(updatedStudent.session).toBe("2026/2027");
     });
 
     test("should reject a non-third-term result", async () => {
@@ -456,6 +486,12 @@ describe("Promotion Controller", () => {
       const response = await request(app)
         .patch(`/api/v1/promotions/${result._id}/apply`)
         .set("Authorization", `Bearer ${token}`);
+
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Graduation request failed: ${JSON.stringify(response.body, null, 2)}`,
+        );
+      }
 
       expect(response.statusCode).toBe(200);
 

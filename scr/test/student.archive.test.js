@@ -1,12 +1,15 @@
 const request = require("supertest");
+const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
+
 const app = require("../app");
 const Admin = require("../models/Admin");
 const StudentCredential = require("../models/StudentCredential");
-const bcrypt = require("bcrypt");
 
 describe("Student Archive API", () => {
   let token;
   let studentId;
+  let studentMongoId;
 
   beforeEach(async () => {
     const hashedPassword = await bcrypt.hash("password123", 12);
@@ -41,18 +44,24 @@ describe("Student Archive API", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(studentResponse.statusCode).toBe(201);
 
     studentId = studentResponse.body.student.studentId;
+    studentMongoId = studentResponse.body.student._id;
+
+    expect(studentId).toBeDefined();
+    expect(studentMongoId).toBeDefined();
   });
 
   test("Should archive a student successfully", async () => {
     const response = await request(app)
-      .delete(`/api/v1/students/${studentId}`)
+      .delete(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
@@ -62,7 +71,7 @@ describe("Student Archive API", () => {
 
   test("Should return archived students", async () => {
     await request(app)
-      .delete(`/api/v1/students/${studentId}`)
+      .delete(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     const response = await request(app)
@@ -88,7 +97,7 @@ describe("Student Archive API", () => {
 
   test("Should not include archived student in active students", async () => {
     await request(app)
-      .delete(`/api/v1/students/${studentId}`)
+      .delete(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     const response = await request(app)
@@ -107,11 +116,11 @@ describe("Student Archive API", () => {
 
   test("Should restore an archived student successfully", async () => {
     await request(app)
-      .delete(`/api/v1/students/${studentId}`)
+      .delete(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     const response = await request(app)
-      .patch(`/api/v1/students/${studentId}/restore`)
+      .patch(`/api/v1/students/${studentMongoId}/restore`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
@@ -120,8 +129,10 @@ describe("Student Archive API", () => {
   });
 
   test("Should return 404 when restoring non-existing student", async () => {
+    const nonExistingStudentId = new mongoose.Types.ObjectId().toString();
+
     const response = await request(app)
-      .patch("/api/v1/students/TCC99999/restore")
+      .patch(`/api/v1/students/${nonExistingStudentId}/restore`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(404);
@@ -137,7 +148,7 @@ describe("Student Archive API", () => {
     expect(credentialBeforeArchive.isActive).toBe(true);
 
     const response = await request(app)
-      .delete(`/api/v1/students/${studentId}`)
+      .delete(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
@@ -162,14 +173,20 @@ describe("Student Archive API", () => {
           lastName: "Archived",
           gender: i % 2 === 0 ? "Female" : "Male",
           dateOfBirth: `2012-05-${String((i % 28) + 1).padStart(2, "0")}`,
+          admissionYear: 2025,
           currentClass: "JSS1",
           session: "2025/2026",
+          parentPhone: "08012345678",
         });
 
       expect(response.statusCode).toBe(201);
 
+      const createdStudentMongoId = response.body.student._id;
+
+      expect(createdStudentMongoId).toBeDefined();
+
       await request(app)
-        .delete(`/api/v1/students/${response.body.student.studentId}`)
+        .delete(`/api/v1/students/${createdStudentMongoId}`)
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
     }
@@ -207,14 +224,20 @@ describe("Student Archive API", () => {
           lastName: "Archived",
           gender: i % 2 === 0 ? "Female" : "Male",
           dateOfBirth: `2012-06-${String((i % 28) + 1).padStart(2, "0")}`,
+          admissionYear: 2025,
           currentClass: "JSS1",
           session: "2025/2026",
+          parentPhone: "08012345678",
         });
 
       expect(response.statusCode).toBe(201);
 
+      const createdStudentMongoId = response.body.student._id;
+
+      expect(createdStudentMongoId).toBeDefined();
+
       await request(app)
-        .delete(`/api/v1/students/${response.body.student.studentId}`)
+        .delete(`/api/v1/students/${createdStudentMongoId}`)
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
     }
@@ -247,14 +270,20 @@ describe("Student Archive API", () => {
           lastName: "Archived",
           gender: i % 2 === 0 ? "Female" : "Male",
           dateOfBirth: `2011-07-${String((i % 28) + 1).padStart(2, "0")}`,
+          admissionYear: 2025,
           currentClass: "JSS2",
           session: "2025/2026",
+          parentPhone: "08012345678",
         });
 
       expect(response.statusCode).toBe(201);
 
+      const createdStudentMongoId = response.body.student._id;
+
+      expect(createdStudentMongoId).toBeDefined();
+
       await request(app)
-        .delete(`/api/v1/students/${response.body.student.studentId}`)
+        .delete(`/api/v1/students/${createdStudentMongoId}`)
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
     }
@@ -285,14 +314,20 @@ describe("Student Archive API", () => {
           lastName: "Archived",
           gender: i % 2 === 0 ? "Female" : "Male",
           dateOfBirth: `2010-08-${String((i % 28) + 1).padStart(2, "0")}`,
+          admissionYear: 2025,
           currentClass: "JSS2",
           session: "2025/2026",
+          parentPhone: "08012345678",
         });
 
       expect(response.statusCode).toBe(201);
 
+      const createdStudentMongoId = response.body.student._id;
+
+      expect(createdStudentMongoId).toBeDefined();
+
       await request(app)
-        .delete(`/api/v1/students/${response.body.student.studentId}`)
+        .delete(`/api/v1/students/${createdStudentMongoId}`)
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
     }

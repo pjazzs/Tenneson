@@ -7,6 +7,7 @@ const bcrypt = require("bcrypt");
 describe("Student QR Code API", () => {
   let token;
   let studentId;
+  let studentMongoId;
 
   beforeEach(async () => {
     const hashedPassword = await bcrypt.hash("password123", 12);
@@ -38,18 +39,25 @@ describe("Student QR Code API", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(studentResponse.statusCode).toBe(201);
 
+    // Official student ID used for public QR verification.
+    // Example: 2025/TCC00071
     studentId = studentResponse.body.student.studentId;
+
+    // MongoDB _id used by protected/internal student endpoints.
+    studentMongoId = studentResponse.body.student._id;
   });
 
   test("Should generate a QR code successfully", async () => {
     const response = await request(app)
-      .get(`/api/v1/students/${studentId}/qrcode`)
+      .get(`/api/v1/students/${studentMongoId}/qrcode`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
@@ -75,7 +83,7 @@ describe("Student QR Code API", () => {
 
   test("Should require authentication to generate QR code", async () => {
     const response = await request(app).get(
-      `/api/v1/students/${studentId}/qrcode`,
+      `/api/v1/students/${studentMongoId}/qrcode`,
     );
 
     expect(response.statusCode).toBe(401);
@@ -83,7 +91,7 @@ describe("Student QR Code API", () => {
 
   test("Should verify a valid student successfully", async () => {
     const response = await request(app).get(
-      `/api/v1/students/qrcode/verify/${studentId}`,
+      `/api/v1/students/qrcode/verify/${encodeURIComponent(studentId)}`,
     );
 
     expect(response.statusCode).toBe(200);
@@ -123,7 +131,7 @@ describe("Student QR Code API", () => {
     await Student.findOneAndUpdate({ studentId }, { isActive: false });
 
     const response = await request(app).get(
-      `/api/v1/students/qrcode/verify/${studentId}`,
+      `/api/v1/students/qrcode/verify/${encodeURIComponent(studentId)}`,
     );
 
     expect(response.statusCode).toBe(404);
@@ -139,7 +147,7 @@ describe("Student QR Code API", () => {
     await Student.findOneAndUpdate({ studentId }, { isActive: false });
 
     const response = await request(app)
-      .get(`/api/v1/students/${studentId}/qrcode`)
+      .get(`/api/v1/students/${studentMongoId}/qrcode`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(404);

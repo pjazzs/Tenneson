@@ -11,7 +11,7 @@ describe("Activity Log", () => {
   });
 
   test("Creating student should create activity log", async () => {
-    await request(app)
+    const response = await request(app)
       .post("/api/v1/students")
       .set("Authorization", `Bearer ${token}`)
       .send({
@@ -19,9 +19,16 @@ describe("Activity Log", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentName: "Mr Doe",
+        parentPhone: "08012345678",
       });
+
+    expect(response.statusCode).toBe(201);
+
+    expect(response.body.success).toBe(true);
 
     const logs = await ActivityLog.find();
 

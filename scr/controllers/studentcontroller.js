@@ -3,7 +3,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const asyncHandler = require("express-async-handler");
-
+const mongoose = require("mongoose");
 const Student = require("../models/student");
 const StudentCredential = require("../models/StudentCredential");
 
@@ -499,17 +499,20 @@ exports.getStudents = asyncHandler(async (req, res) => {
 */
 
 exports.getStudent = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
 
-  const student = await Student.findOne({
-    studentId,
+  // Prevent Mongoose CastError for invalid student IDs
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(404);
 
-    isActive: true,
-  })
+    throw new Error("Student not found.");
+  }
+
+  const student = await Student.findById(id)
     .populate("createdBy", "fullName email -_id")
     .populate("updatedBy", "fullName email -_id");
 
-  if (!student) {
+  if (!student || !student.isActive) {
     res.status(404);
 
     throw new Error("Student not found.");
@@ -517,7 +520,6 @@ exports.getStudent = asyncHandler(async (req, res) => {
 
   return res.status(200).json({
     success: true,
-
     student,
   });
 });
@@ -529,7 +531,7 @@ exports.getStudent = asyncHandler(async (req, res) => {
 */
 
 exports.updateStudent = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
 
   /*
    * Only these fields are allowed to be updated
@@ -573,20 +575,17 @@ exports.updateStudent = asyncHandler(async (req, res) => {
 
   const student = await Student.findOneAndUpdate(
     {
-      studentId,
+      _id: id,
+      isActive: true,
     },
-
     {
       $set: {
         ...updateData,
-
         updatedBy: req.admin._id,
       },
     },
-
     {
       returnDocument: "after",
-
       runValidators: true,
     },
   );
@@ -598,10 +597,10 @@ exports.updateStudent = asyncHandler(async (req, res) => {
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Audit Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Audit Log
+   * --------------------------------------------------------------------------
+   */
 
   await createAuditLog({
     user: req.admin._id,
@@ -618,10 +617,10 @@ exports.updateStudent = asyncHandler(async (req, res) => {
   });
 
   /*
-  |--------------------------------------------------------------------------
-  | Activity Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Activity Log
+   * --------------------------------------------------------------------------
+   */
 
   await logActivity({
     adminId: req.admin._id,
@@ -649,17 +648,16 @@ exports.updateStudent = asyncHandler(async (req, res) => {
 */
 
 exports.deleteStudent = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
 
   const student = await Student.findOneAndUpdate(
     {
-      studentId,
+      _id: id,
+      isActive: true,
     },
-
     {
       isActive: false,
     },
-
     {
       returnDocument: "after",
     },
@@ -668,34 +666,31 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
   if (!student) {
     return res.status(404).json({
       success: false,
-
       message: "Student not found.",
     });
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Disable Student Login
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Disable Student Login
+   * --------------------------------------------------------------------------
+   */
 
   await StudentCredential.findOneAndUpdate(
     {
       student: student._id,
     },
-
     {
       isActive: false,
-
       updatedBy: req.admin._id,
     },
   );
 
   /*
-  |--------------------------------------------------------------------------
-  | Audit Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Audit Log
+   * --------------------------------------------------------------------------
+   */
 
   await createAuditLog({
     user: req.admin._id,
@@ -712,10 +707,10 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
   });
 
   /*
-  |--------------------------------------------------------------------------
-  | Activity Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Activity Log
+   * --------------------------------------------------------------------------
+   */
 
   await logActivity({
     adminId: req.admin._id,
@@ -741,11 +736,9 @@ exports.deleteStudent = asyncHandler(async (req, res) => {
 */
 
 exports.restoreStudent = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
 
-  const student = await Student.findOne({
-    studentId,
-  });
+  const student = await Student.findById(id);
 
   if (!student) {
     res.status(404);
@@ -754,10 +747,10 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Verify Student Login Credential
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Verify Student Login Credential
+   * --------------------------------------------------------------------------
+   */
 
   const credential = await StudentCredential.findOne({
     student: student._id,
@@ -772,10 +765,10 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Restore Student
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Restore Student
+   * --------------------------------------------------------------------------
+   */
 
   student.isActive = true;
   student.updatedBy = req.admin._id;
@@ -783,10 +776,10 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
   await student.save();
 
   /*
-  |--------------------------------------------------------------------------
-  | Reactivate Student Login
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Reactivate Student Login
+   * --------------------------------------------------------------------------
+   */
 
   credential.isActive = true;
   credential.updatedBy = req.admin._id;
@@ -794,10 +787,10 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
   await credential.save();
 
   /*
-  |--------------------------------------------------------------------------
-  | Audit Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Audit Log
+   * --------------------------------------------------------------------------
+   */
 
   await createAuditLog({
     user: req.admin._id,
@@ -814,10 +807,10 @@ exports.restoreStudent = asyncHandler(async (req, res) => {
   });
 
   /*
-  |--------------------------------------------------------------------------
-  | Activity Log
-  |--------------------------------------------------------------------------
-  */
+   * --------------------------------------------------------------------------
+   * Activity Log
+   * --------------------------------------------------------------------------
+   */
 
   await logActivity({
     adminId: req.admin._id,
@@ -1038,23 +1031,29 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
   /*
   |--------------------------------------------------------------------------
+  | Allowed Classes
+  |--------------------------------------------------------------------------
+  */
+
+  const allowedClasses = ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
+
+  /*
+  |--------------------------------------------------------------------------
   | Process Each Student
   |--------------------------------------------------------------------------
   */
 
   for (const student of students) {
-    const {
-      firstName,
-      lastName,
-      otherName,
-      gender,
-      dateOfBirth,
-      currentClass,
-      session,
-      parentName,
-      parentPhone,
-    } = student;
-
+    const firstName = student.FirstName ?? student.firstName;
+    const lastName = student.LastName ?? student.lastName;
+    const otherName = student.OtherName ?? student.otherName;
+    const gender = student.Gender ?? student.gender;
+    const dateOfBirth = student.DateOfBirth ?? student.dateOfBirth;
+    const admissionYear = student.AdmissionYear ?? student.admissionYear;
+    const currentClass = student.CurrentClass ?? student.currentClass;
+    const session = student.Session ?? student.session;
+    const parentName = student.ParentName ?? student.parentName;
+    const parentPhone = student.ParentPhone ?? student.parentPhone;
     /*
     |--------------------------------------------------------------------------
     | Required Fields
@@ -1066,6 +1065,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       !lastName ||
       !gender ||
       !dateOfBirth ||
+      !admissionYear ||
       !currentClass ||
       !session
     ) {
@@ -1079,7 +1079,32 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
-    | Parse Date
+    | Validate Admission Year
+    |--------------------------------------------------------------------------
+    */
+
+    const parsedAdmissionYear = Number(admissionYear);
+
+    if (
+      !/^\d{4}$/.test(String(admissionYear)) ||
+      parsedAdmissionYear < 1900 ||
+      parsedAdmissionYear > 2100
+    ) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          admissionYear,
+        },
+        reason: "Admission year must be a valid 4-digit year.",
+      });
+
+      continue;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Parse Date of Birth
     |--------------------------------------------------------------------------
     */
 
@@ -1087,7 +1112,11 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
     if (!parsedDateOfBirth) {
       skippedStudents.push({
-        student,
+        student: {
+          firstName,
+          lastName,
+          dateOfBirth,
+        },
         reason: "Invalid date of birth format.",
       });
 
@@ -1108,6 +1137,64 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
           gender,
         },
         reason: "Gender must be Male or Female.",
+      });
+
+      continue;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Class Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!allowedClasses.includes(currentClass)) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          currentClass,
+        },
+        reason:
+          "Current class must be one of JSS1, JSS2, JSS3, SS1, SS2, or SS3.",
+      });
+
+      continue;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!/^\d{4}\/\d{4}$/.test(String(session))) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          session,
+        },
+        reason: "Session must be in the format YYYY/YYYY.",
+      });
+
+      continue;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Parent Phone Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!/^\d{11}$/.test(String(parentPhone))) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          parentPhone,
+        },
+        reason: "Parent phone must contain exactly 11 digits.",
       });
 
       continue;
@@ -1166,11 +1253,24 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
-    | Generate Student ID
+    | Generate Official Student ID
     |--------------------------------------------------------------------------
+    |
+    | The global sequence remains unchanged.
+    |
+    | Example:
+    |
+    | Base ID:
+    | TCC00071
+    |
+    | Official ID:
+    | 2025/TCC00071
+    |
     */
 
-    const studentId = await generateStudentId();
+    const baseStudentId = await generateStudentId();
+
+    const studentId = `${parsedAdmissionYear}/${baseStudentId}`;
 
     /*
     |--------------------------------------------------------------------------
@@ -1185,6 +1285,8 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     try {
       newStudent = await Student.create({
         studentId,
+
+        admissionYear: parsedAdmissionYear,
 
         firstName,
 
@@ -1228,17 +1330,14 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       | Store Imported Student
       |--------------------------------------------------------------------------
       |
-      | IMPORTANT:
-      |
       | The temporary plaintext password is intentionally NOT returned.
-      |
-      | The credential is still created using the generated password,
-      | but the password itself is never included in the API response.
       |
       */
 
       importedStudents.push({
         studentId: newStudent.studentId,
+
+        admissionYear: newStudent.admissionYear,
 
         firstName: newStudent.firstName,
 
@@ -1296,6 +1395,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
           firstName,
           lastName,
           gender,
+          admissionYear,
           currentClass,
           session,
         },
@@ -1637,15 +1737,23 @@ exports.getActivityLogs = asyncHandler(async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| Download Student Slip
+|--------------------------------------------------------------------------
+*/
+
 exports.downloadStudentSlip = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
   const student = await Student.findOne({
-    studentId: req.params.studentId,
+    _id: id,
+    isActive: true,
   });
 
   if (!student) {
     return res.status(404).json({
       success: false,
-
       message: "Student not found",
     });
   }
@@ -1710,11 +1818,23 @@ exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
 */
 
 exports.generateStudentQRCode = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
+
+  /*
+   * The route uses MongoDB _id internally.
+   *
+   * Validate the ID before querying MongoDB so an invalid
+   * value such as "TCC99999" returns 404 instead of causing
+   * a Mongoose CastError and returning 500.
+   */
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(404);
+
+    throw new Error("Student not found.");
+  }
 
   const student = await Student.findOne({
-    studentId,
-
+    _id: id,
     isActive: true,
   });
 
@@ -1724,11 +1844,15 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
     throw new Error("Student not found.");
   }
 
+  /*
+   * The route uses MongoDB _id internally.
+   *
+   * The QR itself still contains the official studentId.
+   */
   const qrCode = await generateQRCode(student.studentId);
 
   return res.status(200).json({
     success: true,
-
     qrCode,
   });
 });
@@ -1740,7 +1864,7 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
 */
 
 exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
-  const { studentId } = req.params;
+  const { id } = req.params;
 
   if (!req.file) {
     res.status(400);
@@ -1749,7 +1873,8 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   }
 
   const student = await Student.findOne({
-    studentId,
+    _id: id,
+    isActive: true,
   });
 
   if (!student) {
@@ -1768,9 +1893,6 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   | The new image has already been uploaded by the upload middleware.
   | We first save the new image reference to MongoDB. Only after that
   | succeeds do we delete the old Cloudinary image.
-  |
-  | This prevents the database from pointing to an image that has already
-  | been deleted if the database save fails.
   |
   */
 
@@ -1792,7 +1914,6 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
 
   student.photo = {
     url: req.file.path,
-
     publicId: req.file.filename,
   };
 
@@ -1801,10 +1922,7 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   } catch (error) {
     /*
      * The new Cloudinary image is no longer referenced by MongoDB.
-     *
      * Delete it to prevent an orphaned Cloudinary image.
-     *
-     * The old image remains untouched because we have not deleted it yet.
      */
     if (req.file.filename) {
       try {
@@ -1824,13 +1942,6 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
   |--------------------------------------------------------------------------
   | Delete Previous Cloudinary Image
   |--------------------------------------------------------------------------
-  |
-  | At this point MongoDB successfully references the new image.
-  |
-  | If deletion of the old image fails, the database remains consistent:
-  | it still points to the new image. The old Cloudinary image may remain
-  | temporarily and can be cleaned up later.
-  |
   */
 
   if (
@@ -1852,19 +1963,14 @@ exports.uploadStudentPhoto = asyncHandler(async (req, res) => {
 
   await logActivity({
     adminId: req.admin._id,
-
     action: "UPLOAD_STUDENT_PHOTO",
-
     studentId: student.studentId,
-
     details: `${student.firstName} ${student.lastName}`,
   });
 
   return res.status(200).json({
     success: true,
-
     message: "Student photo uploaded successfully.",
-
     photo: student.photo,
   });
 });

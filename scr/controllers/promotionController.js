@@ -49,7 +49,10 @@ const getNextSessionName = (sessionName) => {
 };
 
 /**
- * Determine the student's next class after promotion.
+ * Determine the next class after promotion.
+ *
+ * SS3 intentionally has no next class because graduation
+ * is handled separately in applyPromotion().
  */
 const getNextClass = (currentClass) => {
   const progression = {
@@ -58,7 +61,6 @@ const getNextClass = (currentClass) => {
     JSS3: "SS1",
     SS1: "SS2",
     SS2: "SS3",
-    SS3: "Graduated",
   };
 
   return progression[currentClass] || null;
@@ -75,8 +77,16 @@ const getNextClass = (currentClass) => {
  *
  * The Result remains historical and is never modified here.
  *
- * The Student record is updated to the next academic session/class,
- * and a Promotion record preserves the transition.
+ * For promoted students:
+ *   Student moves to the next class and next session.
+ *
+ * For repeating students:
+ *   Student remains in the same class but moves to the next session.
+ *
+ * For SS3:
+ *   Student remains in SS3.
+ *   Promotion.decision becomes "graduated".
+ *   The academic session still advances.
  */
 exports.applyPromotion = asyncHandler(async (req, res) => {
   const { resultId } = req.params;
@@ -221,17 +231,46 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
   let toClass;
   let decision;
 
+  /*
+  |--------------------------------------------------------------------------
+  | Repeat
+  |--------------------------------------------------------------------------
+  |
+  | A repeating student remains in the same class but moves
+  | into the next academic session.
+  |
+  */
+
   if (result.principalDecision === "repeat") {
-    /*
-     * A repeating student remains in the same class
-     * but moves into the next academic session.
-     */
     toClass = fromClass;
     decision = "repeat";
+  } else if (fromClass === "SS3") {
+
+  /*
+  |--------------------------------------------------------------------------
+  | Graduation
+  |--------------------------------------------------------------------------
+  |
+  | SS3 is the final class.
+  |
+  | We do NOT set Student.currentClass to "Graduated" because
+  | the Student schema only allows the academic classes.
+  |
+  | Instead:
+  |
+  |   toClass = "SS3"
+  |   decision = "graduated"
+  |
+  */
+    toClass = "SS3";
+    decision = "graduated";
   } else {
-    /*
-     * A promoted student advances to the next class.
-     */
+
+  /*
+  |--------------------------------------------------------------------------
+  | Normal Promotion
+  |--------------------------------------------------------------------------
+  */
     toClass = getNextClass(fromClass);
 
     if (!toClass) {
@@ -241,10 +280,7 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
       });
     }
 
-    /*
-     * SS3 promotion means graduation rather than another class.
-     */
-    decision = toClass === "Graduated" ? "graduated" : "promoted";
+    decision = "promoted";
   }
 
   /*
@@ -311,8 +347,7 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
     /*
      * Restore the Student if Promotion creation fails.
      *
-     * This keeps the two records consistent when the promotion
-     * record cannot be created.
+     * This keeps the Student and Promotion records consistent.
      */
 
     student.currentClass = previousStudentState.currentClass;
@@ -332,6 +367,7 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
      * Another request may have successfully created the promotion
      * at the same time.
      */
+
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -502,78 +538,10 @@ exports.getPromotions = asyncHandler(async (req, res) => {
   }
 
   /*
-|--------------------------------------------------------------------------
-| Student Search
-|--------------------------------------------------------------------------
-*/
-
-  if (search?.trim()) {
-    const searchTerm = search.trim();
-
-    const escapedSearch = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-    const searchRegex = new RegExp(escapedSearch, "i");
-
-    const matchingStudents = await Student.find({
-      $or: [
-        {
-          studentId: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          firstName: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          lastName: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          otherName: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          $expr: {
-            $regexMatch: {
-              input: {
-                $trim: {
-                  input: {
-                    $concat: [
-                      "$firstName",
-                      " ",
-                      "$lastName",
-                      " ",
-                      { $ifNull: ["$otherName", ""] },
-                    ],
-                  },
-                },
-              },
-              regex: escapedSearch,
-              options: "i",
-            },
-          },
-        },
-      ],
-    })
-      .select("_id")
-      .lean();
-
-    query.student = {
-      $in: matchingStudents.map((student) => student._id),
-    };
-  } /*
-|--------------------------------------------------------------------------
-| Student Search
-|--------------------------------------------------------------------------
-*/
+  |--------------------------------------------------------------------------
+  | Student Search
+  |--------------------------------------------------------------------------
+  */
 
   if (search?.trim()) {
     const searchTerm = search.trim();
@@ -617,7 +585,9 @@ exports.getPromotions = asyncHandler(async (req, res) => {
                       " ",
                       "$lastName",
                       " ",
-                      { $ifNull: ["$otherName", ""] },
+                      {
+                        $ifNull: ["$otherName", ""],
+                      },
                     ],
                   },
                 },
@@ -636,6 +606,7 @@ exports.getPromotions = asyncHandler(async (req, res) => {
       $in: matchingStudents.map((student) => student._id),
     };
   }
+
   /*
   |--------------------------------------------------------------------------
   | Fetch Promotions + Count
@@ -678,6 +649,7 @@ exports.getPromotions = asyncHandler(async (req, res) => {
       currentPage: page,
       limit,
       totalPromotions,
+
       totalPages: Math.ceil(totalPromotions / limit),
     },
   });

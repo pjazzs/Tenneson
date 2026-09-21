@@ -179,8 +179,7 @@ beforeEach(async () => {
   graduatedStudent = await createStudent({
     firstName: "Michael",
     lastName: "Graduated",
-    currentClass: "Graduated",
-    session: "2026/2027",
+    currentClass: "SS3",
   });
 
   promotedPromotion = await createPromotion({

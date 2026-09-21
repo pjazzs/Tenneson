@@ -1,4 +1,5 @@
 const express = require("express");
+
 const {
   createStudent,
   getStudents,
@@ -19,18 +20,29 @@ const {
   monthlyRegistrationAnalytics,
   classAnalytics,
 } = require("../controllers/studentcontroller");
+
 const { protect } = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validateRequest");
+
 const {
   studentSchema,
   studentUpdateSchema,
 } = require("../validators/studentValidator");
+
 const upload = require("../middleware/uploadMiddlewear");
 const uploadPhoto = require("../middleware/photoUpload");
+
 const { authorizePermission } = require("../middleware/permissionMiddleware");
+
 const { verifyLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
+
+/*
+|--------------------------------------------------------------------------
+| Student Import
+|--------------------------------------------------------------------------
+*/
 
 router.post(
   "/students/import",
@@ -39,7 +51,15 @@ router.post(
   upload.single("file"),
   bulkImportStudents,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Student Dashboard & Analytics
+|--------------------------------------------------------------------------
+*/
+
 router.get("/students/dashboard", protect, dashboard);
+
 router.get(
   "/students/analytics/monthly",
   protect,
@@ -48,9 +68,15 @@ router.get(
 
 router.get("/students/analytics/classes", protect, classAnalytics);
 
+/*
+|--------------------------------------------------------------------------
+| Activity Logs
+|--------------------------------------------------------------------------
+*/
+
 /**
  * @swagger
- * /api/v1/activity-logs:
+ * /api/v1/students/activity-logs:
  *   get:
  *     summary: Get admin activity logs
  *     tags: [Activity Logs]
@@ -59,37 +85,6 @@ router.get("/students/analytics/classes", protect, classAnalytics);
  *     responses:
  *       200:
  *         description: Activity logs retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 count:
- *                   type: integer
- *                   example: 10
- *                 logs:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       action:
- *                         type: string
- *                         example: Created student
- *                       admin:
- *                         type: object
- *                         properties:
- *                           fullName:
- *                             type: string
- *                             example: John Admin
- *                           email:
- *                             type: string
- *                             example: admin@gmail.com
- *                       createdAt:
- *                         type: string
- *                         example: 2026-08-02T12:00:00.000Z
  *       401:
  *         description: Unauthorized
  */
@@ -99,13 +94,42 @@ router.get(
   authorizePermission("students.view"),
   getActivityLogs,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Public Student Verification
+|--------------------------------------------------------------------------
+|
+| These endpoints intentionally use the official studentId.
+|
+| Example:
+| 2025/TCC00073
+|
+*/
+
 router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
+
+router.get("/students/verify/:studentId", verifyLimiter, verifyStudent);
+
+/*
+|--------------------------------------------------------------------------
+| Student Export
+|--------------------------------------------------------------------------
+*/
+
 router.get(
   "/students/export",
   protect,
   authorizePermission("students.export"),
   exportStudents,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Create Student
+|--------------------------------------------------------------------------
+*/
+
 router.post(
   "/students",
   protect,
@@ -113,19 +137,25 @@ router.post(
   validate(studentSchema),
   createStudent,
 );
-router.get(
-  "/students/:studentId/slip",
-  protect,
-  authorizePermission("students.view"),
-  downloadStudentSlip,
-);
-router.get("/students/:studentId/qrcode", protect, generateStudentQRCode);
+
+/*
+|--------------------------------------------------------------------------
+| Archived Students
+|--------------------------------------------------------------------------
+*/
+
 router.get(
   "/students/archived",
   protect,
   authorizePermission("students.view"),
   getArchivedStudents,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Get All Students
+|--------------------------------------------------------------------------
+*/
 
 /**
  * @swagger
@@ -146,17 +176,17 @@ router.get(
  *                 success:
  *                   type: boolean
  *                   example: true
- *                 count:
- *                   type: integer
- *                   example: 20
  *                 students:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: 68c123456789abcdef123456
  *                       studentId:
  *                         type: string
- *                         example: TCC00023
+ *                         example: 2025/TCC00023
  *                       firstName:
  *                         type: string
  *                         example: John
@@ -175,24 +205,76 @@ router.get(
   authorizePermission("students.view"),
   getStudents,
 );
-router.get("/students/verify/:studentId", verifyLimiter, verifyStudent);
+
+/*
+|--------------------------------------------------------------------------
+| Student Resource Routes
+|--------------------------------------------------------------------------
+|
+| These routes use MongoDB _id.
+|
+| Example:
+| /api/v1/students/68c123456789abcdef123456
+|
+*/
+
+/*
+|--------------------------------------------------------------------------
+| Restore Student
+|--------------------------------------------------------------------------
+*/
+
 router.patch(
-  "/students/:studentId/restore",
+  "/students/:id/restore",
   protect,
   authorizePermission("students.restore"),
   restoreStudent,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Upload Student Photo
+|--------------------------------------------------------------------------
+*/
+
 router.patch(
-  "/students/:studentId/photo",
+  "/students/:id/photo",
   protect,
   authorizePermission("students.photo"),
   uploadPhoto.single("photo"),
   uploadStudentPhoto,
 );
 
+/*
+|--------------------------------------------------------------------------
+| Generate Student QR Code
+|--------------------------------------------------------------------------
+*/
+
+router.get("/students/:id/qrcode", protect, generateStudentQRCode);
+
+/*
+|--------------------------------------------------------------------------
+| Download Student Slip
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/students/:id/slip",
+  protect,
+  authorizePermission("students.view"),
+  downloadStudentSlip,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Get Single Student
+|--------------------------------------------------------------------------
+*/
+
 /**
  * @swagger
- * /api/v1/students/{studentId}:
+ * /api/v1/students/{id}:
  *   get:
  *     summary: Get a single student
  *     tags: [Students]
@@ -200,11 +282,12 @@ router.patch(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: studentId
+ *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         example: TCC00023
+ *         description: MongoDB student document ID
+ *         example: 68c123456789abcdef123456
  *     responses:
  *       200:
  *         description: Student found successfully
@@ -214,15 +297,21 @@ router.patch(
  *         description: Unauthorized
  */
 router.get(
-  "/students/:studentId",
+  "/students/:id",
   protect,
   authorizePermission("students.view"),
   getStudent,
 );
 
+/*
+|--------------------------------------------------------------------------
+| Update Student
+|--------------------------------------------------------------------------
+*/
+
 /**
  * @swagger
- * /api/v1/students/{studentId}:
+ * /api/v1/students/{id}:
  *   put:
  *     summary: Update student details
  *     tags: [Students]
@@ -230,11 +319,12 @@ router.get(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: studentId
+ *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         example: TCC00023
+ *         description: MongoDB student document ID
+ *         example: 68c123456789abcdef123456
  *     requestBody:
  *       required: true
  *       content:
@@ -246,8 +336,6 @@ router.get(
  *                 type: string
  *                 example: Michael
  *               currentClass:
- *
- *
  *                 type: string
  *                 example: JSS2
  *               parentPhone:
@@ -260,16 +348,22 @@ router.get(
  *         description: Student not found
  */
 router.put(
-  "/students/:studentId",
+  "/students/:id",
   protect,
   authorizePermission("students.update"),
   validate(studentUpdateSchema),
   updateStudent,
 );
 
+/*
+|--------------------------------------------------------------------------
+| Delete / Archive Student
+|--------------------------------------------------------------------------
+*/
+
 /**
  * @swagger
- * /api/v1/students/{studentId}:
+ * /api/v1/students/{id}:
  *   delete:
  *     summary: Delete a student
  *     tags: [Students]
@@ -277,11 +371,12 @@ router.put(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: studentId
+ *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         example: TCC00023
+ *         description: MongoDB student document ID
+ *         example: 68c123456789abcdef123456
  *     responses:
  *       200:
  *         description: Student deleted successfully
@@ -291,7 +386,7 @@ router.put(
  *         description: Unauthorized
  */
 router.delete(
-  "/students/:studentId",
+  "/students/:id",
   protect,
   authorizePermission("students.delete"),
   deleteStudent,

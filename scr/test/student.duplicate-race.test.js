@@ -1,5 +1,4 @@
 const request = require("supertest");
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
 const app = require("../app");
@@ -20,6 +19,7 @@ describe("Student Duplicate Registration Race Condition", () => {
     otherName: "",
     gender: "Male",
     dateOfBirth: "2012-05-10",
+    admissionYear: 2025,
     currentClass: "JSS1",
     session: "2025/2026",
     parentName: "Jane Doe",

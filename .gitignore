@@ -14,3 +14,25 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+
+if (error.code === 11000) {
+  return res.status(409).json({
+    success: false,
+    message: "A student with these details already exists.",
+  });
+}
+
+is too generic.
+
+If the duplicate is actually:
+
+studentId
+
+or:
+
+username
+
+or another unique field, you're telling yourself that the student's personal details are duplicated when that might not be true.
+
+We can improve that after we fix the routing.

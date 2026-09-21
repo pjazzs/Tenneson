@@ -1,4 +1,3 @@
-
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
@@ -15,17 +14,15 @@ beforeEach(async () => {
     email,
     password: hashedPassword,
     role: "admin",
-    permissions: [
-      "students.create",
-    ],
+    permissions: ["students.create"],
   });
 
-  const loginResponse = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email,
-      password: "password123",
-    });
+  const loginResponse = await request(app).post("/api/v1/auth/login").send({
+    email,
+    password: "password123",
+  });
+
+  expect(loginResponse.statusCode).toBe(200);
 
   token = loginResponse.body.token;
 });
@@ -39,8 +36,10 @@ describe("Student Validation Tests", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(response.statusCode).toBe(400);
@@ -54,8 +53,10 @@ describe("Student Validation Tests", () => {
         firstName: "John",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(response.statusCode).toBe(400);
@@ -70,8 +71,10 @@ describe("Student Validation Tests", () => {
         lastName: "Doe",
         gender: "Unknown",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(response.statusCode).toBe(400);
@@ -86,12 +89,13 @@ describe("Student Validation Tests", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(response.statusCode).toBe(201);
     expect(response.body.success).toBe(true);
   });
 });
-

@@ -70,24 +70,28 @@ describe("Student Bulk Import API", () => {
     const filePath = createExcelFile(
       [
         {
-          firstName: "John",
-          lastName: "Doe",
-          gender: "Male",
-          dateOfBirth: "2012-05-10",
-          currentClass: "JSS1",
-          session: "2025/2026",
-          parentName: "Mr Doe",
-          parentPhone: "08012345678",
+          FirstName: "John",
+          LastName: "Doe",
+          OtherName: "",
+          Gender: "Male",
+          DateOfBirth: "2012-05-10",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS1",
+          Session: "2025/2026",
+          ParentName: "Mr Doe",
+          ParentPhone: "08012345678",
         },
         {
-          firstName: "Jane",
-          lastName: "Smith",
-          gender: "Female",
-          dateOfBirth: "2011-06-15",
-          currentClass: "JSS2",
-          session: "2025/2026",
-          parentName: "Mrs Smith",
-          parentPhone: "08087654321",
+          FirstName: "Jane",
+          LastName: "Smith",
+          OtherName: "",
+          Gender: "Female",
+          DateOfBirth: "2011-06-15",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS2",
+          Session: "2025/2026",
+          ParentName: "Mrs Smith",
+          ParentPhone: "08087654321",
         },
       ],
       "students.xlsx",
@@ -133,20 +137,28 @@ describe("Student Bulk Import API", () => {
     const filePath = createExcelFile(
       [
         {
-          firstName: "John",
-          lastName: "Doe",
-          gender: "Male",
-          dateOfBirth: "2012-05-10",
-          currentClass: "JSS1",
-          session: "2025/2026",
+          FirstName: "John",
+          LastName: "Doe",
+          OtherName: "",
+          Gender: "Male",
+          DateOfBirth: "2012-05-10",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS1",
+          Session: "2025/2026",
+          ParentName: "Mr Doe",
+          ParentPhone: "08012345678",
         },
         {
-          firstName: "Jane",
-          lastName: "",
-          gender: "Female",
-          dateOfBirth: "2011-06-15",
-          currentClass: "JSS2",
-          session: "2025/2026",
+          FirstName: "Jane",
+          LastName: "",
+          OtherName: "",
+          Gender: "Female",
+          DateOfBirth: "2011-06-15",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS2",
+          Session: "2025/2026",
+          ParentName: "Mrs Smith",
+          ParentPhone: "08087654321",
         },
       ],
       "students-missing-fields.xlsx",
@@ -182,12 +194,16 @@ describe("Student Bulk Import API", () => {
     const filePath = createExcelFile(
       [
         {
-          firstName: "John",
-          lastName: "Doe",
-          gender: "Unknown",
-          dateOfBirth: "2012-05-10",
-          currentClass: "JSS1",
-          session: "2025/2026",
+          FirstName: "John",
+          LastName: "Doe",
+          OtherName: "",
+          Gender: "Unknown",
+          DateOfBirth: "2012-05-10",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS1",
+          Session: "2025/2026",
+          ParentName: "Mr Doe",
+          ParentPhone: "08012345678",
         },
       ],
       "students-invalid-gender.xlsx",
@@ -219,25 +235,32 @@ describe("Student Bulk Import API", () => {
 
   test("Should skip duplicate students", async () => {
     await Student.create({
-      studentId: "TCC00001",
+      studentId: "2025/TCC00001",
       firstName: "John",
       lastName: "Doe",
       gender: "Male",
       dateOfBirth: new Date("2012-05-10"),
+      admissionYear: 2025,
       currentClass: "JSS1",
       session: "2025/2026",
+      parentName: "Mr Doe",
+      parentPhone: "08012345678",
       isActive: true,
     });
 
     const filePath = createExcelFile(
       [
         {
-          firstName: "John",
-          lastName: "Doe",
-          gender: "Male",
-          dateOfBirth: "2012-05-10",
-          currentClass: "JSS1",
-          session: "2025/2026",
+          FirstName: "John",
+          LastName: "Doe",
+          OtherName: "",
+          Gender: "Male",
+          DateOfBirth: "2012-05-10",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS1",
+          Session: "2025/2026",
+          ParentName: "Mr Doe",
+          ParentPhone: "08012345678",
         },
       ],
       "students-duplicate.xlsx",
@@ -262,7 +285,9 @@ describe("Student Bulk Import API", () => {
       "Student already exists.",
     );
 
-    expect(response.body.skippedStudents[0].existingStudentId).toBe("TCC00001");
+    expect(response.body.skippedStudents[0].existingStudentId).toBe(
+      "2025/TCC00001",
+    );
 
     const students = await Student.find();
 
@@ -273,12 +298,16 @@ describe("Student Bulk Import API", () => {
     const filePath = createExcelFile(
       [
         {
-          firstName: "John",
-          lastName: "Doe",
-          gender: "Male",
-          dateOfBirth: "invalid-date",
-          currentClass: "JSS1",
-          session: "2025/2026",
+          FirstName: "John",
+          LastName: "Doe",
+          OtherName: "",
+          Gender: "Male",
+          DateOfBirth: "invalid-date",
+          AdmissionYear: 2025,
+          CurrentClass: "JSS1",
+          Session: "2025/2026",
+          ParentName: "Mr Doe",
+          ParentPhone: "08012345678",
         },
       ],
       "students-invalid-date.xlsx",
@@ -337,15 +366,20 @@ describe("Student Bulk Import API", () => {
     expect(response.statusCode).toBe(403);
     expect(response.body.success).toBe(false);
   });
+
   test("Should create activity log after bulk import", async () => {
     const filePath = createExcelFile([
       {
-        firstName: "John",
-        lastName: "Doe",
-        gender: "Male",
-        dateOfBirth: "2012-05-10",
-        currentClass: "JSS1",
-        session: "2025/2026",
+        FirstName: "John",
+        LastName: "Doe",
+        OtherName: "",
+        Gender: "Male",
+        DateOfBirth: "2012-05-10",
+        AdmissionYear: 2025,
+        CurrentClass: "JSS1",
+        Session: "2025/2026",
+        ParentName: "Mr Doe",
+        ParentPhone: "08012345678",
       },
     ]);
 

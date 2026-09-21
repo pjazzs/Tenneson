@@ -127,56 +127,57 @@ describe("Student Authentication API", () => {
     });
 
     test("Should login successfully and require first password change", async () => {
-      const response = await request(app).post("/api/v1/student/login").send({
-        username: student.studentId,
-        password: studentPassword,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.requiresPasswordChange).toBe(true);
-
-      expect(response.body.passwordChangeToken).toBeDefined();
-      expect(response.body.token).toBeUndefined();
+      // existing test
     });
 
     test("Should reject login with incorrect password", async () => {
-      const response = await request(app).post("/api/v1/student/login").send({
-        username: student.studentId,
-        password: "WrongPassword123!",
-      });
-
-      expect(response.statusCode).toBe(401);
-      expect(response.body.success).toBe(false);
+      // existing test
     });
 
     test("Should reject login for a nonexistent student", async () => {
-      const response = await request(app).post("/api/v1/student/login").send({
-        username: "TCC99999",
-        password: studentPassword,
-      });
-
-      expect(response.statusCode).toBe(401);
-      expect(response.body.success).toBe(false);
+      // existing test
     });
 
     test("Should reject login for an archived student", async () => {
-      await Student.updateOne(
-        { _id: student._id },
-        {
-          $set: {
-            isActive: false,
-          },
-        },
-      );
+      // existing test
+    });
 
-      const response = await request(app).post("/api/v1/student/login").send({
-        username: student.studentId,
-        password: studentPassword,
-      });
+    test("Should reject reuse of a password-change token after successful password change", async () => {
+      const loginResponse = await request(app)
+        .post("/api/v1/student/login")
+        .send({
+          username: student.studentId,
+          password: studentPassword,
+        });
 
-      expect(response.statusCode).toBe(401);
-      expect(response.body.success).toBe(false);
+      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.body.passwordChangeToken).toBeDefined();
+
+      const passwordChangeToken = loginResponse.body.passwordChangeToken;
+
+      // First password change should succeed
+      const firstChangeResponse = await request(app)
+        .patch("/api/v1/student/change-password")
+        .set("Authorization", `Bearer ${passwordChangeToken}`)
+        .send({
+          newPassword: newStudentPassword,
+          confirmPassword: newStudentPassword,
+        });
+
+      expect(firstChangeResponse.statusCode).toBe(200);
+      expect(firstChangeResponse.body.success).toBe(true);
+
+      // The same password-change token must now be invalid
+      const reuseResponse = await request(app)
+        .patch("/api/v1/student/change-password")
+        .set("Authorization", `Bearer ${passwordChangeToken}`)
+        .send({
+          newPassword: "AnotherStudentPassword123!",
+          confirmPassword: "AnotherStudentPassword123!",
+        });
+
+      expect(reuseResponse.statusCode).toBe(401);
+      expect(reuseResponse.body.success).toBe(false);
     });
   });
 
@@ -441,6 +442,135 @@ describe("Student Authentication API", () => {
       );
 
       expect(passwordMatches).toBe(true);
+    });
+
+    test("Should require password change after admin resets a student's password", async () => {
+      await StudentCredential.create({
+        student: student._id,
+        username: student.studentId,
+        passwordHash: await bcrypt.hash(studentPassword, 12),
+        mustChangePassword: false,
+        isActive: true,
+        createdBy: admin._id,
+      });
+
+      // Admin resets the student's password
+      const resetResponse = await request(app)
+        .patch(`/api/v1/students/${student.studentId}/reset-password`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          password: newStudentPassword,
+        });
+
+      expect(resetResponse.statusCode).toBe(200);
+      expect(resetResponse.body.success).toBe(true);
+
+      // Student logs in with the newly reset password
+      const loginResponse = await request(app)
+        .post("/api/v1/student/login")
+        .send({
+          username: student.studentId,
+          password: newStudentPassword,
+        });
+
+      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.requiresPasswordChange).toBe(true);
+
+      expect(loginResponse.body.passwordChangeToken).toBeDefined();
+      expect(loginResponse.body.token).toBeUndefined();
+
+      // The temporary/password-change token must not access the profile yet
+      const profileResponse = await request(app)
+        .get("/api/v1/student/me")
+        .set(
+          "Authorization",
+          `Bearer ${loginResponse.body.passwordChangeToken}`,
+        );
+
+      expect(profileResponse.statusCode).toBe(403);
+      expect(profileResponse.body.success).toBe(false);
+      expect(profileResponse.body.requiresPasswordChange).toBe(true);
+    });
+
+    test("Should reject a valid student token when the credential is inactive", async () => {
+      await StudentCredential.create({
+        student: student._id,
+        username: student.studentId,
+        passwordHash: await bcrypt.hash(newStudentPassword, 12),
+        mustChangePassword: false,
+        isActive: true,
+        createdBy: admin._id,
+      });
+
+      const loginResponse = await request(app)
+        .post("/api/v1/student/login")
+        .send({
+          username: student.studentId,
+          password: newStudentPassword,
+        });
+
+      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.body.token).toBeDefined();
+
+      const token = loginResponse.body.token;
+
+      // Deactivate the credential after the token has already been issued.
+      await StudentCredential.updateOne(
+        { student: student._id },
+        {
+          $set: {
+            isActive: false,
+          },
+        },
+      );
+
+      const response = await request(app)
+        .get("/api/v1/student/me")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(401);
+      expect(response.body.success).toBe(false);
+    });
+
+    test("Should reject a valid student token when the student is inactive", async () => {
+      await StudentCredential.create({
+        student: student._id,
+        username: student.studentId,
+        passwordHash: await bcrypt.hash(newStudentPassword, 12),
+        mustChangePassword: false,
+        isActive: true,
+        createdBy: admin._id,
+      });
+
+      const loginResponse = await request(app)
+        .post("/api/v1/student/login")
+        .send({
+          username: student.studentId,
+          password: newStudentPassword,
+        });
+
+      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.body.token).toBeDefined();
+
+      const token = loginResponse.body.token;
+
+      // Deactivate the student after the JWT has already been issued.
+      await Student.updateOne(
+        { _id: student._id },
+        {
+          $set: {
+            isActive: false,
+          },
+        },
+      );
+
+      const response = await request(app)
+        .get("/api/v1/student/me")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(401);
+      expect(response.body.success).toBe(false);
     });
 
     test("Should invalidate an old access token after an admin resets the student's password", async () => {

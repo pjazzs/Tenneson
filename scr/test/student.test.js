@@ -1,9 +1,8 @@
-
 const request = require("supertest");
 const app = require("../app");
 const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
-
+const mongoose = require("mongoose");
 describe("Student API", () => {
   let token;
 
@@ -15,18 +14,13 @@ describe("Student API", () => {
       email: `admin${Date.now()}@test.com`,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-        "students.view",
-      ],
+      permissions: ["students.create", "students.view"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: admin.email,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: admin.email,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -40,14 +34,19 @@ describe("Student API", () => {
       .send({
         firstName: "John",
         lastName: "Doe",
-        otherName: "Michael",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
-        parentName: "Mr Doe",
         parentPhone: "08012345678",
       });
+
+    if (response.statusCode !== 201) {
+      throw new Error(
+        `CREATE STUDENT FAILED:\n${JSON.stringify(response.body, null, 2)}`,
+      );
+    }
 
     expect(response.statusCode).toBe(201);
     expect(response.body.success).toBe(true);
@@ -63,16 +62,19 @@ describe("Student API", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-10",
+        admissionYear: 2025,
         currentClass: "JSS1",
         session: "2025/2026",
+        parentPhone: "08012345678",
       });
 
     expect(createResponse.statusCode).toBe(201);
 
     const studentId = createResponse.body.student.studentId;
+    const studentMongoId = createResponse.body.student._id;
 
     const response = await request(app)
-      .get(`/api/v1/students/${studentId}`)
+      .get(`/api/v1/students/${studentMongoId}`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
@@ -90,8 +92,7 @@ describe("Student API", () => {
   });
 
   test("Should reject getting a student without authentication", async () => {
-    const response = await request(app)
-      .get("/api/v1/students/TCC00001");
+    const response = await request(app).get("/api/v1/students/TCC00001");
 
     expect(response.statusCode).toBe(401);
     expect(response.body.success).toBe(false);
@@ -107,17 +108,13 @@ describe("Student API", () => {
       email: adminEmail,
       password: hashedPassword,
       role: "admin",
-      permissions: [
-        "students.create",
-      ],
+      permissions: ["students.create"],
     });
 
-    const loginResponse = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: adminEmail,
-        password: "password123",
-      });
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminEmail,
+      password: "password123",
+    });
 
     expect(loginResponse.statusCode).toBe(200);
 
@@ -125,10 +122,7 @@ describe("Student API", () => {
 
     const response = await request(app)
       .get("/api/v1/students/TCC00001")
-      .set(
-        "Authorization",
-        `Bearer ${noPermissionToken}`
-      );
+      .set("Authorization", `Bearer ${noPermissionToken}`);
 
     expect(response.statusCode).toBe(403);
     expect(response.body.success).toBe(false);

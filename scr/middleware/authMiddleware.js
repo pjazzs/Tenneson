@@ -65,6 +65,15 @@ exports.protect = async (req, res, next) => {
       });
     }
 
+    if (!admin.isActive) {
+      console.log("[AUTH DEBUG] Admin account is inactive");
+
+      return res.status(401).json({
+        success: false,
+        message: "Admin account is inactive.",
+      });
+    }
+
     const currentTokenVersion = admin.tokenVersion || 0;
     const tokenVersion = decoded.tokenVersion ?? 0;
 

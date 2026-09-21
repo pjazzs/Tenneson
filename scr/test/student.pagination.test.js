@@ -4,6 +4,7 @@ const Admin = require("../models/Admin");
 const bcrypt = require("bcrypt");
 
 jest.setTimeout(120000);
+
 describe("Student Pagination API", () => {
   let token;
 
@@ -23,11 +24,14 @@ describe("Student Pagination API", () => {
       password: "password123",
     });
 
+    expect(superAdminLogin.statusCode).toBe(200);
+    expect(superAdminLogin.body.token).toBeDefined();
+
     const superAdminToken = superAdminLogin.body.token;
 
     const adminEmail = `admin${Date.now()}@test.com`;
 
-    await request(app)
+    const adminRegisterResponse = await request(app)
       .post("/api/v1/auth/register")
       .set("Authorization", `Bearer ${superAdminToken}`)
       .send({
@@ -37,26 +41,36 @@ describe("Student Pagination API", () => {
         permissions: ["students.create", "students.view"],
       });
 
+    expect(adminRegisterResponse.statusCode).toBe(201);
+
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: adminEmail,
       password: "password123",
     });
 
+    expect(loginResponse.statusCode).toBe(200);
+    expect(loginResponse.body.token).toBeDefined();
+
     token = loginResponse.body.token;
 
-    // Create students
+    // Create 12 students
     for (let i = 0; i < 12; i++) {
-      await request(app)
+      const studentResponse = await request(app)
         .post("/api/v1/students")
         .set("Authorization", `Bearer ${token}`)
         .send({
           firstName: `Student${i}`,
           lastName: "Test",
           gender: "Male",
-          dateOfBirth: "2012-05-10",
+          dateOfBirth: `2012-05-${String(i + 1).padStart(2, "0")}`,
+          admissionYear: 2025,
           currentClass: "JSS1",
           session: "2025/2026",
+          parentPhone: "08012345678",
         });
+
+      expect(studentResponse.statusCode).toBe(201);
+      expect(studentResponse.body.student).toBeDefined();
     }
   });
 

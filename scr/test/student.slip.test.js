@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 
 let token;
 let studentId;
+let studentMongoId;
 let superAdminToken;
 
 describe("Student Slip PDF", () => {
@@ -39,6 +40,7 @@ describe("Student Slip PDF", () => {
         lastName: "Doe",
         gender: "Male",
         dateOfBirth: "2012-05-20",
+        admissionYear: 2026,
         currentClass: "JSS1",
         session: "2026/2027",
         parentName: "Mr Doe",
@@ -47,13 +49,19 @@ describe("Student Slip PDF", () => {
 
     expect(student.statusCode).toBe(201);
 
+    // Official student ID.
+    // Example: 2026/TCC00001
     studentId = student.body.student.studentId;
+
+    // MongoDB document ID used by protected internal routes.
+    studentMongoId = student.body.student._id;
+
     token = superAdminToken;
   });
 
   test("Should download student registration slip PDF", async () => {
     const response = await request(app)
-      .get(`/api/v1/students/${studentId}/slip`)
+      .get(`/api/v1/students/${studentMongoId}/slip`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(200);
