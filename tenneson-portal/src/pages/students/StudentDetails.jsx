@@ -74,7 +74,7 @@ function StudentDetails() {
       setUploading(true);
 
       const response = await api.patch(
-        `/students/${student.studentId}/photo`,
+        `/students/${student._id}/photo`,
 
         formData,
 
@@ -109,7 +109,7 @@ function StudentDetails() {
     if (!confirmDelete) return;
 
     try {
-      await api.delete(`/students/${student.studentId}`);
+      await api.delete(`/students/${student._id}`);
 
       navigate("/students");
     } catch (error) {
@@ -123,7 +123,7 @@ function StudentDetails() {
 
   const generateQR = async () => {
     try {
-      const response = await api.get(`/students/${student.studentId}/qrcode`);
+      const response = await api.get(`/students/${student._id}/qrcode`);
 
       setQrCode(response.data.qrCode);
 
@@ -146,7 +146,7 @@ function StudentDetails() {
   const downloadSlip = async () => {
     try {
       const response = await api.get(
-        `/students/${student.studentId}/slip`,
+        `/students/${student._id}/slip`,
 
         {
           responseType: "blob",
@@ -287,7 +287,7 @@ function StudentDetails() {
 
           {hasPermission("students.update") && (
             <ActionButton
-              onClick={() => navigate(`/students/${student.studentId}/edit`)}
+              onClick={() => navigate(`/students/${student._id}/edit`)}
               color="blue"
               icon={<FaEdit />}
               text="Edit"
@@ -517,6 +517,8 @@ function StudentDetails() {
 
         <InfoSection title="Academic Information">
           <Info label="Student ID" value={student.studentId} />
+
+          <Info label="Admission Year" value={student.admissionYear || "N/A"} />
 
           <Info label="Class" value={student.currentClass} />
 

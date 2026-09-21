@@ -1,11 +1,6 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
-import {
-  useParams,
-} from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import {
   FaCheckCircle,
@@ -16,15 +11,8 @@ import {
 
 import api from "../../api/axios";
 
-
 function VerifyStudent() {
-
-
-  const {
-    studentId,
-  } = useParams();
-
-
+  const { studentId } = useParams();
 
   const [student, setStudent] = useState(null);
 
@@ -32,67 +20,28 @@ function VerifyStudent() {
 
   const [error, setError] = useState("");
 
-
-
-
   useEffect(() => {
-
-
     const verifyStudent = async () => {
-
-
       try {
-
-
         setLoading(true);
 
-
         const response = await api.get(
-          `/students/qrcode/verify/${studentId}`
+          `/students/qrcode/verify/${encodeURIComponent(studentId)}`,
         );
 
-
-        setStudent(
-          response.data.student
-        );
-
-
-      } catch(error) {
-
-
-        setError(
-          error.response?.data?.message ||
-          "Unable to verify student."
-        );
-
-
+        setStudent(response.data.student);
+      } catch (error) {
+        setError(error.response?.data?.message || "Unable to verify student.");
       } finally {
-
-
         setLoading(false);
-
-
       }
-
-
     };
 
-
-
     verifyStudent();
-
-
   }, [studentId]);
 
-
-
-
-
   if (loading) {
-
-
     return (
-
       <div
         className="
           min-h-screen
@@ -103,7 +52,6 @@ function VerifyStudent() {
           text-white
         "
       >
-
         <div
           className="
             flex
@@ -112,7 +60,6 @@ function VerifyStudent() {
             gap-4
           "
         >
-
           <div
             className="
               w-10
@@ -125,25 +72,13 @@ function VerifyStudent() {
             "
           />
 
-
-          <p>
-            Verifying student...
-          </p>
-
-
+          <p>Verifying student...</p>
         </div>
-
-
       </div>
-
     );
-
   }
-    if (error || !student) {
-
-
+  if (error || !student) {
     return (
-
       <div
         className="
           min-h-screen
@@ -155,8 +90,6 @@ function VerifyStudent() {
           text-white
         "
       >
-
-
         <div
           className="
             bg-slate-900
@@ -170,8 +103,6 @@ function VerifyStudent() {
             shadow-xl
           "
         >
-
-
           <FaTimesCircle
             className="
               text-red-500
@@ -180,7 +111,6 @@ function VerifyStudent() {
               mb-5
             "
           />
-
 
           <h1
             className="
@@ -192,7 +122,6 @@ function VerifyStudent() {
             Verification Failed
           </h1>
 
-
           <p
             className="
               text-gray-400
@@ -200,24 +129,12 @@ function VerifyStudent() {
           >
             {error || "Student not found."}
           </p>
-
-
         </div>
-
-
       </div>
-
     );
-
-
   }
 
-
-
-
-
   return (
-
     <div
       className="
         min-h-screen
@@ -229,8 +146,6 @@ function VerifyStudent() {
         text-white
       "
     >
-
-
       <div
         className="
           w-full
@@ -243,10 +158,7 @@ function VerifyStudent() {
           overflow-hidden
         "
       >
-
-
         {/* HEADER */}
-
 
         <div
           className="
@@ -255,8 +167,6 @@ function VerifyStudent() {
             text-center
           "
         >
-
-
           <FaCheckCircle
             className="
               text-white
@@ -265,7 +175,6 @@ function VerifyStudent() {
               mb-3
             "
           />
-
 
           <h1
             className="
@@ -276,7 +185,6 @@ function VerifyStudent() {
             Verified Student
           </h1>
 
-
           <p
             className="
               text-green-100
@@ -285,15 +193,9 @@ function VerifyStudent() {
           >
             Student record confirmed
           </p>
-
-
         </div>
 
-
-
-
         {/* STUDENT PHOTO */}
-
 
         <div
           className="
@@ -302,15 +204,11 @@ function VerifyStudent() {
             mt-6
           "
         >
-
-
-          {
-  student.photo?.url ? (
-
-    <img
-      src={student.photo.url}
-      alt={`${student.firstName} ${student.lastName}`}
-      className="
+          {student.photo?.url ? (
+            <img
+              src={student.photo.url}
+              alt={`${student.firstName} ${student.lastName}`}
+              className="
         w-28
         h-28
         rounded-full
@@ -318,12 +216,10 @@ function VerifyStudent() {
         border-4
         border-green-500
       "
-    />
-
-  ) : (
-
-    <div
-      className="
+            />
+          ) : (
+            <div
+              className="
         w-28
         h-28
         rounded-full
@@ -334,18 +230,13 @@ function VerifyStudent() {
         text-3xl
         font-bold
       "
-    >
-      {student.firstName?.[0]}
-      {student.lastName?.[0]}
-    </div>
-
-  )
-}
-
-
+            >
+              {student.firstName?.[0]}
+              {student.lastName?.[0]}
+            </div>
+          )}
         </div>
-                {/* STUDENT DETAILS */}
-
+        {/* STUDENT DETAILS */}
 
         <div
           className="
@@ -353,50 +244,31 @@ function VerifyStudent() {
             space-y-4
           "
         >
-
-
-
           <div
             className="
               text-center
               mb-6
             "
           >
-
             <h2
               className="
                 text-2xl
                 font-bold
               "
             >
-
               {student.firstName} {student.lastName}
-
             </h2>
 
-
-            {
-              student.otherName && (
-
-                <p
-                  className="
+            {student.otherName && (
+              <p
+                className="
                     text-gray-400
                   "
-                >
-
-                  {student.otherName}
-
-                </p>
-
-              )
-            }
-
-
+              >
+                {student.otherName}
+              </p>
+            )}
           </div>
-
-
-
-
 
           <div
             className="
@@ -405,8 +277,6 @@ function VerifyStudent() {
               gap-4
             "
           >
-
-
             <div
               className="
                 bg-slate-800
@@ -414,7 +284,6 @@ function VerifyStudent() {
                 p-4
               "
             >
-
               <div
                 className="
                   flex
@@ -425,30 +294,18 @@ function VerifyStudent() {
                   mb-2
                 "
               >
-
-                <FaIdCard/>
-
+                <FaIdCard />
                 Student ID
-
               </div>
-
 
               <p
                 className="
                   font-semibold
                 "
               >
-
                 {student.studentId}
-
               </p>
-
-
             </div>
-
-
-
-
 
             <div
               className="
@@ -457,7 +314,6 @@ function VerifyStudent() {
                 p-4
               "
             >
-
               <div
                 className="
                   flex
@@ -468,34 +324,19 @@ function VerifyStudent() {
                   mb-2
                 "
               >
-
-                <FaUserGraduate/>
-
+                <FaUserGraduate />
                 Gender
-
               </div>
-
 
               <p
                 className="
                   font-semibold
                 "
               >
-
                 {student.gender}
-
               </p>
-
-
             </div>
-
-
-
           </div>
-
-
-
-
 
           <div
             className="
@@ -504,7 +345,6 @@ function VerifyStudent() {
               p-4
             "
           >
-
             <p
               className="
                 text-gray-400
@@ -512,28 +352,17 @@ function VerifyStudent() {
                 mb-1
               "
             >
-
               Current Class
-
             </p>
-
 
             <p
               className="
                 font-semibold
               "
             >
-
               {student.currentClass}
-
             </p>
-
-
           </div>
-
-
-
-
 
           <div
             className="
@@ -542,7 +371,6 @@ function VerifyStudent() {
               p-4
             "
           >
-
             <p
               className="
                 text-gray-400
@@ -550,28 +378,17 @@ function VerifyStudent() {
                 mb-1
               "
             >
-
               Session
-
             </p>
-
 
             <p
               className="
                 font-semibold
               "
             >
-
               {student.session}
-
             </p>
-
-
           </div>
-
-
-
-
 
           <div
             className="
@@ -580,7 +397,6 @@ function VerifyStudent() {
               mt-5
             "
           >
-
             <span
               className="
                 bg-green-500/20
@@ -592,23 +408,12 @@ function VerifyStudent() {
                 font-semibold
               "
             >
-
               ACTIVE STUDENT
-
             </span>
-
-
           </div>
-
-
-
         </div>
 
-
-
-
         {/* FOOTER */}
-
 
         <div
           className="
@@ -620,23 +425,12 @@ function VerifyStudent() {
             text-gray-500
           "
         >
-
-          This verification is generated from the school
-          student management system.
-
+          This verification is generated from the school student management
+          system.
         </div>
-
-
       </div>
-
-
     </div>
-
-
   );
-
-
 }
-
 
 export default VerifyStudent;
