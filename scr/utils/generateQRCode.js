@@ -1,11 +1,15 @@
 const QRCode = require("qrcode");
 
-const generateQRCode = async (studentId) => {
-  const encodedStudentId = encodeURIComponent(studentId);
+const generateQRCode = async (studentIdentifier) => {
+  if (!studentIdentifier) {
+    throw new Error("Student identifier is required.");
+  }
 
-  return await QRCode.toDataURL(
-    `${process.env.FRONTEND_URL}/verify/${encodedStudentId}`,
-  );
+  const encodedIdentifier = encodeURIComponent(studentIdentifier.toString());
+
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify/${encodedIdentifier}`;
+
+  return await QRCode.toDataURL(verificationUrl);
 };
 
 module.exports = generateQRCode;

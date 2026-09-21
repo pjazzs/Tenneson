@@ -47,11 +47,8 @@ describe("Student QR Code API", () => {
 
     expect(studentResponse.statusCode).toBe(201);
 
-    // Official student ID used for public QR verification.
-    // Example: 2025/TCC00071
     studentId = studentResponse.body.student.studentId;
 
-    // MongoDB _id used by protected/internal student endpoints.
     studentMongoId = studentResponse.body.student._id;
   });
 
@@ -73,7 +70,7 @@ describe("Student QR Code API", () => {
 
   test("Should return 404 when generating QR code for non-existing student", async () => {
     const response = await request(app)
-      .get("/api/v1/students/TCC99999/qrcode")
+      .get("/api/v1/students/000000000000000000000000/qrcode")
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.statusCode).toBe(404);
@@ -89,9 +86,9 @@ describe("Student QR Code API", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  test("Should verify a valid student successfully", async () => {
+  test("Should verify a valid student using MongoDB _id", async () => {
     const response = await request(app).get(
-      `/api/v1/students/qrcode/verify/${encodeURIComponent(studentId)}`,
+      `/api/v1/students/qrcode/verify/${studentMongoId}`,
     );
 
     expect(response.statusCode).toBe(200);
@@ -110,28 +107,34 @@ describe("Student QR Code API", () => {
 
     expect(response.body.student.class).toBe("JSS1");
 
+    expect(response.body.student.currentClass).toBe("JSS1");
+
     expect(response.body.student.session).toBe("2025/2026");
   });
 
-  test("Should reject an invalid student ID during QR verification", async () => {
+  test("Should verify an old QR code using the official studentId", async () => {
+    const legacyStudentId = `TCCLEGACY${Date.now()}`;
+
+    await Student.findByIdAndUpdate(studentMongoId, {
+      studentId: legacyStudentId,
+    });
+
     const response = await request(app).get(
-      "/api/v1/students/qrcode/verify/TCC99999",
+      `/api/v1/students/qrcode/verify/${legacyStudentId}`,
     );
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
 
-    expect(response.body.success).toBe(false);
+    expect(response.body.success).toBe(true);
 
-    expect(response.body.verified).toBe(false);
+    expect(response.body.verified).toBe(true);
 
-    expect(response.body.message).toBe("Invalid student ID");
+    expect(response.body.student.studentId).toBe(legacyStudentId);
   });
 
-  test("Should not verify an archived student", async () => {
-    await Student.findOneAndUpdate({ studentId }, { isActive: false });
-
+  test("Should reject an invalid student identifier during QR verification", async () => {
     const response = await request(app).get(
-      `/api/v1/students/qrcode/verify/${encodeURIComponent(studentId)}`,
+      "/api/v1/students/qrcode/verify/000000000000000000000000",
     );
 
     expect(response.statusCode).toBe(404);
@@ -140,11 +143,62 @@ describe("Student QR Code API", () => {
 
     expect(response.body.verified).toBe(false);
 
-    expect(response.body.message).toBe("Invalid student ID");
+    expect(response.body.message).toBe("Invalid student identifier.");
+  });
+
+  test("Should not verify an archived student using MongoDB _id", async () => {
+    await Student.findOneAndUpdate(
+      {
+        _id: studentMongoId,
+      },
+      {
+        isActive: false,
+      },
+    );
+
+    const response = await request(app).get(
+      `/api/v1/students/qrcode/verify/${studentMongoId}`,
+    );
+
+    expect(response.statusCode).toBe(404);
+
+    expect(response.body.success).toBe(false);
+
+    expect(response.body.verified).toBe(false);
+
+    expect(response.body.message).toBe("Invalid student identifier.");
+  });
+
+  test("Should not verify an archived student using the old studentId", async () => {
+    const legacyStudentId = `TCCLEGACY${Date.now()}`;
+
+    await Student.findByIdAndUpdate(studentMongoId, {
+      studentId: legacyStudentId,
+      isActive: false,
+    });
+
+    const response = await request(app).get(
+      `/api/v1/students/qrcode/verify/${legacyStudentId}`,
+    );
+
+    expect(response.statusCode).toBe(404);
+
+    expect(response.body.success).toBe(false);
+
+    expect(response.body.verified).toBe(false);
+
+    expect(response.body.message).toBe("Invalid student identifier.");
   });
 
   test("Should not generate QR code for an archived student", async () => {
-    await Student.findOneAndUpdate({ studentId }, { isActive: false });
+    await Student.findOneAndUpdate(
+      {
+        _id: studentMongoId,
+      },
+      {
+        isActive: false,
+      },
+    );
 
     const response = await request(app)
       .get(`/api/v1/students/${studentMongoId}/qrcode`)

@@ -107,7 +107,7 @@ router.get(
 |
 */
 
-router.get("/students/qrcode/verify/:studentId", verifyStudentQrcode);
+router.get("/students/qrcode/verify/:identifier", verifyStudentQrcode);
 
 router.get("/students/verify/:studentId", verifyLimiter, verifyStudent);
 

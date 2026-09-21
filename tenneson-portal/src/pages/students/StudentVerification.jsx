@@ -12,7 +12,7 @@ import {
 import api from "../../api/axios";
 
 function VerifyStudent() {
-  const { studentId } = useParams();
+  const { identifier } = useParams();
 
   const [student, setStudent] = useState(null);
 
@@ -25,12 +25,35 @@ function VerifyStudent() {
       try {
         setLoading(true);
 
+        setError("");
+
+        setStudent(null);
+
+        if (!identifier) {
+          setError("Invalid student verification link.");
+
+          return;
+        }
+
         const response = await api.get(
-          `/students/qrcode/verify/${encodeURIComponent(studentId)}`,
+          `/students/qrcode/verify/${encodeURIComponent(identifier)}`,
         );
 
-        setStudent(response.data.student);
+        if (
+          response.data?.success &&
+          response.data?.verified &&
+          response.data?.student
+        ) {
+          setStudent(response.data.student);
+        } else {
+          setError(response.data?.message || "Unable to verify student.");
+        }
       } catch (error) {
+        console.error(
+          "Student verification error:",
+          error.response?.data || error.message,
+        );
+
         setError(error.response?.data?.message || "Unable to verify student.");
       } finally {
         setLoading(false);
@@ -38,7 +61,7 @@ function VerifyStudent() {
     };
 
     verifyStudent();
-  }, [studentId]);
+  }, [identifier]);
 
   if (loading) {
     return (
@@ -77,6 +100,7 @@ function VerifyStudent() {
       </div>
     );
   }
+
   if (error || !student) {
     return (
       <div
@@ -209,33 +233,34 @@ function VerifyStudent() {
               src={student.photo.url}
               alt={`${student.firstName} ${student.lastName}`}
               className="
-        w-28
-        h-28
-        rounded-full
-        object-cover
-        border-4
-        border-green-500
-      "
+                w-28
+                h-28
+                rounded-full
+                object-cover
+                border-4
+                border-green-500
+              "
             />
           ) : (
             <div
               className="
-        w-28
-        h-28
-        rounded-full
-        bg-green-600
-        flex
-        items-center
-        justify-center
-        text-3xl
-        font-bold
-      "
+                w-28
+                h-28
+                rounded-full
+                bg-green-600
+                flex
+                items-center
+                justify-center
+                text-3xl
+                font-bold
+              "
             >
               {student.firstName?.[0]}
               {student.lastName?.[0]}
             </div>
           )}
         </div>
+
         {/* STUDENT DETAILS */}
 
         <div
@@ -262,8 +287,8 @@ function VerifyStudent() {
             {student.otherName && (
               <p
                 className="
-                    text-gray-400
-                  "
+                  text-gray-400
+                "
               >
                 {student.otherName}
               </p>
@@ -301,6 +326,7 @@ function VerifyStudent() {
               <p
                 className="
                   font-semibold
+                  wrap-break-word
                 "
               >
                 {student.studentId}

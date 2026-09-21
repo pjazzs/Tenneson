@@ -32,7 +32,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
 
       {/* Public student verification */}
-      <Route path="/verify/:studentId" element={<VerifyStudent />} />
+      <Route path="/verify/:identifier" element={<VerifyStudent />} />
 
       {/* =========================================
           PROTECTED ADMIN PORTAL

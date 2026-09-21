@@ -1768,22 +1768,82 @@ exports.downloadStudentSlip = asyncHandler(async (req, res) => {
 */
 
 exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
-  const student = await Student.findOne({
-    studentId: req.params.studentId,
-    isActive: true,
-  });
+  const { identifier } = req.params;
+
+  if (!identifier) {
+    return res.status(400).json({
+      success: false,
+      verified: false,
+      message: "Student identifier is required.",
+    });
+  }
+
+  let student = null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | 1. Try MongoDB _id
+  |--------------------------------------------------------------------------
+  |
+  | New QR codes contain the student's MongoDB _id.
+  |
+  */
+
+  if (mongoose.isValidObjectId(identifier)) {
+    student = await Student.findOne({
+      _id: identifier,
+      isActive: true,
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 2. Fallback to school studentId
+  |--------------------------------------------------------------------------
+  |
+  | This keeps older QR codes working.
+  |
+  | Examples:
+  |
+  | TCC00071
+  | TCC00072
+  | 2025/TCC00073
+  |
+  */
+
+  if (!student) {
+    const decodedIdentifier = decodeURIComponent(identifier);
+
+    student = await Student.findOne({
+      studentId: decodedIdentifier,
+      isActive: true,
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 3. Student not found
+  |--------------------------------------------------------------------------
+  */
 
   if (!student) {
     return res.status(404).json({
       success: false,
       verified: false,
-      message: "Invalid student ID",
+      message: "Invalid student identifier.",
     });
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 4. Successful verification
+  |--------------------------------------------------------------------------
+  */
 
   return res.status(200).json({
     success: true,
     verified: true,
+
     student: {
       studentId: student.studentId,
 
@@ -1799,7 +1859,6 @@ exports.verifyStudentQrcode = asyncHandler(async (req, res) => {
 
       gender: student.gender,
 
-      // Keep both fields for compatibility
       class: student.currentClass,
 
       currentClass: student.currentClass,
@@ -1824,8 +1883,7 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
    * The route uses MongoDB _id internally.
    *
    * Validate the ID before querying MongoDB so an invalid
-   * value such as "TCC99999" returns 404 instead of causing
-   * a Mongoose CastError and returning 500.
+   * value returns 404 instead of causing a Mongoose CastError.
    */
   if (!mongoose.isValidObjectId(id)) {
     res.status(404);
@@ -1845,11 +1903,16 @@ exports.generateStudentQRCode = asyncHandler(async (req, res) => {
   }
 
   /*
-   * The route uses MongoDB _id internally.
+   * The QR now contains MongoDB _id instead of studentId.
    *
-   * The QR itself still contains the official studentId.
+   * This prevents problems with student IDs such as:
+   *
+   * 2025/TCC00073
+   *
+   * because the "/" would otherwise be interpreted
+   * as a URL path separator.
    */
-  const qrCode = await generateQRCode(student.studentId);
+  const qrCode = await generateQRCode(student._id);
 
   return res.status(200).json({
     success: true,
