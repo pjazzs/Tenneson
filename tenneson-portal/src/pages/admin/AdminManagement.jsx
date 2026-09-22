@@ -117,6 +117,20 @@ function AdminManagement() {
       },
     ],
 
+    AcademicSessions: [
+      {
+        key: "academic-sessions.view",
+        label: "View Academic Sessions",
+      },
+    ],
+
+    Subjects: [
+      {
+        key: "subjects.view",
+        label: "View Subjects",
+      },
+    ],
+
     Admins: [
       {
         key: "admins.manage",

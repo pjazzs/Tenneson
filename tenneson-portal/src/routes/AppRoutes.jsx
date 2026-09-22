@@ -16,6 +16,7 @@ import AddStudent from "../pages/students/AddStudent";
 import StudentDetails from "../pages/students/StudentDetails";
 import EditStudent from "../pages/students/EditStudent";
 import ArchivedStudents from "../pages/students/ArchivedStudents";
+import ResultEntry from "../pages/results/ResultEntry";
 
 import ActivityLogs from "../pages/activity/ActivityLogs";
 
@@ -72,6 +73,15 @@ function AppRoutes() {
             element={
               <PermissionRoute permission="results.view">
                 <Results />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/results/entry"
+            element={
+              <PermissionRoute permission="results.create">
+                <ResultEntry />
               </PermissionRoute>
             }
           />
