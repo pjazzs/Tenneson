@@ -1,60 +1,106 @@
 import { useEffect, useMemo, useState } from "react";
-import { FaArrowLeft, FaSearch, FaSpinner } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import ResultAttendance from "./components/ResultAttendance";
+import ResultScoreEntry from "./components/ResultScoreEntry";
+import ResultAffectiveDomain from "./components/ResultAffectiveDomain";
+import ResultPsychomotorDomain from "./components/ResultPsychomotorDomain";
+import ResultConduct from "./components/ResultConduct";
+import ResultAdditionalInfo from "./components/ResultAdditionalInfo";
+import ResultReview from "./components/ResultReview";
+import {
+  FaArrowRight,
+  FaCheckCircle,
+  FaSearch,
+  FaSpinner,
+  FaTimes,
+} from "react-icons/fa";
 
 import api from "../../api/axios";
+import { createResult, getResult, getResults } from "../../api/resultApi";
+import calculateResultGrade from "../../utils/resultGrade";
 
-function ResultEntry() {
-  const navigate = useNavigate();
-
-  /*
-  |--------------------------------------------------------------------------
-  | Academic Sessions
-  |--------------------------------------------------------------------------
-  */
-
+const ResultEntry = () => {
   const [academicSessions, setAcademicSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-
   const [academicSessionId, setAcademicSessionId] = useState("");
 
-  /*
-  |--------------------------------------------------------------------------
-  | Term
-  |--------------------------------------------------------------------------
-  */
-
   const [term, setTerm] = useState("");
-
-  /*
-  |--------------------------------------------------------------------------
-  | Students
-  |--------------------------------------------------------------------------
-  */
 
   const [studentSearch, setStudentSearch] = useState("");
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Subjects
-  |--------------------------------------------------------------------------
-  */
-
   const [subjects, setSubjects] = useState([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
-
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([]);
+
+  const [currentStep, setCurrentStep] = useState("selection");
+
+  const [scoreEntries, setScoreEntries] = useState([]);
+
+  const [attendance, setAttendance] = useState({
+    daysSchoolOpened: "",
+    daysPresent: "",
+    daysAbsent: "",
+  });
 
   /*
   |--------------------------------------------------------------------------
-  | General
+  | Affective Domain
   |--------------------------------------------------------------------------
   */
 
+  const [affectiveDomain, setAffectiveDomain] = useState({
+    punctuality: "",
+    attentiveness: "",
+    neatness: "",
+    politeness: "",
+    reliability: "",
+    honesty: "",
+    initiative: "",
+    attitudeToWork: "",
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Psychomotor Domain
+  |--------------------------------------------------------------------------
+  */
+
+  const [psychomotorDomain, setPsychomotorDomain] = useState({
+    sportingActivities: "",
+    handWriting: "",
+    fluency: "",
+    drawingAndPainting: "",
+    musicalAbility: "",
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Conduct
+  |--------------------------------------------------------------------------
+  */
+
+  const [conduct, setConduct] = useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Additional Information
+  |--------------------------------------------------------------------------
+  */
+
+  const [sports, setSports] = useState([]);
+  const [clubs, setClubs] = useState([]);
+  const [specialReport, setSpecialReport] = useState("");
+
+  const [comments, setComments] = useState({
+    classTeacher: "",
+    principal: "",
+    performance: "",
+  });
+
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   /*
   |--------------------------------------------------------------------------
@@ -63,7 +109,7 @@ function ResultEntry() {
   */
 
   useEffect(() => {
-    const fetchAcademicSessions = async () => {
+    const loadAcademicSessions = async () => {
       try {
         setSessionsLoading(true);
         setError("");
@@ -72,33 +118,29 @@ function ResultEntry() {
 
         setAcademicSessions(response.data.academicSessions || []);
       } catch (error) {
-        console.error(
-          "Fetch academic sessions error:",
-          error.response?.data || error.message,
-        );
+        console.error("Failed to load academic sessions:", error);
 
         setError(
-          error.response?.data?.message || "Unable to load academic sessions.",
+          error.response?.data?.message || "Failed to load academic sessions.",
         );
       } finally {
         setSessionsLoading(false);
       }
     };
 
-    fetchAcademicSessions();
+    loadAcademicSessions();
   }, []);
 
   /*
   |--------------------------------------------------------------------------
-  | Load Active Subjects
+  | Load Subjects
   |--------------------------------------------------------------------------
   */
 
   useEffect(() => {
-    const fetchSubjects = async () => {
+    const loadSubjects = async () => {
       try {
         setSubjectsLoading(true);
-        setError("");
 
         const response = await api.get("/subjects", {
           params: {
@@ -108,38 +150,27 @@ function ResultEntry() {
 
         setSubjects(response.data.subjects || []);
       } catch (error) {
-        console.error(
-          "Fetch subjects error:",
-          error.response?.data || error.message,
-        );
+        console.error("Failed to load subjects:", error);
 
-        setError(error.response?.data?.message || "Unable to load subjects.");
+        setError(error.response?.data?.message || "Failed to load subjects.");
       } finally {
         setSubjectsLoading(false);
       }
     };
 
-    fetchSubjects();
+    loadSubjects();
   }, []);
 
   /*
   |--------------------------------------------------------------------------
-  | Search Students
+  | Student Search
   |--------------------------------------------------------------------------
-  |
-  | Important:
-  | We intentionally do NOT call setStudents([]) synchronously inside
-  | this effect when the search box is empty.
-  |
-  | React's eslint rule flags synchronous state updates inside effects
-  | because they can cause cascading renders.
-  |
   */
 
   useEffect(() => {
     const search = studentSearch.trim();
 
-    if (!search) {
+    if (!search || selectedStudent) {
       return;
     }
 
@@ -158,12 +189,9 @@ function ResultEntry() {
 
         setStudents(response.data.students || []);
       } catch (error) {
-        console.error(
-          "Search students error:",
-          error.response?.data || error.message,
-        );
+        console.error("Failed to search students:", error);
 
-        setError(error.response?.data?.message || "Unable to search students.");
+        setError(error.response?.data?.message || "Failed to search students.");
 
         setStudents([]);
       } finally {
@@ -172,27 +200,27 @@ function ResultEntry() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [studentSearch]);
+  }, [studentSearch, selectedStudent]);
 
   /*
   |--------------------------------------------------------------------------
-  | Visible Student Search Results
+  | Visible Students
   |--------------------------------------------------------------------------
-  |
-  | When the search input is empty, don't render the previous search results.
-  | This avoids needing setStudents([]) inside the effect.
-  |
   */
 
-  const visibleStudents = studentSearch.trim() ? students : [];
+  const visibleStudents = selectedStudent
+    ? []
+    : studentSearch.trim()
+      ? students
+      : [];
 
   /*
   |--------------------------------------------------------------------------
-  | Selected Academic Session
+  | Selected Session
   |--------------------------------------------------------------------------
   */
 
-  const selectedAcademicSession = useMemo(() => {
+  const selectedSession = useMemo(() => {
     return academicSessions.find(
       (session) => session._id === academicSessionId,
     );
@@ -204,7 +232,31 @@ function ResultEntry() {
   |--------------------------------------------------------------------------
   */
 
-  const availableTerms = selectedAcademicSession?.terms || [];
+  const availableTerms = useMemo(() => {
+    return selectedSession?.terms || [];
+  }, [selectedSession]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Selected Term
+  |--------------------------------------------------------------------------
+  */
+
+  const selectedTerm = useMemo(() => {
+    return availableTerms.find((item) => item.key === term);
+  }, [availableTerms, term]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Selected Subjects
+  |--------------------------------------------------------------------------
+  */
+
+  const selectedSubjects = useMemo(() => {
+    return subjects.filter((subject) =>
+      selectedSubjectIds.includes(subject._id),
+    );
+  }, [subjects, selectedSubjectIds]);
 
   /*
   |--------------------------------------------------------------------------
@@ -214,8 +266,24 @@ function ResultEntry() {
 
   const handleSelectStudent = (student) => {
     setSelectedStudent(student);
-    setStudentSearch(`${student.firstName} ${student.lastName}`);
+    setStudentSearch(student.studentId);
     setStudents([]);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Change Student
+  |--------------------------------------------------------------------------
+  */
+
+  const handleChangeStudent = () => {
+    setSelectedStudent(null);
+    setStudentSearch("");
+    setStudents([]);
+    setError("");
+    setSuccessMessage("");
   };
 
   /*
@@ -224,571 +292,1203 @@ function ResultEntry() {
   |--------------------------------------------------------------------------
   */
 
-  const toggleSubject = (subjectId) => {
-    setSelectedSubjectIds((current) => {
-      if (current.includes(subjectId)) {
-        return current.filter((id) => id !== subjectId);
+  const handleToggleSubject = (subjectId) => {
+    setSelectedSubjectIds((currentIds) => {
+      if (currentIds.includes(subjectId)) {
+        return currentIds.filter((id) => id !== subjectId);
       }
 
-      return [...current, subjectId];
+      return [...currentIds, subjectId];
     });
+
+    setError("");
+    setSuccessMessage("");
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Build Subject Results
+  | Continue To Scores
   |--------------------------------------------------------------------------
-  |
-  | This is the structure that will eventually be submitted
-  | to the Result API.
-  |
   */
 
-  const subjectResults = selectedSubjectIds.map((subjectId) => ({
-    subjectId,
-    offered: true,
-    ca1: null,
-    ca2: null,
-    exam: null,
-    teacherComment: "",
-  }));
+  const handleContinueToScores = () => {
+    setError("");
+    setSuccessMessage("");
+
+    if (!academicSessionId) {
+      setError("Please select an academic session.");
+      return;
+    }
+
+    if (!term) {
+      setError("Please select a term.");
+      return;
+    }
+
+    if (!selectedStudent) {
+      setError("Please select a student.");
+      return;
+    }
+
+    if (selectedSubjectIds.length === 0) {
+      setError("Please select at least one subject.");
+      return;
+    }
+
+    const entries = selectedSubjects.map((subject) => {
+      const existingEntry = scoreEntries.find(
+        (entry) => entry.subjectId === subject._id,
+      );
+
+      return (
+        existingEntry || {
+          subjectId: subject._id,
+          subjectName: subject.name,
+          subjectCode: subject.code || "",
+          offered: true,
+          ca1: "",
+          ca2: "",
+          exam: "",
+          total: 0,
+          grade: "",
+          remark: "",
+          teacherComment: "",
+        }
+      );
+    });
+
+    setScoreEntries(entries);
+    setCurrentStep("scores");
+  };
 
   /*
   |--------------------------------------------------------------------------
-  | Continue
+  | Back To Selection
   |--------------------------------------------------------------------------
   */
 
-  const canContinue =
-    academicSessionId &&
-    term &&
-    selectedStudent &&
-    selectedSubjectIds.length > 0;
+  const handleBackToSelection = () => {
+    setCurrentStep("selection");
+    setError("");
+    setSuccessMessage("");
+  };
 
-  const handleContinue = () => {
-    if (!canContinue) {
+  /*
+  |--------------------------------------------------------------------------
+  | Update Score Entries
+  |--------------------------------------------------------------------------
+  */
+
+  const handleScoreEntriesChange = (updatedEntries) => {
+    const entriesWithGrades = updatedEntries.map((entry) => {
+      if (!entry.offered) {
+        return {
+          ...entry,
+          total: 0,
+          grade: "",
+          remark: "",
+        };
+      }
+
+      const ca1 =
+        entry.ca1 === "" || entry.ca1 === null ? 0 : Number(entry.ca1);
+
+      const ca2 =
+        entry.ca2 === "" || entry.ca2 === null ? 0 : Number(entry.ca2);
+
+      const exam =
+        entry.exam === "" || entry.exam === null ? 0 : Number(entry.exam);
+
+      const total = ca1 + ca2 + exam;
+
+      const { grade, remark } = calculateResultGrade(total);
+
+      return {
+        ...entry,
+        total,
+        grade,
+        remark,
+      };
+    });
+
+    setScoreEntries(entriesWithGrades);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Scores To Attendance
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinueFromScores = () => {
+    setError("");
+    setSuccessMessage("");
+
+    const incompleteEntry = scoreEntries.find((entry) => {
+      if (!entry.offered) {
+        return false;
+      }
+
+      return entry.ca1 === "" || entry.ca2 === "" || entry.exam === "";
+    });
+
+    if (incompleteEntry) {
       setError(
-        "Select an academic session, term, student, and at least one subject.",
+        `Please complete the scores for ${incompleteEntry.subjectName}.`,
       );
 
       return;
     }
 
-    setError("");
-
-    console.log("Result Entry Selection:", {
-      studentId: selectedStudent.studentId,
-      academicSessionId,
-      term,
-      subjectResults,
-    });
-
-    /*
-     * Score entry will be added in the next step.
-     */
+    setCurrentStep("attendance");
   };
 
-  return (
-    <div className="w-full text-gray-900">
-      {/* =====================================================
-          HEADER
-      ====================================================== */}
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Scores
+  |--------------------------------------------------------------------------
+  */
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Enter Result
-          </h1>
+  const handleBackToScores = () => {
+    setCurrentStep("scores");
+    setError("");
+    setSuccessMessage("");
+  };
 
-          <p className="text-gray-600 mt-2 text-sm sm:text-base">
-            Select the academic session, term, student, and subjects offered
-            before entering scores.
-          </p>
-        </div>
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Attendance
+  |--------------------------------------------------------------------------
+  */
 
-        <button
-          type="button"
-          onClick={() => navigate("/results")}
-          className="
-            inline-flex
-            items-center
-            justify-center
-            gap-2
-            bg-slate-800
-            hover:bg-slate-700
-            text-white
-            px-4
-            py-2.5
-            rounded-xl
-            transition
-            w-full
-            sm:w-auto
-          "
-        >
-          <FaArrowLeft size={13} />
-          Back to Results
-        </button>
-      </div>
+  const handleContinueFromAttendance = () => {
+    setError("");
+    setSuccessMessage("");
+    setCurrentStep("affective");
+  };
 
-      {/* =====================================================
-          ERROR
-      ====================================================== */}
+  /*
+  |--------------------------------------------------------------------------
+  | Update Affective Domain
+  |--------------------------------------------------------------------------
+  */
 
-      {error && (
-        <div
-          className="
-            mb-6
-            rounded-xl
-            border
-            border-red-200
-            bg-red-50
-            px-4
-            py-3
-            text-sm
-            text-red-700
-          "
-        >
-          {error}
-        </div>
-      )}
+  const handleAffectiveDomainChange = (updatedDomain) => {
+    setAffectiveDomain(updatedDomain);
+    setError("");
+    setSuccessMessage("");
+  };
 
-      {/* =====================================================
-          STEP 1 — SESSION / TERM
-      ====================================================== */}
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Affective Domain
+  |--------------------------------------------------------------------------
+  */
 
-      <section
-        className="
-          bg-white
-          border
-          border-gray-200
-          rounded-2xl
-          shadow-sm
-          p-5
-          sm:p-6
-          mb-6
-        "
-      >
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold">1. Academic Session & Term</h2>
+  const handleContinueFromAffective = () => {
+    setError("");
+    setSuccessMessage("");
+    setCurrentStep("psychomotor");
+  };
 
-          <p className="text-sm text-gray-500 mt-1">
-            Select the academic period for this result.
-          </p>
-        </div>
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Attendance From Affective Domain
+  |--------------------------------------------------------------------------
+  */
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* SESSION */}
+  const handleBackToAttendance = () => {
+    setCurrentStep("attendance");
+    setError("");
+    setSuccessMessage("");
+  };
 
-          <div>
-            <label
-              htmlFor="academic-session"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Academic Session
-            </label>
+  /*
+  |--------------------------------------------------------------------------
+  | Update Psychomotor Domain
+  |--------------------------------------------------------------------------
+  */
 
-            <select
-              id="academic-session"
-              value={academicSessionId}
-              onChange={(event) => {
-                setAcademicSessionId(event.target.value);
-                setTerm("");
-              }}
-              disabled={sessionsLoading}
-              className="
-                w-full
-                h-12
-                rounded-xl
-                border
-                border-gray-300
-                bg-white
-                px-4
-                text-sm
-                focus:outline-none
-                focus:border-green-500
-                disabled:bg-gray-100
-              "
-            >
-              <option value="">
-                {sessionsLoading
-                  ? "Loading sessions..."
-                  : "Select academic session"}
-              </option>
+  const handlePsychomotorDomainChange = (updatedDomain) => {
+    setPsychomotorDomain(updatedDomain);
+    setError("");
+    setSuccessMessage("");
+  };
 
-              {academicSessions.map((session) => (
-                <option key={session._id} value={session._id}>
-                  {session.name}
-                  {session.isActive ? " — Active" : ""}
-                </option>
-              ))}
-            </select>
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Psychomotor Domain
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinueFromPsychomotor = () => {
+    setError("");
+    setSuccessMessage("");
+    setCurrentStep("conduct");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Affective From Psychomotor Domain
+  |--------------------------------------------------------------------------
+  */
+
+  const handleBackToAffective = () => {
+    setCurrentStep("affective");
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Conduct
+  |--------------------------------------------------------------------------
+  */
+
+  const handleConductChange = (updatedConduct) => {
+    setConduct(updatedConduct);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Conduct
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinueFromConduct = () => {
+    setError("");
+    setSuccessMessage("");
+
+    if (!conduct) {
+      setError("Please select the student's conduct.");
+      return;
+    }
+
+    setCurrentStep("additional");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Psychomotor From Conduct
+  |--------------------------------------------------------------------------
+  */
+
+  const handleBackToPsychomotor = () => {
+    setCurrentStep("psychomotor");
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Sports
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSportsChange = (updatedSports) => {
+    setSports(updatedSports);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Clubs
+  |--------------------------------------------------------------------------
+  */
+
+  const handleClubsChange = (updatedClubs) => {
+    setClubs(updatedClubs);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Special Report
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSpecialReportChange = (value) => {
+    setSpecialReport(value);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Comments
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCommentsChange = (updatedComments) => {
+    setComments(updatedComments);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Additional Information
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinueFromAdditionalInfo = () => {
+    setError("");
+    setSuccessMessage("");
+    setCurrentStep("review");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Conduct From Additional Information
+  |--------------------------------------------------------------------------
+  */
+
+  const handleBackToConduct = () => {
+    setCurrentStep("conduct");
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Back To Additional Information From Review
+  |--------------------------------------------------------------------------
+  */
+
+  const handleBackToAdditionalInfo = () => {
+    setCurrentStep("additional");
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Edit Review Section
+  |--------------------------------------------------------------------------
+  */
+
+  const handleEditReviewSection = (section) => {
+    setCurrentStep(section);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Find Existing Result
+  |--------------------------------------------------------------------------
+  */
+
+  const findExistingResult = async () => {
+    console.log("Checking for existing result:", {
+      studentId: selectedStudent.studentId,
+      academicSessionId: selectedSession._id,
+      term,
+    });
+
+    const response = await getResults({
+      search: selectedStudent.studentId,
+      page: 1,
+      limit: 10,
+    });
+
+    const results = response?.results || [];
+
+    console.log("Existing result search response:", response);
+
+    const existingResult = results.find((result) => {
+      const resultSessionId =
+        typeof result.academicSession === "object"
+          ? result.academicSession?._id
+          : result.academicSession;
+
+      return resultSessionId === selectedSession._id && result.term === term;
+    });
+
+    return existingResult || null;
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue From Review
+  |--------------------------------------------------------------------------
+  */
+
+  const handleContinueFromReview = async () => {
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      if (!selectedStudent) {
+        setError("Student information is missing.");
+        return;
+      }
+
+      if (!selectedSession) {
+        setError("Academic session information is missing.");
+        return;
+      }
+
+      if (!term) {
+        setError("Term information is missing.");
+        return;
+      }
+
+      if (!scoreEntries.length) {
+        setError("No subject scores were entered.");
+        return;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Check Existing Result First
+      |--------------------------------------------------------------------------
+      */
+
+      console.log(
+        "Checking whether a result already exists before creating a draft...",
+      );
+
+      const existingResult = await findExistingResult();
+
+      /*
+      |--------------------------------------------------------------------------
+      | Existing Result Found
+      |--------------------------------------------------------------------------
+      */
+
+      if (existingResult?._id) {
+        console.log("Existing result found:", existingResult._id);
+
+        console.log("Retrieving result:", existingResult._id);
+
+        const retrievedResponse = await getResult(existingResult._id);
+
+        console.log("Single result retrieved:", retrievedResponse);
+
+        setSuccessMessage(
+          "An existing result draft was retrieved successfully.",
+        );
+
+        return;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Build Subject Results
+      |--------------------------------------------------------------------------
+      */
+
+      const subjectResults = scoreEntries.map((entry) => ({
+        subjectId: entry.subjectId,
+
+        offered: Boolean(entry.offered),
+
+        ca1: entry.ca1 === "" || entry.ca1 === null ? null : Number(entry.ca1),
+
+        ca2: entry.ca2 === "" || entry.ca2 === null ? null : Number(entry.ca2),
+
+        exam:
+          entry.exam === "" || entry.exam === null ? null : Number(entry.exam),
+
+        teacherComment: entry.teacherComment || "",
+      }));
+
+      /*
+      |--------------------------------------------------------------------------
+      | Build Result Payload
+      |--------------------------------------------------------------------------
+      */
+
+      const payload = {
+        studentId: selectedStudent.studentId,
+
+        academicSessionId: selectedSession._id,
+
+        term,
+
+        subjectResults,
+
+        attendance: {
+          daysSchoolOpened:
+            attendance.daysSchoolOpened === ""
+              ? 0
+              : Number(attendance.daysSchoolOpened),
+
+          daysPresent:
+            attendance.daysPresent === "" ? 0 : Number(attendance.daysPresent),
+
+          daysAbsent:
+            attendance.daysAbsent === "" ? 0 : Number(attendance.daysAbsent),
+        },
+
+        affectiveDomain: {
+          punctuality:
+            affectiveDomain.punctuality === ""
+              ? 0
+              : Number(affectiveDomain.punctuality),
+
+          attentiveness:
+            affectiveDomain.attentiveness === ""
+              ? 0
+              : Number(affectiveDomain.attentiveness),
+
+          neatness:
+            affectiveDomain.neatness === ""
+              ? 0
+              : Number(affectiveDomain.neatness),
+
+          politeness:
+            affectiveDomain.politeness === ""
+              ? 0
+              : Number(affectiveDomain.politeness),
+
+          reliability:
+            affectiveDomain.reliability === ""
+              ? 0
+              : Number(affectiveDomain.reliability),
+
+          honesty:
+            affectiveDomain.honesty === ""
+              ? 0
+              : Number(affectiveDomain.honesty),
+
+          initiative:
+            affectiveDomain.initiative === ""
+              ? 0
+              : Number(affectiveDomain.initiative),
+
+          attitudeToWork:
+            affectiveDomain.attitudeToWork === ""
+              ? 0
+              : Number(affectiveDomain.attitudeToWork),
+        },
+
+        psychomotorDomain: {
+          sportingActivities:
+            psychomotorDomain.sportingActivities === ""
+              ? 0
+              : Number(psychomotorDomain.sportingActivities),
+
+          handWriting:
+            psychomotorDomain.handWriting === ""
+              ? 0
+              : Number(psychomotorDomain.handWriting),
+
+          fluency:
+            psychomotorDomain.fluency === ""
+              ? 0
+              : Number(psychomotorDomain.fluency),
+
+          drawingAndPainting:
+            psychomotorDomain.drawingAndPainting === ""
+              ? 0
+              : Number(psychomotorDomain.drawingAndPainting),
+
+          musicalAbility:
+            psychomotorDomain.musicalAbility === ""
+              ? 0
+              : Number(psychomotorDomain.musicalAbility),
+        },
+
+        conduct,
+
+        sports,
+
+        clubs,
+
+        specialReport,
+
+        comments: {
+          classTeacher: comments.classTeacher || "",
+          principal: comments.principal || "",
+          performance: comments.performance || "",
+        },
+      };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Create Result Draft
+      |--------------------------------------------------------------------------
+      */
+
+      console.log("No existing result found. Creating result draft...");
+
+      const response = await createResult(payload);
+
+      console.log("Result draft created:", response);
+
+      const createdResultId = response?.result?._id;
+
+      /*
+      |--------------------------------------------------------------------------
+      | Verify Newly Created Draft
+      |--------------------------------------------------------------------------
+      */
+
+      if (createdResultId) {
+        console.log("Retrieving newly created result:", createdResultId);
+
+        const retrievedResponse = await getResult(createdResultId);
+
+        console.log("Newly created result retrieved:", retrievedResponse);
+      }
+
+      setSuccessMessage(
+        response?.message || "Result draft created successfully.",
+      );
+    } catch (error) {
+      console.error(
+        "Failed to create or retrieve result draft:",
+        error.response?.data || error.message,
+      );
+
+      setSuccessMessage("");
+
+      setError(
+        error.response?.data?.message ||
+          "Failed to create or retrieve result draft.",
+      );
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Selection Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "selection") {
+    return (
+      <div className="min-h-screen bg-slate-950 p-4 text-white md:p-6">
+        <div className="mx-auto max-w-7xl">
+          {/* Header */}
+          <div className="mb-6">
+            <div className="mb-2 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
+                <FaCheckCircle className="text-lg" />
+              </div>
+
+              <div>
+                <h1 className="text-2xl font-bold">Result Entry</h1>
+
+                <p className="text-sm text-slate-400">
+                  Select the session, student and subjects for this result.
+                </p>
+              </div>
+            </div>
+
+            {/* Progress */}
+            <div className="mt-6 flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold">
+                  1
+                </div>
+
+                <span className="text-sm font-medium text-white">
+                  Selection
+                </span>
+              </div>
+
+              <div className="h-px flex-1 bg-slate-800" />
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
+                  2
+                </div>
+
+                <span className="text-sm text-slate-500">Score Entry</span>
+              </div>
+
+              <div className="h-px flex-1 bg-slate-800" />
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
+                  3
+                </div>
+
+                <span className="hidden text-sm text-slate-500 sm:block">
+                  Attendance
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* TERM */}
-
-          <div>
-            <label
-              htmlFor="term"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Term
-            </label>
-
-            <select
-              id="term"
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              disabled={!academicSessionId}
-              className="
-                w-full
-                h-12
-                rounded-xl
-                border
-                border-gray-300
-                bg-white
-                px-4
-                text-sm
-                focus:outline-none
-                focus:border-green-500
-                disabled:bg-gray-100
-              "
-            >
-              <option value="">
-                {academicSessionId ? "Select term" : "Select session first"}
-              </option>
-
-              {availableTerms.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                  {item.isActive ? " — Active" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      {/* =====================================================
-          STEP 2 — STUDENT
-      ====================================================== */}
-
-      <section
-        className="
-          bg-white
-          border
-          border-gray-200
-          rounded-2xl
-          shadow-sm
-          p-5
-          sm:p-6
-          mb-6
-        "
-      >
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold">2. Select Student</h2>
-
-          <p className="text-sm text-gray-500 mt-1">
-            Search by student name or student ID.
-          </p>
-        </div>
-
-        <div className="relative">
-          <FaSearch
-            className="
-              absolute
-              left-4
-              top-1/2
-              -translate-y-1/2
-              text-gray-400
-            "
-          />
-
-          <input
-            type="text"
-            value={studentSearch}
-            onChange={(event) => {
-              setStudentSearch(event.target.value);
-              setSelectedStudent(null);
-            }}
-            placeholder="Search student..."
-            className="
-              w-full
-              h-12
-              rounded-xl
-              border
-              border-gray-300
-              pl-11
-              pr-4
-              text-sm
-              focus:outline-none
-              focus:border-green-500
-            "
-          />
-
-          {studentsLoading && (
-            <FaSpinner
-              className="
-                absolute
-                right-4
-                top-1/2
-                -translate-y-1/2
-                animate-spin
-                text-green-600
-              "
-            />
-          )}
-
-          {/* SEARCH RESULTS */}
-
-          {visibleStudents.length > 0 && !selectedStudent && (
-            <div
-              className="
-                absolute
-                z-20
-                left-0
-                right-0
-                mt-2
-                bg-white
-                border
-                border-gray-200
-                rounded-xl
-                shadow-xl
-                overflow-hidden
-              "
-            >
-              {visibleStudents.map((student) => (
-                <button
-                  key={student._id}
-                  type="button"
-                  onClick={() => handleSelectStudent(student)}
-                  className="
-                    w-full
-                    text-left
-                    px-4
-                    py-3
-                    hover:bg-gray-50
-                    border-b
-                    border-gray-100
-                    last:border-b-0
-                  "
-                >
-                  <div className="font-medium text-gray-900">
-                    {student.firstName} {student.lastName}
-                    {student.otherName ? ` ${student.otherName}` : ""}
-                  </div>
-
-                  <div className="text-xs text-gray-500 mt-1">
-                    {student.studentId} · {student.currentClass} ·{" "}
-                    {student.gender}
-                  </div>
-                </button>
-              ))}
+          {/* Error */}
+          {error && (
+            <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {error}
             </div>
           )}
-        </div>
 
-        {/* SELECTED STUDENT */}
+          {/* Selection Grid */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Academic Session */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold">Academic Session</h2>
 
-        {selectedStudent && (
-          <div
-            className="
-              mt-4
-              rounded-xl
-              border
-              border-green-200
-              bg-green-50
-              p-4
-            "
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="font-semibold text-gray-900">
-                  {selectedStudent.firstName} {selectedStudent.lastName}
-                  {selectedStudent.otherName
-                    ? ` ${selectedStudent.otherName}`
-                    : ""}
-                </p>
-
-                <p className="text-sm text-gray-600 mt-1">
-                  {selectedStudent.studentId} · {selectedStudent.currentClass} ·{" "}
-                  {selectedStudent.session}
+                <p className="mt-1 text-sm text-slate-400">
+                  Select the academic session and term.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedStudent(null);
-                  setStudentSearch("");
-                  setStudents([]);
-                }}
-                className="
-                  text-sm
-                  text-red-600
-                  hover:text-red-700
-                  font-medium
-                "
-              >
-                Change Student
-              </button>
+              <div className="space-y-4">
+                {/* Session */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-300">
+                    Session
+                  </label>
+
+                  <select
+                    value={academicSessionId}
+                    onChange={(event) => {
+                      setAcademicSessionId(event.target.value);
+                      setTerm("");
+                      setError("");
+                      setSuccessMessage("");
+                    }}
+                    disabled={sessionsLoading}
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                  >
+                    <option value="">
+                      {sessionsLoading
+                        ? "Loading sessions..."
+                        : "Select academic session"}
+                    </option>
+
+                    {academicSessions.map((session) => (
+                      <option key={session._id} value={session._id}>
+                        {session.name}
+                        {session.isActive ? " — Active" : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedSession && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-slate-500">
+                        Selected session:
+                      </span>
+
+                      <span className="text-xs font-medium text-slate-300">
+                        {selectedSession.name}
+                      </span>
+
+                      {selectedSession.isActive && (
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Term */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-300">
+                    Term
+                  </label>
+
+                  <select
+                    value={term}
+                    onChange={(event) => {
+                      setTerm(event.target.value);
+                      setError("");
+                      setSuccessMessage("");
+                    }}
+                    disabled={!academicSessionId}
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Select term</option>
+
+                    {availableTerms.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.name}
+                        {item.isActive ? " — Active" : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedTerm && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-slate-500">
+                        Selected term:
+                      </span>
+
+                      <span className="text-xs font-medium text-slate-300">
+                        {selectedTerm.name}
+                      </span>
+
+                      {selectedTerm.isActive && (
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </section>
 
-      {/* =====================================================
-          STEP 3 — SUBJECTS
-      ====================================================== */}
+            {/* Student */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Student</h2>
 
-      <section
-        className="
-          bg-white
-          border
-          border-gray-200
-          rounded-2xl
-          shadow-sm
-          p-5
-          sm:p-6
-          mb-6
-        "
-      >
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
-          <div>
-            <h2 className="text-lg font-semibold">3. Subjects Offered</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Search using the student name or student ID.
+                  </p>
+                </div>
 
-            <p className="text-sm text-gray-500 mt-1">
-              Select only the subjects this student offered for the selected
-              term.
-            </p>
-          </div>
+                {selectedStudent && (
+                  <button
+                    type="button"
+                    onClick={handleChangeStudent}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <FaTimes />
+                    Change
+                  </button>
+                )}
+              </div>
 
-          <div className="text-sm font-medium text-green-600">
-            {selectedSubjectIds.length} selected
-          </div>
-        </div>
+              {!selectedStudent && (
+                <>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">
+                      <FaSearch />
+                    </div>
 
-        {subjectsLoading ? (
-          <div className="flex items-center justify-center py-10 text-gray-500">
-            <FaSpinner className="animate-spin mr-2" />
-            Loading subjects...
-          </div>
-        ) : subjects.length === 0 ? (
-          <div className="rounded-xl bg-gray-50 border border-gray-200 p-6 text-center text-gray-500">
-            No active subjects are available.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {subjects.map((subject) => {
-              const selected = selectedSubjectIds.includes(subject._id);
+                    <input
+                      type="text"
+                      value={studentSearch}
+                      onChange={(event) => {
+                        setStudentSearch(event.target.value);
+                        setError("");
+                        setSuccessMessage("");
+                      }}
+                      placeholder="Search student..."
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 py-3 pl-11 pr-11 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                    />
 
-              return (
-                <label
-                  key={subject._id}
-                  className={`
-                    flex
-                    items-center
-                    gap-3
-                    rounded-xl
-                    border
-                    p-4
-                    cursor-pointer
-                    transition
-                    ${
-                      selected
-                        ? "border-green-500 bg-green-50"
-                        : "border-gray-200 bg-white hover:border-gray-300"
-                    }
-                  `}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleSubject(subject._id)}
-                    className="
-                      h-5
-                      w-5
-                      accent-green-600
-                    "
-                  />
-
-                  <div>
-                    <p className="font-medium text-gray-900">{subject.name}</p>
-
-                    {subject.code && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {subject.code}
-                      </p>
+                    {studentsLoading && (
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+                        <FaSpinner className="animate-spin text-blue-400" />
+                      </div>
                     )}
                   </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
 
-        {/* SELECTION PREVIEW */}
+                  {visibleStudents.length > 0 && (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-slate-900">
+                      {visibleStudents.map((student) => (
+                        <button
+                          key={student._id}
+                          type="button"
+                          onClick={() => handleSelectStudent(student)}
+                          className="flex w-full items-center justify-between border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 hover:bg-white/5"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-white">
+                              {student.firstName} {student.lastName}
+                            </p>
 
-        {selectedSubjectIds.length > 0 && (
-          <div className="mt-6 rounded-xl bg-slate-50 border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Selected Subjects
-            </h3>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {student.studentId}
+                            </p>
+                          </div>
 
-            <div className="flex flex-wrap gap-2">
-              {subjects
-                .filter((subject) => selectedSubjectIds.includes(subject._id))
-                .map((subject) => (
-                  <span
-                    key={subject._id}
-                    className="
-                      inline-flex
-                      items-center
-                      rounded-full
-                      bg-green-100
-                      text-green-700
-                      px-3
-                      py-1
-                      text-xs
-                      font-medium
-                    "
-                  >
-                    {subject.name}
-                  </span>
-                ))}
+                          <FaArrowRight className="text-xs text-slate-600" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {!studentsLoading &&
+                    studentSearch.trim() &&
+                    visibleStudents.length === 0 && (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-slate-900 px-4 py-4 text-sm text-slate-500">
+                        No students found.
+                      </div>
+                    )}
+                </>
+              )}
+
+              {selectedStudent && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-emerald-400">
+                        Selected Student
+                      </p>
+
+                      <p className="mt-1 font-semibold text-white">
+                        {selectedStudent.firstName} {selectedStudent.lastName}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-400">
+                        {selectedStudent.studentId}
+                      </p>
+                    </div>
+
+                    <FaCheckCircle className="text-xl text-emerald-400" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </section>
 
-      {/* =====================================================
-          CONTINUE
-      ====================================================== */}
+          {/* Subjects */}
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl">
+            <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+              <div>
+                <h2 className="text-lg font-semibold">Subjects</h2>
 
-      <div className="flex justify-end pb-8">
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={!canContinue}
-          className="
-            w-full
-            sm:w-auto
-            px-6
-            py-3
-            rounded-xl
-            bg-green-600
-            hover:bg-green-700
-            text-white
-            font-medium
-            transition
-            disabled:opacity-40
-            disabled:cursor-not-allowed
-          "
-        >
-          Continue to Scores
-        </button>
+                <p className="mt-1 text-sm text-slate-400">
+                  Select the subjects the student is offering.
+                </p>
+              </div>
+
+              <div className="rounded-full bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400">
+                {selectedSubjectIds.length} selected
+              </div>
+            </div>
+
+            {subjectsLoading ? (
+              <div className="flex items-center justify-center py-10 text-slate-500">
+                <FaSpinner className="mr-3 animate-spin" />
+                Loading subjects...
+              </div>
+            ) : subjects.length === 0 ? (
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-4 text-sm text-yellow-300">
+                No active subjects were found.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {subjects.map((subject) => {
+                  const selected = selectedSubjectIds.includes(subject._id);
+
+                  return (
+                    <button
+                      key={subject._id}
+                      type="button"
+                      onClick={() => handleToggleSubject(subject._id)}
+                      className={`rounded-xl border p-4 text-left transition ${
+                        selected
+                          ? "border-blue-500 bg-blue-500/10"
+                          : "border-white/10 bg-slate-900 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {subject.name}
+                          </p>
+
+                          {subject.code && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {subject.code}
+                            </p>
+                          )}
+                        </div>
+
+                        {selected && (
+                          <FaCheckCircle className="mt-0.5 shrink-0 text-blue-400" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={handleContinueToScores}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+            >
+              Continue to Scores
+              <FaArrowRight />
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Score Entry Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "scores") {
+    return (
+      <ResultScoreEntry
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        scoreEntries={scoreEntries}
+        onScoreEntriesChange={handleScoreEntriesChange}
+        onBack={handleBackToSelection}
+        onContinue={handleContinueFromScores}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Attendance Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "attendance") {
+    return (
+      <ResultAttendance
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        attendance={attendance}
+        onAttendanceChange={setAttendance}
+        onBack={handleBackToScores}
+        onContinue={handleContinueFromAttendance}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Affective Domain Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "affective") {
+    return (
+      <ResultAffectiveDomain
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        affectiveDomain={affectiveDomain}
+        onAffectiveDomainChange={handleAffectiveDomainChange}
+        onBack={handleBackToAttendance}
+        onContinue={handleContinueFromAffective}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Psychomotor Domain Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "psychomotor") {
+    return (
+      <ResultPsychomotorDomain
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        psychomotorDomain={psychomotorDomain}
+        onPsychomotorDomainChange={handlePsychomotorDomainChange}
+        onBack={handleBackToAffective}
+        onContinue={handleContinueFromPsychomotor}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Conduct Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "conduct") {
+    return (
+      <ResultConduct
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        conduct={conduct}
+        onConductChange={handleConductChange}
+        onBack={handleBackToPsychomotor}
+        onContinue={handleContinueFromConduct}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Additional Information Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "additional") {
+    return (
+      <ResultAdditionalInfo
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        sports={sports}
+        clubs={clubs}
+        specialReport={specialReport}
+        comments={comments}
+        onSportsChange={handleSportsChange}
+        onClubsChange={handleClubsChange}
+        onSpecialReportChange={handleSpecialReportChange}
+        onCommentsChange={handleCommentsChange}
+        onBack={handleBackToConduct}
+        onContinue={handleContinueFromAdditionalInfo}
+        error={error}
+      />
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Review Step
+  |--------------------------------------------------------------------------
+  */
+
+  if (currentStep === "review") {
+    return (
+      <ResultReview
+        selectedStudent={selectedStudent}
+        academicSession={selectedSession}
+        term={term}
+        scoreEntries={scoreEntries}
+        attendance={attendance}
+        affectiveDomain={affectiveDomain}
+        psychomotorDomain={psychomotorDomain}
+        conduct={conduct}
+        sports={sports}
+        clubs={clubs}
+        specialReport={specialReport}
+        comments={comments}
+        onBack={handleBackToAdditionalInfo}
+        onEditSection={handleEditReviewSection}
+        onContinue={handleContinueFromReview}
+        error={error}
+        successMessage={successMessage}
+      />
+    );
+  }
+
+  return null;
+};
 
 export default ResultEntry;
