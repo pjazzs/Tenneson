@@ -122,6 +122,16 @@ function AdminManagement() {
         key: "academic-sessions.view",
         label: "View Academic Sessions",
       },
+
+      {
+        key: "academic-sessions.create",
+        label: "Create Academic Session",
+      },
+
+      {
+        key: "academic-sessions.update",
+        label: "Update Academic Session",
+      },
     ],
 
     Subjects: [

@@ -22,6 +22,7 @@ import ActivityLogs from "../pages/activity/ActivityLogs";
 
 import AdminManagement from "../pages/admin/AdminManagement";
 import AuditLog from "../pages/admin/AuditLog";
+import AcademicSessions from "../pages/academicSessions/AcademicSessions";
 
 function AppRoutes() {
   return (
@@ -85,6 +86,8 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
+
+          <Route path="/academic-sessions" element={<AcademicSessions />} />
 
           {/* Add student */}
           <Route

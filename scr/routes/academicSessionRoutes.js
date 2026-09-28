@@ -3,6 +3,8 @@ const express = require("express");
 const {
   getAcademicSessions,
   getAcademicSession,
+  createAcademicSession,
+  updateAcademicSession,
 } = require("../controllers/academicSessionController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -31,6 +33,28 @@ router.get(
   protect,
   authorizePermission("academic-sessions.view"),
   getAcademicSession,
+);
+
+// ===============================
+// Create Academic Session
+// ===============================
+
+router.post(
+  "/academic-sessions",
+  protect,
+  authorizePermission("academic-sessions.create"),
+  createAcademicSession,
+);
+
+// ===============================
+// Update Academic Session
+// ===============================
+
+router.put(
+  "/academic-sessions/:id",
+  protect,
+  authorizePermission("academic-sessions.update"),
+  updateAcademicSession,
 );
 
 module.exports = router;
