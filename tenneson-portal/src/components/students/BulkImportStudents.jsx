@@ -35,7 +35,6 @@ function BulkImportStudents({ onImportSuccess }) {
         session: "",
         parentName: "",
         parentPhone: "",
-        TemporaryPassword: "",
       },
     ];
 
