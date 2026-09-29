@@ -15,6 +15,8 @@ const generateStudentSlip = require("../utils/generateStudentSlip");
 const cloudinary = require("../config/cloudinary");
 const parseExcelDate = require("../utils/parseExcelDate");
 const createAuditLog = require("../utils/createAuditLog");
+const jwt = require("jsonwebtoken");
+const path = require("path");
 
 /*
 |--------------------------------------------------------------------------
@@ -118,6 +120,110 @@ const createBulkStudentCredential = async ({ student, adminId }) => {
   return {
     credential,
     temporaryPassword: password,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Credential Report
+|--------------------------------------------------------------------------
+|
+| Temporary credential reports are stored outside the public web directory.
+| The plaintext passwords exist only inside the generated Excel file.
+|
+*/
+
+const CREDENTIAL_REPORT_DIRECTORY = path.join(
+  process.cwd(),
+  "uploads",
+  "credential-reports",
+);
+
+const CREDENTIAL_REPORT_EXPIRY_MS = 15 * 60 * 1000;
+
+const credentialReports = new Map();
+
+const ensureCredentialReportDirectory = () => {
+  fs.mkdirSync(CREDENTIAL_REPORT_DIRECTORY, {
+    recursive: true,
+  });
+};
+
+const generateCredentialReportToken = ({ adminId, reportId }) => {
+  return jwt.sign(
+    {
+      type: "student_credential_report",
+      reportId,
+      adminId: adminId.toString(),
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "15m",
+    },
+  );
+};
+
+const createCredentialReport = ({ adminId, importedStudents }) => {
+  ensureCredentialReportDirectory();
+
+  const reportId = crypto.randomUUID();
+
+  const fileName = `student-credentials-${reportId}.xlsx`;
+
+  const filePath = path.join(CREDENTIAL_REPORT_DIRECTORY, fileName);
+
+  const reportData = importedStudents.map((student) => ({
+    StudentID: student.studentId,
+    FirstName: student.firstName,
+    LastName: student.lastName,
+    CurrentClass: student.currentClass,
+    Session: student.session,
+    Username: student.username,
+    TemporaryPassword: student.temporaryPassword,
+    MustChangePassword: student.mustChangePassword,
+  }));
+
+  const workbook = XLSX.utils.book_new();
+
+  const worksheet = XLSX.utils.json_to_sheet(reportData);
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Credentials");
+
+  XLSX.writeFile(workbook, filePath);
+
+  const expiresAt = Date.now() + CREDENTIAL_REPORT_EXPIRY_MS;
+
+  const cleanupTimer = setTimeout(() => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      console.log("Credential report cleanup error:", error.message);
+    }
+
+    credentialReports.delete(reportId);
+  }, CREDENTIAL_REPORT_EXPIRY_MS);
+
+  cleanupTimer.unref?.();
+
+  credentialReports.set(reportId, {
+    adminId: adminId.toString(),
+    filePath,
+    expiresAt,
+    consumed: false,
+    cleanupTimer,
+  });
+
+  const reportToken = generateCredentialReportToken({
+    adminId,
+    reportId,
+  });
+
+  return {
+    reportId,
+    reportToken,
+    expiresIn: Math.floor(CREDENTIAL_REPORT_EXPIRY_MS / 1000),
   };
 };
 
@@ -1348,6 +1454,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
         session: newStudent.session,
 
         username: credentialResult.credential.username,
+        temporaryPassword: credentialResult.temporaryPassword,
 
         mustChangePassword: credentialResult.credential.mustChangePassword,
       });
@@ -1419,6 +1526,27 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     details: `${importedStudents.length} students imported`,
   });
 
+  let credentialReport = null;
+
+  if (importedStudents.length > 0) {
+    credentialReport = createCredentialReport({
+      adminId: req.admin._id,
+      importedStudents,
+    });
+  }
+
+  /*
+|--------------------------------------------------------------------------
+| Remove Plaintext Passwords From JSON Response
+|--------------------------------------------------------------------------
+*/
+
+  const responseStudents = importedStudents.map((student) => {
+    const { temporaryPassword, ...safeStudent } = student;
+
+    return safeStudent;
+  });
+
   /*
   |--------------------------------------------------------------------------
   | Response
@@ -1438,9 +1566,139 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       skipped: skippedStudents.length,
     },
 
-    importedStudents,
+    importedStudents: responseStudents,
 
     skippedStudents,
+    credentialReport,
+  });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Download Bulk Student Credential Report
+|--------------------------------------------------------------------------
+*/
+
+exports.downloadBulkCredentialReport = asyncHandler(async (req, res) => {
+  const reportToken = req.headers["x-credential-report-token"];
+
+  if (!reportToken) {
+    return res.status(401).json({
+      success: false,
+      message: "Credential report token is required.",
+    });
+  }
+
+  let decoded;
+
+  try {
+    decoded = jwt.verify(reportToken, process.env.JWT_SECRET);
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Credential report token is invalid or expired.",
+    });
+  }
+
+  if (
+    decoded.type !== "student_credential_report" ||
+    !decoded.reportId ||
+    !decoded.adminId
+  ) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid credential report token.",
+    });
+  }
+
+  if (decoded.adminId !== req.admin._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: "You are not authorized to download this credential report.",
+    });
+  }
+
+  const report = credentialReports.get(decoded.reportId);
+
+  if (!report) {
+    return res.status(404).json({
+      success: false,
+      message: "Credential report not found or has expired.",
+    });
+  }
+
+  if (report.adminId !== req.admin._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: "You are not authorized to access this report.",
+    });
+  }
+
+  if (report.consumed) {
+    return res.status(410).json({
+      success: false,
+      message: "Credential report has already been downloaded.",
+    });
+  }
+
+  if (Date.now() > report.expiresAt) {
+    credentialReports.delete(decoded.reportId);
+
+    try {
+      if (fs.existsSync(report.filePath)) {
+        fs.unlinkSync(report.filePath);
+      }
+    } catch (error) {
+      console.log("Expired credential report cleanup error:", error.message);
+    }
+
+    return res.status(410).json({
+      success: false,
+      message: "Credential report has expired.",
+    });
+  }
+
+  if (!fs.existsSync(report.filePath)) {
+    credentialReports.delete(decoded.reportId);
+
+    return res.status(404).json({
+      success: false,
+      message: "Credential report file no longer exists.",
+    });
+  }
+
+  /*
+    |--------------------------------------------------------------------------
+    | Mark Report As Consumed
+    |--------------------------------------------------------------------------
+    */
+
+  report.consumed = true;
+
+  credentialReports.set(decoded.reportId, report);
+
+  /*
+    |--------------------------------------------------------------------------
+    | Download
+    |--------------------------------------------------------------------------
+    */
+
+  return res.download(report.filePath, "Student-Credentials.xlsx", (error) => {
+    try {
+      if (fs.existsSync(report.filePath)) {
+        fs.unlinkSync(report.filePath);
+      }
+    } catch (cleanupError) {
+      console.log("Credential report cleanup error:", cleanupError.message);
+    }
+
+    clearTimeout(report.cleanupTimer);
+
+    credentialReports.delete(decoded.reportId);
+
+    if (error) {
+      console.log("Credential report download error:", error.message);
+    }
   });
 });
 

@@ -17,6 +17,7 @@ function AddStudent() {
     session: "",
     parentName: "",
     parentPhone: "",
+    password: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -335,6 +336,18 @@ function AddStudent() {
           pattern="\d{11}"
           className={inputStyle}
           required
+        />
+
+        {/* Temporary Password */}
+        <input
+          type="password"
+          name="password"
+          placeholder="Temporary Password (min. 6 characters)"
+          value={formData.password}
+          onChange={handleChange}
+          className={inputStyle}
+          required
+          minLength={6}
         />
 
         {/* Submit */}

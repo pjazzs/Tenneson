@@ -11,6 +11,7 @@ const {
   verifyStudent,
   dashboard,
   bulkImportStudents,
+  downloadBulkCredentialReport,
   exportStudents,
   getActivityLogs,
   downloadStudentSlip,
@@ -50,6 +51,19 @@ router.post(
   authorizePermission("students.import"),
   upload.single("file"),
   bulkImportStudents,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Student Credential Report
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/students/import/credential-report",
+  protect,
+  authorizePermission("students.import"),
+  downloadBulkCredentialReport,
 );
 
 /*

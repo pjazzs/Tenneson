@@ -434,13 +434,13 @@ const AcademicSessions = () => {
         return `${term.name}: start date cannot be after the closing date.`;
       }
 
-      if (
-        term.closingDate &&
-        term.endDate &&
-        new Date(term.closingDate) > new Date(term.endDate)
-      ) {
-        return `${term.name}: closing date cannot be after the end date.`;
-      }
+      // if (
+      //   term.closingDate &&
+      //   term.endDate &&
+      //   new Date(term.closingDate) > new Date(term.endDate)
+      // ) {
+      //   return `${term.name}: closing date cannot be after the end date.`;
+      // }
     }
 
     return "";
