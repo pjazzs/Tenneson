@@ -24,6 +24,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/dashboard",
       icon: <FaHome />,
       visible: true,
+      end: true,
     },
 
     {
@@ -31,6 +32,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/students",
       icon: <FaUserGraduate />,
       visible: hasPermission("students.view"),
+      end: true,
     },
 
     {
@@ -38,6 +40,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/results",
       icon: <FaFileAlt />,
       visible: hasPermission("results.view"),
+      end: true,
     },
 
     {
@@ -45,6 +48,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/results/entry",
       icon: <FaClipboardList />,
       visible: hasPermission("results.create"),
+      end: true,
     },
 
     {
@@ -52,6 +56,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/academic-sessions",
       icon: <FaCalendarAlt />,
       visible: hasPermission("academic-sessions.view"),
+      end: true,
     },
 
     {
@@ -59,6 +64,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/promotions",
       icon: <FaExchangeAlt />,
       visible: admin?.role === "admin" || admin?.role === "super_admin",
+      end: true,
     },
 
     {
@@ -66,6 +72,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/activity-logs",
       icon: <FaHistory />,
       visible: hasPermission("students.view"),
+      end: true,
     },
 
     {
@@ -73,6 +80,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/students/archived",
       icon: <FaArchive />,
       visible: hasPermission("students.view"),
+      end: true,
     },
 
     {
@@ -80,6 +88,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/audit-logs",
       icon: <FaClipboardList />,
       visible: admin?.role === "admin" || admin?.role === "super_admin",
+      end: true,
     },
 
     {
@@ -87,6 +96,7 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/admins",
       icon: <FaUserShield />,
       visible: hasPermission("admins.manage"),
+      end: true,
     },
   ];
 
@@ -209,6 +219,7 @@ function Sidebar({ isMobileOpen, onClose }) {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.end}
                 onClick={onClose}
                 className={({ isActive }) => `
                 flex
