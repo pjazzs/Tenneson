@@ -69,17 +69,17 @@ function Sidebar({ isMobileOpen, onClose }) {
     },
 
     {
-      name: "Admin Management",
-      path: "/admins",
-      icon: <FaUserShield />,
-      visible: hasPermission("admins.manage"),
-    },
-
-    {
       name: "Audit Logs",
       path: "/audit-logs",
       icon: <FaClipboardList />,
       visible: admin?.role === "admin" || admin?.role === "super_admin",
+    },
+
+    {
+      name: "Admin Management",
+      path: "/admins",
+      icon: <FaUserShield />,
+      visible: hasPermission("admins.manage"),
     },
   ];
 

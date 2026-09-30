@@ -1,12 +1,21 @@
 import { Routes, Route } from "react-router-dom";
+import LandingPage from "../pages/LandingPage";
 
 import Layout from "../components/layout/Layout";
 
 import Login from "../pages/auth/Login";
+import StudentLogin from "../pages/students/StudentLogin";
+import StudentChangePassword from "../pages/students/StudentChangePassword";
+import StudentProfile from "../pages/students/StudentProfile";
+import StudentResults from "../pages/students/StudentResults";
+import StudentResultDetails from "../pages/students/StudentResultDetails";
+import AcademicRecords from "../pages/students/AcademicRecords";
 import Dashboard from "../pages/dashboard/Dashboard";
 import Promotions from "../pages/promotions/Promotions";
 import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
+import StudentDashboard from "../pages/students/StudentDashboard";
+import StudentProtectedRoute from "../components/students/StudentProtectedRoute";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 
 import ProtectedRoute from "../components/auth/ProtectedRoute";
@@ -23,7 +32,6 @@ import ActivityLogs from "../pages/activity/ActivityLogs";
 import AdminManagement from "../pages/admin/AdminManagement";
 import AuditLog from "../pages/admin/AuditLog";
 import AcademicSessions from "../pages/academicSessions/AcademicSessions";
-
 function AppRoutes() {
   return (
     <Routes>
@@ -31,10 +39,37 @@ function AppRoutes() {
           PUBLIC ROUTES
       ========================================= */}
 
+      <Route path="/" element={<LandingPage />} />
+
       <Route path="/login" element={<Login />} />
+
+      <Route path="/student/login" element={<StudentLogin />} />
+      <Route
+        path="/student/change-password"
+        element={<StudentChangePassword />}
+      />
 
       {/* Public student verification */}
       <Route path="/verify/:identifier" element={<VerifyStudent />} />
+
+      {/* =========================================
+    PROTECTED STUDENT PORTAL
+========================================= */}
+
+      <Route element={<StudentProtectedRoute />}>
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
+      </Route>
+
+      <Route path="/student/profile" element={<StudentProfile />} />
+
+      <Route path="/student/results" element={<StudentResults />} />
+
+      <Route
+        path="/student/results/:resultId"
+        element={<StudentResultDetails />}
+      />
+
+      <Route path="/student/academic-records" element={<AcademicRecords />} />
 
       {/* =========================================
           PROTECTED ADMIN PORTAL
@@ -176,7 +211,7 @@ function AppRoutes() {
           FALLBACK
       ========================================= */}
 
-      <Route path="*" element={<Login />} />
+      <Route path="*" element={<LandingPage />} />
     </Routes>
   );
 }

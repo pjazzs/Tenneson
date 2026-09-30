@@ -6,6 +6,7 @@ import {
   FaTimes,
   FaSpinner,
   FaCheckCircle,
+  FaKey,
 } from "react-icons/fa";
 
 import * as XLSX from "xlsx";
@@ -16,7 +17,10 @@ function BulkImportStudents({ onImportSuccess }) {
   const [showModal, setShowModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [downloadingCredentials, setDownloadingCredentials] = useState(false);
+  const [credentialsDownloaded, setCredentialsDownloaded] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [credentialError, setCredentialError] = useState("");
 
   // ==========================================
   // Download Excel Template
@@ -59,6 +63,8 @@ function BulkImportStudents({ onImportSuccess }) {
 
     try {
       setImporting(true);
+      setCredentialError("");
+      setCredentialsDownloaded(false);
 
       const formData = new FormData();
 
@@ -78,9 +84,116 @@ function BulkImportStudents({ onImportSuccess }) {
         "Bulk import error:",
         error.response?.data || error.message,
       );
+
+      alert(
+        error.response?.data?.message ||
+          "Failed to import students. Please try again.",
+      );
     } finally {
       setImporting(false);
     }
+  };
+
+  // ==========================================
+  // Download Credential Report
+  // ==========================================
+
+  const downloadCredentialReport = async () => {
+    const reportToken = importResult?.credentialReport?.reportToken;
+
+    if (!reportToken) {
+      setCredentialError(
+        "Credential report is unavailable. Please import the students again.",
+      );
+
+      return;
+    }
+
+    try {
+      setDownloadingCredentials(true);
+      setCredentialError("");
+
+      const response = await api.get("/students/import/credential-report", {
+        headers: {
+          "X-Credential-Report-Token": reportToken,
+        },
+        responseType: "blob",
+      });
+
+      // ==========================================
+      // Create Downloadable File
+      // ==========================================
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "Student-Credentials.xlsx";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      // ==========================================
+      // Mark Report As Downloaded
+      // ==========================================
+
+      setCredentialsDownloaded(true);
+    } catch (error) {
+      console.error(
+        "Credential report download error:",
+        error.response?.data || error.message,
+      );
+
+      /*
+       * Axios returns the backend error as a Blob when
+       * responseType is "blob".
+       *
+       * Try to read the backend JSON error message.
+       */
+
+      let message =
+        "Unable to download the credential report. Please try again.";
+
+      if (error.response?.data instanceof Blob) {
+        try {
+          const errorText = await error.response.data.text();
+
+          const errorData = JSON.parse(errorText);
+
+          message = errorData.message || message;
+        } catch {
+          // Keep default error message.
+        }
+      } else {
+        message = error.response?.data?.message || message;
+      }
+
+      setCredentialError(message);
+    } finally {
+      setDownloadingCredentials(false);
+    }
+  };
+
+  // ==========================================
+  // Close Modal
+  // ==========================================
+
+  const closeModal = () => {
+    setShowModal(false);
+    setImportResult(null);
+    setSelectedFile(null);
+    setCredentialError("");
+    setCredentialsDownloaded(false);
   };
 
   // ==========================================
@@ -95,6 +208,8 @@ function BulkImportStudents({ onImportSuccess }) {
         onClick={() => {
           setShowModal(true);
           setImportResult(null);
+          setCredentialError("");
+          setCredentialsDownloaded(false);
         }}
         className="
           flex
@@ -162,7 +277,7 @@ function BulkImportStudents({ onImportSuccess }) {
               </div>
 
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
                 className="
                   text-gray-400
                   hover:text-white
@@ -234,36 +349,38 @@ function BulkImportStudents({ onImportSuccess }) {
 
             {/* Import Button */}
 
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="
-                mt-5
-                w-full
-                flex
-                items-center
-                justify-center
-                gap-2
-                bg-blue-600
-                hover:bg-blue-700
-                disabled:opacity-50
-                py-3
-                rounded-xl
-                font-semibold
-              "
-            >
-              {importing ? (
-                <>
-                  <FaSpinner className="animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <FaUpload />
-                  Import Students
-                </>
-              )}
-            </button>
+            {!importResult && (
+              <button
+                onClick={handleImport}
+                disabled={importing}
+                className="
+                  mt-5
+                  w-full
+                  flex
+                  items-center
+                  justify-center
+                  gap-2
+                  bg-blue-600
+                  hover:bg-blue-700
+                  disabled:opacity-50
+                  py-3
+                  rounded-xl
+                  font-semibold
+                "
+              >
+                {importing ? (
+                  <>
+                    <FaSpinner className="animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <FaUpload />
+                    Import Students
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Import Result */}
 
@@ -357,6 +474,114 @@ function BulkImportStudents({ onImportSuccess }) {
                   </div>
                 </div>
 
+                {/* Credential Report */}
+
+                {importResult.credentialReport && (
+                  <div
+                    className="
+                      bg-blue-600/10
+                      border
+                      border-blue-500/30
+                      rounded-xl
+                      p-4
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        text-blue-400
+                        font-semibold
+                        mb-2
+                      "
+                    >
+                      <FaKey />
+                      Student Login Credentials
+                    </div>
+
+                    <p className="text-gray-300 text-sm mb-4">
+                      A temporary username and password has been generated for
+                      each imported student.
+                    </p>
+
+                    <p className="text-yellow-400 text-xs mb-4">
+                      Download this credential report now. It is available for
+                      one download only and expires after 15 minutes.
+                    </p>
+
+                    {!credentialsDownloaded ? (
+                      <button
+                        onClick={downloadCredentialReport}
+                        disabled={downloadingCredentials}
+                        className="
+                          w-full
+                          flex
+                          items-center
+                          justify-center
+                          gap-2
+                          bg-blue-600
+                          hover:bg-blue-700
+                          disabled:opacity-50
+                          py-3
+                          rounded-xl
+                          font-semibold
+                        "
+                      >
+                        {downloadingCredentials ? (
+                          <>
+                            <FaSpinner className="animate-spin" />
+                            Preparing Credentials...
+                          </>
+                        ) : (
+                          <>
+                            <FaDownload />
+                            Download Student Credentials
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <div
+                        className="
+                          flex
+                          items-center
+                          gap-2
+                          justify-center
+                          bg-green-600/20
+                          border
+                          border-green-500/30
+                          text-green-400
+                          py-3
+                          rounded-xl
+                          font-semibold
+                        "
+                      >
+                        <FaCheckCircle />
+                        Credentials Downloaded
+                      </div>
+                    )}
+
+                    {/* Credential Error */}
+
+                    {credentialError && (
+                      <div
+                        className="
+                          mt-3
+                          bg-red-600/10
+                          border
+                          border-red-500/20
+                          rounded-lg
+                          p-3
+                          text-red-400
+                          text-sm
+                        "
+                      >
+                        {credentialError}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Skipped Students */}
 
                 {importResult.skippedStudents?.length > 0 && (
@@ -385,11 +610,11 @@ function BulkImportStudents({ onImportSuccess }) {
                       <div
                         key={index}
                         className="
-                            border-b
-                            border-white/10
-                            py-3
-                            text-sm
-                          "
+                          border-b
+                          border-white/10
+                          py-3
+                          text-sm
+                        "
                       >
                         <p className="text-white">
                           {item.student?.firstName} {item.student?.lastName}
@@ -404,10 +629,7 @@ function BulkImportStudents({ onImportSuccess }) {
                 {/* Close */}
 
                 <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setImportResult(null);
-                  }}
+                  onClick={closeModal}
                   className="
                     w-full
                     bg-gray-700

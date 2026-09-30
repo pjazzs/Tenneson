@@ -332,8 +332,8 @@ function AddStudent() {
           value={formData.parentPhone}
           onChange={handleChange}
           inputMode="numeric"
-          maxLength={11}
-          pattern="\d{11}"
+          maxLength={12}
+          pattern="\d{12}"
           className={inputStyle}
           required
         />
