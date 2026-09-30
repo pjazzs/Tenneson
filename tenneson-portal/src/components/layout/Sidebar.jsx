@@ -41,6 +41,13 @@ function Sidebar({ isMobileOpen, onClose }) {
     },
 
     {
+      name: "Result Entry",
+      path: "/results/entry",
+      icon: <FaClipboardList />,
+      visible: hasPermission("results.create"),
+    },
+
+    {
       name: "Academic Sessions",
       path: "/academic-sessions",
       icon: <FaCalendarAlt />,

@@ -15,12 +15,15 @@ import {
   FaHeart,
   FaShieldAlt,
 } from "react-icons/fa";
+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 function LandingPage() {
   const navigate = useNavigate();
 
   const currentYear = new Date().getFullYear();
+  const [showFullMessage, setShowFullMessage] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -388,12 +391,12 @@ function LandingPage() {
 
               <div
                 className="
-                  text-slate-600
-                  leading-8
-                  text-base
-                  sm:text-lg
-                  space-y-5
-                "
+    text-slate-600
+    leading-8
+    text-base
+    sm:text-lg
+    space-y-5
+  "
               >
                 <p>Dear Esteemed Visitors,</p>
 
@@ -405,38 +408,68 @@ function LandingPage() {
                   our school’s commitment to excellence.
                 </p>
 
-                <p>
-                  As the proprietor of Tenneson College, Obantoko, I believe in
-                  the power of connection, and this portal is designed to keep
-                  us all closely connected. Whether you are a parent, student,
-                  educator, or prospective member of our school community, this
-                  platform will provide you with easy access to important
-                  information, updates, and resources that enhance your
-                  engagement with our school.
-                </p>
+                {/* Remaining message */}
+                <div className={showFullMessage ? "block" : "hidden sm:block"}>
+                  <p>
+                    As the proprietor of Tenneson College, Obantoko, I believe
+                    in the power of connection, and this portal is designed to
+                    keep us all closely connected. Whether you are a parent,
+                    student, educator, or prospective member of our school
+                    community, this platform will provide you with easy access
+                    to important information, updates, and resources that
+                    enhance your engagement with our school.
+                  </p>
 
-                <p>
-                  Through this online portal, we aim to foster better
-                  communication and ensure that all stakeholders have the tools
-                  they need to support the growth and development of our
-                  students. It is not just a website; it is an extension of the
-                  values we hold dear: integrity, excellence, innovation, and a
-                  deep commitment to holistic education.
-                </p>
+                  <p>
+                    Through this online portal, we aim to foster better
+                    communication and ensure that all stakeholders have the
+                    tools they need to support the growth and development of our
+                    students. It is not just a website; it is an extension of
+                    the values we hold dear: integrity, excellence, innovation,
+                    and a deep commitment to holistic education.
+                  </p>
 
-                <p>
-                  We invite you to explore, interact, and stay up-to-date with
-                  the many opportunities, events, and accomplishments that make
-                  Tenneson College, Obantoko a unique and special place. Your
-                  involvement is invaluable, and together, we can continue to
-                  shape the future of our students.
-                </p>
+                  <p>
+                    We invite you to explore, interact, and stay up-to-date with
+                    the many opportunities, events, and accomplishments that
+                    make Tenneson College, Obantoko a unique and special place.
+                    Your involvement is invaluable, and together, we can
+                    continue to shape the future of our students.
+                  </p>
 
-                <p>
-                  Thank you for visiting our online portal. We look forward to
-                  strengthening our partnership and working with you to build a
-                  bright future for the next generation of leaders.
-                </p>
+                  <p>
+                    Thank you for visiting our online portal. We look forward to
+                    strengthening our partnership and working with you to build
+                    a bright future for the next generation of leaders.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Read More / Read Less */}
+              <div className="mt-6 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowFullMessage((prev) => !prev)}
+                  className="
+      inline-flex
+      items-center
+      gap-2
+      text-green-700
+      font-bold
+      hover:text-green-800
+      transition
+    "
+                >
+                  {showFullMessage ? "Read Less" : "Read More"}
+
+                  <FaArrowRight
+                    className={`
+        transition-transform
+        duration-200
+        ${showFullMessage ? "-rotate-90" : "rotate-0"}
+      `}
+                  />
+                </button>
               </div>
 
               <div
