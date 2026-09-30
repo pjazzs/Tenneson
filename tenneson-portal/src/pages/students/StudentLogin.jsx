@@ -249,7 +249,7 @@ function StudentLogin() {
               id="student-username"
               name="username"
               type="text"
-              placeholder="TCC00001"
+              placeholder="2026/TCC00001"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               className={`${inputStyle} pl-11`}
