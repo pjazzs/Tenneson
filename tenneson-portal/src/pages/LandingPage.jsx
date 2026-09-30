@@ -665,7 +665,7 @@ function LandingPage() {
               title="Student Portal"
               description="Students can access their academic profile, results, and other student services."
               buttonText="Student Login"
-              onClick={() => navigate("/student-login")}
+              onClick={() => navigate("/student/login")}
             />
 
             {/* Admin */}
