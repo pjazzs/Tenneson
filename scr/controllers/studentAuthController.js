@@ -160,7 +160,7 @@ exports.loginStudent = asyncHandler(async (req, res) => {
   }).populate({
     path: "student",
     select:
-      "studentId firstName lastName otherName gender currentClass session photo isActive",
+      "studentId firstName lastName otherName gender currentClass session photo parentName parentPhone isActive",
   });
 
   /*
@@ -265,6 +265,9 @@ exports.loginStudent = asyncHandler(async (req, res) => {
         session: credential.student.session,
 
         photo: credential.student.photo,
+        parentName: credential.student.parentName,
+
+        parentPhone: credential.student.parentPhone,
       },
     });
   }
@@ -302,6 +305,9 @@ exports.loginStudent = asyncHandler(async (req, res) => {
       session: credential.student.session,
 
       photo: credential.student.photo,
+      parentName: credential.student.parentName,
+
+      parentPhone: credential.student.parentPhone,
     },
   });
 });
@@ -391,7 +397,7 @@ exports.changeStudentPassword = asyncHandler(async (req, res) => {
   const credential = await StudentCredential.findById(decoded.id).populate({
     path: "student",
     select:
-      "studentId firstName lastName otherName gender currentClass session photo isActive",
+      "studentId firstName lastName otherName gender currentClass session photo parentName parentPhone isActive",
   });
 
   if (!credential) {
@@ -631,6 +637,9 @@ exports.changeStudentPassword = asyncHandler(async (req, res) => {
       session: credential.student.session,
 
       photo: credential.student.photo,
+      parentName: credential.student.parentName,
+
+      parentPhone: credential.student.parentPhone,
     },
   });
 });
@@ -1032,6 +1041,8 @@ exports.getMyProfile = asyncHandler(async (req, res) => {
       session: student.session,
 
       photo: student.photo,
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
     },
   });
 });

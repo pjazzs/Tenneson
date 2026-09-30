@@ -1,16 +1,16 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiArrowLeft,
   FiUser,
   FiCalendar,
   FiBookOpen,
-  FiMail,
   FiPhone,
-  FiMapPin,
   FiShield,
 } from "react-icons/fi";
 
 import useStudentAuth from "../../hooks/useStudentAuth";
+import studentApi from "../../api/studentApi";
 
 const InfoItem = ({ icon: Icon, label, value }) => (
   <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
@@ -30,7 +30,29 @@ const InfoItem = ({ icon: Icon, label, value }) => (
 
 function StudentProfile() {
   const navigate = useNavigate();
-  const { student } = useStudentAuth();
+
+  const { student: storedStudent } = useStudentAuth();
+
+  const [student, setStudent] = useState(storedStudent);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const response = await studentApi.get("/student/me");
+
+        if (response.data?.student) {
+          setStudent(response.data.student);
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load student profile:",
+          error?.response?.data?.message || error.message,
+        );
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   if (!student) {
     return (
@@ -78,7 +100,6 @@ function StudentProfile() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
           <button
@@ -92,13 +113,11 @@ function StudentProfile() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        {/* Profile heading */}
         <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
           <div className="h-32 bg-linear-to-r from-blue-900/50 via-slate-900 to-slate-900" />
 
           <div className="px-6 sm:px-8 pb-8">
             <div className="-mt-16 flex flex-col sm:flex-row sm:items-end gap-5">
-              {/* Photo */}
               <div className="w-32 h-32 rounded-3xl border-4 border-slate-900 bg-slate-800 overflow-hidden flex items-center justify-center">
                 {photoUrl ? (
                   <img
@@ -127,11 +146,9 @@ function StudentProfile() {
           </div>
         </section>
 
-        {/* Personal information */}
         <section className="mt-6">
           <div className="flex items-center gap-3 mb-4">
             <FiUser className="text-blue-400" />
-
             <h2 className="text-xl font-semibold">Personal Information</h2>
           </div>
 
@@ -170,32 +187,30 @@ function StudentProfile() {
           </div>
         </section>
 
-        {/* Contact information */}
         <section className="mt-8">
           <div className="flex items-center gap-3 mb-4">
             <FiPhone className="text-blue-400" />
 
-            <h2 className="text-xl font-semibold">Contact Information</h2>
+            <h2 className="text-xl font-semibold">
+              Parent / Guardian Information
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <InfoItem
-              icon={FiPhone}
-              label="Parent Phone"
-              value={student.parentPhone}
+              icon={FiUser}
+              label="Parent / Guardian Name"
+              value={student.parentName}
             />
 
             <InfoItem
-              icon={FiMail}
-              label="Parent Email"
-              value={student.parentEmail}
+              icon={FiPhone}
+              label="Parent / Guardian Phone"
+              value={student.parentPhone}
             />
-
-            <InfoItem icon={FiMapPin} label="Address" value={student.address} />
           </div>
         </section>
 
-        {/* Notice */}
         <div className="mt-8 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
           <p className="text-sm text-slate-300 leading-6">
             Your profile information is managed by the school administration. If
