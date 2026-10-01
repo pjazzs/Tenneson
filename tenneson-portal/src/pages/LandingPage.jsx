@@ -49,7 +49,7 @@ function LandingPage() {
             bg-center
           "
           style={{
-            backgroundImage: "url('/public/logo.jpeg')",
+            backgroundImage: "url('/logo.jpeg')",
           }}
         />
 
@@ -120,7 +120,7 @@ function LandingPage() {
     "
               >
                 <img
-                  src="/public/logo.jpeg"
+                  src="/logo.jpeg"
                   alt="Tenneson Comprehensive College logo"
                   className="w-full h-full object-contain"
                 />
@@ -798,7 +798,7 @@ function LandingPage() {
                 "
               >
                 <img
-                  src="/images/tenneson-logo.png"
+                  src="/logo.jpeg"
                   alt="Tenneson Comprehensive College logo"
                   className="w-full h-full object-contain"
                 />
