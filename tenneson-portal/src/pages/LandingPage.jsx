@@ -16,14 +16,49 @@ import {
   FaShieldAlt,
 } from "react-icons/fa";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InstallTennesonButton from "../components/InstallTennesonButton";
+
 function LandingPage() {
   const navigate = useNavigate();
 
   const currentYear = new Date().getFullYear();
   const [showFullMessage, setShowFullMessage] = useState(false);
+
+  // Reveal cards when they enter the viewport.
+  // They hide again when scrolled out, so the animation can replay.
+  useEffect(() => {
+    const elements = document.querySelectorAll(".scroll-reveal");
+
+    if (!("IntersectionObserver" in window)) {
+      elements.forEach((element) => {
+        element.classList.add("is-visible");
+      });
+
+      return undefined;
+    }
+
+    elements.forEach((element, index) => {
+      element.style.setProperty("--reveal-delay", `${(index % 4) * 100}ms`);
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle("is-visible", entry.isIntersecting);
+        });
+      },
+      {
+        threshold: 0.12,
+        rootMargin: "0px 0px -40px 0px",
+      },
+    );
+
+    elements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -104,20 +139,20 @@ function LandingPage() {
             <div className="flex items-center gap-4">
               <div
                 className="
-      w-16
-      h-16
-      sm:w-20
-      sm:h-20
-      rounded-full
-      bg-white
-      p-1.5
-      flex
-      items-center
-      justify-center
-      shadow-xl
-      overflow-hidden
-      shrink-0
-    "
+                  w-16
+                  h-16
+                  sm:w-20
+                  sm:h-20
+                  rounded-full
+                  bg-white
+                  p-1.5
+                  flex
+                  items-center
+                  justify-center
+                  shadow-xl
+                  overflow-hidden
+                  shrink-0
+                "
               >
                 <img
                   src="/logo.jpeg"
@@ -129,25 +164,25 @@ function LandingPage() {
               <div>
                 <p
                   className="
-        text-white
-        font-extrabold
-        text-xl
-        sm:text-2xl
-        lg:text-3xl
-        leading-tight
-      "
+                    text-white
+                    font-extrabold
+                    text-xl
+                    sm:text-2xl
+                    lg:text-3xl
+                    leading-tight
+                  "
                 >
                   Tenneson Comprehensive College
                 </p>
 
                 <p
                   className="
-        text-green-200
-        text-sm
-        sm:text-base
-        lg:text-lg
-        mt-1
-      "
+                    text-green-200
+                    text-sm
+                    sm:text-base
+                    lg:text-lg
+                    mt-1
+                  "
                 >
                   Obantoko, Abeokuta, Ogun State
                 </p>
@@ -332,6 +367,7 @@ function LandingPage() {
                   "
                 />
               </button>
+
               <div className="mt-8 flex justify-center">
                 <InstallTennesonButton />
               </div>
@@ -378,6 +414,7 @@ function LandingPage() {
           <div
             className="
               bg-slate-50
+              scroll-reveal
               border
               border-slate-200
               rounded-3xl
@@ -394,12 +431,12 @@ function LandingPage() {
 
               <div
                 className="
-    text-slate-600
-    leading-8
-    text-base
-    sm:text-lg
-    space-y-5
-  "
+                  text-slate-600
+                  leading-8
+                  text-base
+                  sm:text-lg
+                  space-y-5
+                "
               >
                 <p>Dear Esteemed Visitors,</p>
 
@@ -454,23 +491,23 @@ function LandingPage() {
                   type="button"
                   onClick={() => setShowFullMessage((prev) => !prev)}
                   className="
-      inline-flex
-      items-center
-      gap-2
-      text-green-700
-      font-bold
-      hover:text-green-800
-      transition
-    "
+                    inline-flex
+                    items-center
+                    gap-2
+                    text-green-700
+                    font-bold
+                    hover:text-green-800
+                    transition
+                  "
                 >
                   {showFullMessage ? "Read Less" : "Read More"}
 
                   <FaArrowRight
                     className={`
-        transition-transform
-        duration-200
-        ${showFullMessage ? "-rotate-90" : "rotate-0"}
-      `}
+                      transition-transform
+                      duration-200
+                      ${showFullMessage ? "-rotate-90" : "rotate-0"}
+                    `}
                   />
                 </button>
               </div>
@@ -516,6 +553,7 @@ function LandingPage() {
             <div
               className="
                 bg-white
+                scroll-reveal
                 rounded-3xl
                 p-8
                 sm:p-10
@@ -557,6 +595,7 @@ function LandingPage() {
             <div
               className="
                 bg-white
+                scroll-reveal
                 rounded-3xl
                 p-8
                 sm:p-10
@@ -891,6 +930,7 @@ function ValueCard({ icon, title, text }) {
       className="
         p-7
         rounded-2xl
+        scroll-reveal
         border
         border-slate-200
         bg-white
@@ -932,6 +972,7 @@ function PortalCard({ icon, title, description, buttonText, onClick }) {
     <div
       className="
         bg-white/10
+        scroll-reveal
         border
         border-white/10
         rounded-3xl
@@ -995,6 +1036,7 @@ function ContactCard({ icon, title, text }) {
     <div
       className="
         bg-white
+        scroll-reveal
         border
         border-slate-200
         rounded-2xl

@@ -204,6 +204,21 @@ function BulkImportStudents({ onImportSuccess }) {
   // ==========================================
 
   const closeModal = () => {
+    // Never close the modal while the backend import is running.
+    if (importing) {
+      return;
+    }
+
+    // Keep the report token accessible until credentials are downloaded.
+    if (importResult?.credentialReport?.reportToken && !credentialsDownloaded) {
+      alert(
+        "Please download the student credential report before closing this window. " +
+          "The report expires after 15 minutes and is available for one download only.",
+      );
+
+      return;
+    }
+
     setShowModal(false);
     setImportResult(null);
     setSelectedFile(null);
@@ -293,7 +308,11 @@ function BulkImportStudents({ onImportSuccess }) {
 
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-white"
+                disabled={importing}
+                className="text-gray-400 hover:text-white
+                          disabled:opacity-40
+                          disabled:cursor-not-allowed
+                        "
                 aria-label="Close bulk import modal"
               >
                 <FaTimes />
