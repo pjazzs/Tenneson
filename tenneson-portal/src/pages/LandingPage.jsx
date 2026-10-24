@@ -18,7 +18,7 @@ import {
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import InstallTennesonButton from "../components/InstallTennesonButton";
 function LandingPage() {
   const navigate = useNavigate();
 
@@ -677,6 +677,11 @@ function LandingPage() {
               onClick={() => navigate("/login")}
             />
           </div>
+
+          {/* Install App button — separate from the portal cards grid */}
+          <div className="mt-8 flex justify-center">
+            <InstallTennesonButton />
+          </div>
         </div>
       </section>
 
@@ -703,7 +708,7 @@ function LandingPage() {
                 <>
                   18, Muftau, Alabi Street,
                   <br />
-                  Gbonagun, Obantogo,
+                  Gbonagun, Obantoko,
                   <br />
                   Abeokuta, Ogun State.
                 </>

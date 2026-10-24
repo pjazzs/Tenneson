@@ -1,0 +1,38 @@
+# Tenneson PWA setup files
+
+These files are prepared for the existing `tenneson-portal` Vite/React frontend.
+
+## 1. Copy the assets
+- Copy `public/manifest.json` to `tenneson-portal/public/manifest.json`.
+- Copy the `public/icons/` folder to `tenneson-portal/public/icons/`.
+- Copy `InstallTennesonButton.jsx` to `tenneson-portal/src/components/InstallTennesonButton.jsx`.
+
+## 2. Update `tenneson-portal/index.html`
+Inside `<head>`, add these tags. Keep the existing title, SEO, verification, canonical, Open Graph, Twitter and structured-data metadata.
+
+html
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#3b1767" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Tenneson" />
+<link rel="apple-touch-icon" href="/icons/tenneson-192.png" />
+
+## 3. Add the button to the existing landing page
+In `src/pages/LandingPage.jsx`, add this import:
+
+jsx
+import InstallTennesonButton from "../components/InstallTennesonButton";
+
+
+Place `<InstallTennesonButton />` beneath the existing Student Portal / Admin Portal buttons in the hero section. Do not replace the landing page or remove existing routes.
+
+## 4. Test and deploy
+Run `npm run build` from `tenneson-portal`, then commit and push the changes so Vercel can deploy them.
+
+After deployment, open `https://tenneson.vercel.app` in Android Chrome and use Install app (or the install button if Chrome exposes its install prompt). On iPhone, use Safari > Share > Add to Home Screen.
+
+Notes:
+- This is an online portal; this setup does not make student results or records available offline.
+- The browser controls whether the native installation prompt is available. The button provides manual installation instructions when it is not.
+- Test the built app before treating it as production-ready.
