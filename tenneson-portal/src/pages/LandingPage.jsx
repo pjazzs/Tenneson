@@ -332,6 +332,9 @@ function LandingPage() {
                   "
                 />
               </button>
+              <div className="mt-8 flex justify-center">
+                <InstallTennesonButton />
+              </div>
             </div>
 
             <p className="mt-5 text-sm text-white/60">
