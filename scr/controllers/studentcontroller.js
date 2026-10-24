@@ -1242,23 +1242,54 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     }
 
     /*
-    |--------------------------------------------------------------------------
-    | Parent Phone Validation
-    |--------------------------------------------------------------------------
-    */
+|--------------------------------------------------------------------------
+| Parent Phone Validation
+|--------------------------------------------------------------------------
+| Excel may remove the leading zero when a phone number is stored
+| as a numeric cell.
+|
+| Examples:
+| 8012345678   -> 08012345678
+| "8012345678" -> 08012345678
+| "08012345678" remains unchanged.
+|
+| The normalized number must still contain exactly 11 digits.
+|--------------------------------------------------------------------------
+*/
 
-    if (!/^\d{11}$/.test(String(parentPhone))) {
+    const rawParentPhone = parentPhone;
+
+    let normalizedParentPhone = "";
+
+    if (typeof rawParentPhone === "number" && Number.isFinite(rawParentPhone)) {
+      // Excel numeric cells may contain a phone number without its leading zero.
+      normalizedParentPhone = String(rawParentPhone);
+    } else if (typeof rawParentPhone === "string") {
+      normalizedParentPhone = rawParentPhone.trim();
+    } else if (rawParentPhone !== null && rawParentPhone !== undefined) {
+      normalizedParentPhone = String(rawParentPhone).trim();
+    }
+
+    // Only restore the Nigerian leading zero for a 10-digit mobile number.
+    if (/^[1-9]\d{9}$/.test(normalizedParentPhone)) {
+      normalizedParentPhone = `0${normalizedParentPhone}`;
+    }
+
+    if (!/^0\d{10}$/.test(normalizedParentPhone)) {
       skippedStudents.push({
         student: {
           firstName,
           lastName,
-          parentPhone,
+          parentPhone: rawParentPhone,
         },
-        reason: "Parent phone must contain exactly 11 digits.",
+        reason: "Parent phone must contain exactly 11 digits and start with 0.",
       });
 
       continue;
     }
+
+    // Store the normalized phone number as a string.
+    const validatedParentPhone = normalizedParentPhone;
 
     /*
     |--------------------------------------------------------------------------
@@ -1364,7 +1395,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
         parentName,
 
-        parentPhone,
+        parentPhone: validatedParentPhone,
 
         createdBy: req.admin._id,
 

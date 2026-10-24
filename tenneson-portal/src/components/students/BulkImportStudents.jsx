@@ -38,11 +38,41 @@ function BulkImportStudents({ onImportSuccess }) {
         currentClass: "",
         session: "",
         parentName: "",
-        parentPhone: "",
+        parentPhone: "08012345678",
       },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(template);
+
+    // Explicitly format the ParentPhone column as text.
+    // This helps preserve leading zeros when users enter phone numbers.
+    worksheet.J1 = {
+      t: "s",
+      v: "08012345678",
+      z: "@",
+    };
+
+    // Format the parentPhone column cells as text.
+    // The template's first example row is row 2.
+    worksheet.J2 = {
+      t: "s",
+      v: "08012345678",
+      z: "@",
+    };
+
+    // Set helpful column widths.
+    worksheet["!cols"] = [
+      { wch: 18 }, // firstName
+      { wch: 18 }, // lastName
+      { wch: 18 }, // otherName
+      { wch: 12 }, // gender
+      { wch: 18 }, // dateOfBirth
+      { wch: 16 }, // admissionYear
+      { wch: 16 }, // currentClass
+      { wch: 16 }, // session
+      { wch: 24 }, // parentName
+      { wch: 20 }, // parentPhone
+    ];
 
     const workbook = XLSX.utils.book_new();
 
@@ -120,10 +150,6 @@ function BulkImportStudents({ onImportSuccess }) {
         responseType: "blob",
       });
 
-      // ==========================================
-      // Create Downloadable File
-      // ==========================================
-
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -143,23 +169,12 @@ function BulkImportStudents({ onImportSuccess }) {
 
       window.URL.revokeObjectURL(url);
 
-      // ==========================================
-      // Mark Report As Downloaded
-      // ==========================================
-
       setCredentialsDownloaded(true);
     } catch (error) {
       console.error(
         "Credential report download error:",
         error.response?.data || error.message,
       );
-
-      /*
-       * Axios returns the backend error as a Blob when
-       * responseType is "blob".
-       *
-       * Try to read the backend JSON error message.
-       */
 
       let message =
         "Unable to download the credential report. Please try again.";
@@ -172,7 +187,7 @@ function BulkImportStudents({ onImportSuccess }) {
 
           message = errorData.message || message;
         } catch {
-          // Keep default error message.
+          // Keep the default error message.
         }
       } else {
         message = error.response?.data?.message || message;
@@ -278,10 +293,8 @@ function BulkImportStudents({ onImportSuccess }) {
 
               <button
                 onClick={closeModal}
-                className="
-                  text-gray-400
-                  hover:text-white
-                "
+                className="text-gray-400 hover:text-white"
+                aria-label="Close bulk import modal"
               >
                 <FaTimes />
               </button>
@@ -301,12 +314,23 @@ function BulkImportStudents({ onImportSuccess }) {
                 hover:bg-green-700
                 py-3
                 rounded-xl
-                mb-5
+                mb-3
               "
             >
               <FaDownload />
               Download Excel Template
             </button>
+
+            <div className="text-gray-300 text-sm mb-5 space-y-1">
+              <p>
+                <strong>Parent phone:</strong> Enter exactly 11 digits,
+                including the leading zero (e.g. 08012345678).
+              </p>
+              <p>
+                Keep phone numbers as text in Excel. Do not remove the leading
+                zero.
+              </p>
+            </div>
 
             {/* File Upload */}
 
@@ -327,21 +351,11 @@ function BulkImportStudents({ onImportSuccess }) {
                 onChange={(event) => {
                   setSelectedFile(event.target.files?.[0] || null);
                 }}
-                className="
-                  w-full
-                  text-sm
-                  text-gray-300
-                "
+                className="w-full text-sm text-gray-300"
               />
 
               {selectedFile && (
-                <p
-                  className="
-                    mt-3
-                    text-sm
-                    text-green-400
-                  "
-                >
+                <p className="mt-3 text-sm text-green-400">
                   Selected: {selectedFile.name}
                 </p>
               )}
@@ -385,12 +399,7 @@ function BulkImportStudents({ onImportSuccess }) {
             {/* Import Result */}
 
             {importResult && (
-              <div
-                className="
-                  mt-6
-                  space-y-4
-                "
-              >
+              <div className="mt-6 space-y-4">
                 {/* Summary */}
 
                 <div
@@ -416,57 +425,23 @@ function BulkImportStudents({ onImportSuccess }) {
                     Import Completed
                   </div>
 
-                  <div
-                    className="
-                      grid
-                      grid-cols-3
-                      gap-3
-                      text-center
-                    "
-                  >
-                    {/* Total */}
-
-                    <div
-                      className="
-                        bg-white/5
-                        rounded-lg
-                        p-3
-                      "
-                    >
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-white/5 rounded-lg p-3">
                       <p className="text-gray-400 text-xs">Total Rows</p>
-
                       <p className="text-lg font-bold">
                         {importResult.summary?.totalRows ?? 0}
                       </p>
                     </div>
 
-                    {/* Imported */}
-
-                    <div
-                      className="
-                        bg-white/5
-                        rounded-lg
-                        p-3
-                      "
-                    >
+                    <div className="bg-white/5 rounded-lg p-3">
                       <p className="text-gray-400 text-xs">Imported</p>
-
                       <p className="text-lg font-bold text-green-400">
                         {importResult.summary?.imported ?? 0}
                       </p>
                     </div>
 
-                    {/* Skipped */}
-
-                    <div
-                      className="
-                        bg-white/5
-                        rounded-lg
-                        p-3
-                      "
-                    >
+                    <div className="bg-white/5 rounded-lg p-3">
                       <p className="text-gray-400 text-xs">Skipped</p>
-
                       <p className="text-lg font-bold text-red-400">
                         {importResult.summary?.skipped ?? 0}
                       </p>
@@ -561,8 +536,6 @@ function BulkImportStudents({ onImportSuccess }) {
                       </div>
                     )}
 
-                    {/* Credential Error */}
-
                     {credentialError && (
                       <div
                         className="
@@ -596,25 +569,14 @@ function BulkImportStudents({ onImportSuccess }) {
                       overflow-y-auto
                     "
                   >
-                    <h3
-                      className="
-                        font-semibold
-                        text-red-400
-                        mb-3
-                      "
-                    >
+                    <h3 className="font-semibold text-red-400 mb-3">
                       Skipped Students
                     </h3>
 
                     {importResult.skippedStudents.map((item, index) => (
                       <div
                         key={index}
-                        className="
-                          border-b
-                          border-white/10
-                          py-3
-                          text-sm
-                        "
+                        className="border-b border-white/10 py-3 text-sm"
                       >
                         <p className="text-white">
                           {item.student?.firstName} {item.student?.lastName}

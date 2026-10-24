@@ -333,7 +333,7 @@ function AddStudent() {
           onChange={handleChange}
           inputMode="numeric"
           maxLength={12}
-          pattern="\d{12}"
+          pattern="\d{11}"
           className={inputStyle}
           required
         />
