@@ -12,6 +12,34 @@ const subjects = [
     code: "ENG",
   },
   {
+    name: "Government",
+    code: "GOVT",
+  },
+  {
+    name: "Literature-in-English",
+    code: "LIT",
+  },
+  {
+    name: "Physics",
+    code: "PHY",
+  },
+  {
+    name: "Chemistry",
+    code: "CHM",
+  },
+  {
+    name: "Food and Nutrition",
+    code: "FN",
+  },
+  {
+    name: "Biology",
+    code: "BIO",
+  },
+  {
+    name: "Citizenship",
+    code: "CIT",
+  },
+  {
     name: "Basic Science",
     code: "BSC",
   },
@@ -24,8 +52,8 @@ const subjects = [
     code: "SOS",
   },
   {
-    name: "Computer Studies",
-    code: "COM",
+    name: "Digital Technology",
+    code: "DTECH",
   },
   {
     name: "Civic Education",
@@ -34,6 +62,42 @@ const subjects = [
   {
     name: "Agricultural Science",
     code: "AGRIC",
+  },
+  {
+    name: "Cultural And Creative Arts",
+    code: "C.C.A",
+  },
+  {
+    name: "Christian Religious Studies",
+    code: "CRS",
+  },
+  {
+    name: "Physical and Health Education",
+    code: "PHE",
+  },
+  {
+    name: "Music",
+    code: "Music",
+  },
+  {
+    name: "Yoruba",
+    code: "YOR",
+  },
+  {
+    name: "Business Studies",
+    code: "BUS",
+  },
+  {
+    name: "History",
+    code: "HIS",
+  },
+  {
+    name: "Home Economics",
+    code: "H/ECONS",
+  },
+  {
+    name: "French",
+    code: "FR",
   },
 ];
 
