@@ -739,11 +739,22 @@ const ResultEntry = () => {
     setSuccessMessage("");
 
     const incompleteEntry = scoreEntries.find((entry) => {
+      // A subject not offered this term does not require score entry.
       if (!entry.offered) {
         return false;
       }
 
-      return entry.ca1 === "" || entry.ca2 === "" || entry.exam === "";
+      return (
+        entry.ca1 === "" ||
+        entry.ca1 === null ||
+        entry.ca1 === undefined ||
+        entry.ca2 === "" ||
+        entry.ca2 === null ||
+        entry.ca2 === undefined ||
+        entry.exam === "" ||
+        entry.exam === null ||
+        entry.exam === undefined
+      );
     });
 
     if (incompleteEntry) {
