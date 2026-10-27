@@ -677,11 +677,29 @@ const ResultEntry = () => {
   const handleScoreEntriesChange = (updatedEntries) => {
     const entriesWithGrades = updatedEntries.map((entry) => {
       if (!entry.offered) {
+        // Preserve the existing weighted average for a subject not
+        // offered this term. Only calculate its grade if the average exists.
+        const total =
+          entry.total === "" ||
+          entry.total === null ||
+          entry.total === undefined
+            ? null
+            : Number(entry.total);
+
+        if (total === null || !Number.isFinite(total)) {
+          return {
+            ...entry,
+            grade: "",
+            remark: "",
+          };
+        }
+
+        const { grade, remark } = calculateResultGrade(total);
+
         return {
           ...entry,
-          total: 0,
-          grade: "",
-          remark: "",
+          grade,
+          remark,
         };
       }
 
