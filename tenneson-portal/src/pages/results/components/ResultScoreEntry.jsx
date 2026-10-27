@@ -143,7 +143,7 @@ const ResultScoreEntry = ({
 
   /*
   |--------------------------------------------------------------------------
-  | Current-Term Total
+  | Current-Term Total and Score Validation
   |--------------------------------------------------------------------------
   */
 
@@ -156,26 +156,20 @@ const ResultScoreEntry = ({
   };
 
   const hasCompleteScores = (entry) => {
-    return (
-      entry.ca1 !== "" &&
-      entry.ca1 !== null &&
-      entry.ca1 !== undefined &&
-      entry.ca2 !== "" &&
-      entry.ca2 !== null &&
-      entry.ca2 !== undefined &&
-      entry.exam !== "" &&
-      entry.exam !== null &&
-      entry.exam !== undefined
+    const values = [entry.ca1, entry.ca2, entry.exam];
+
+    return values.every(
+      (value) =>
+        value !== "" &&
+        value !== null &&
+        value !== undefined &&
+        Number.isFinite(Number(value)),
     );
   };
 
   /*
   |--------------------------------------------------------------------------
   | Previous-Term Subject Lookup
-  |--------------------------------------------------------------------------
-  |
-  | The backend matches previous-term subject results by Subject ObjectId.
-  | A score of 0 is valid when offered is true.
   |--------------------------------------------------------------------------
   */
 
@@ -186,10 +180,12 @@ const ResultScoreEntry = ({
 
     return (
       result.subjectResults?.find((item) => {
-        const subjectId =
-          typeof item.subject === "object"
-            ? item.subject?._id
-            : item.subject || item.subjectId;
+        const subject =
+          item.subject && typeof item.subject === "object"
+            ? item.subject._id
+            : item.subject;
+
+        const subjectId = subject || item.subjectId;
 
         return String(subjectId || "") === String(entry.subjectId);
       }) || null
@@ -199,18 +195,30 @@ const ResultScoreEntry = ({
   const getPreviousSubjectInfo = (previousTerm, entry) => {
     const subjectResult = getPreviousSubjectResult(previousTerm, entry);
 
-    if (!subjectResult || !subjectResult.offered) {
+    if (!subjectResult || subjectResult.offered !== true) {
       return {
         offered: false,
         total: null,
       };
     }
 
-    const total = subjectResult.total;
+    const total = Number(subjectResult.total);
+
+    if (
+      subjectResult.total === null ||
+      subjectResult.total === undefined ||
+      subjectResult.total === "" ||
+      !Number.isFinite(total)
+    ) {
+      return {
+        offered: false,
+        total: null,
+      };
+    }
 
     return {
-      offered: Number.isFinite(total),
-      total: Number.isFinite(total) ? total : null,
+      offered: true,
+      total,
     };
   };
 
@@ -225,14 +233,11 @@ const ResultScoreEntry = ({
   | Third-Term Cumulative Score and Weighted Average
   |--------------------------------------------------------------------------
   |
-  | This mirrors resultCalculationService.js:
+  | cumulativeScore = sum of applicable term totals.
+  | weightedAverage = cumulativeScore / number of applicable terms.
   |
-  | cumulativeScore = applicable First + Second + Third Term totals
-  |
-  | weightedAverage = cumulativeScore / number of applicable terms
-  |
-  | Only previous terms where the subject was offered and has a valid
-  | saved total contribute to the cumulative score and denominator.
+  | Previous-term results count only if the subject was offered and
+  | the saved total is valid. A valid score of 0 is included.
   |--------------------------------------------------------------------------
   */
 
@@ -240,15 +245,15 @@ const ResultScoreEntry = ({
     let cumulativeScore = 0;
     let termsOffered = 0;
 
-    // Include the current term only when the subject is offered
-    // and all three score fields have been entered.
+    // An offered current-term subject must have all scores entered
+    // before its third-term score contributes to the calculation.
     if (entry.offered && hasCompleteScores(entry)) {
       cumulativeScore += getTotal(entry);
       termsOffered += 1;
     }
 
-    // Previous-term scores remain applicable even if the subject
-    // is not offered in the current (third) term.
+    // Include eligible previous-term scores even if the subject
+    // is not offered in the current third term.
     for (const previousTerm of ["first", "second"]) {
       const previous = getPreviousSubjectInfo(previousTerm, entry);
 
@@ -278,18 +283,24 @@ const ResultScoreEntry = ({
       termsOffered,
     };
   };
+
   /*
   |--------------------------------------------------------------------------
   | Grade and Remark
-  |--------------------------------------------------------------------------
-  |
-  | First/Second Term: grade the current-term total.
-  | Third Term: grade the weighted average, as the backend does.
   |--------------------------------------------------------------------------
   */
 
   const getGrade = (entry) => {
     if (currentTermKey === "third") {
+      // If the subject is offered this term, don't show a grade
+      // until all current-term score fields have been completed.
+      if (entry.offered && !hasCompleteScores(entry)) {
+        return {
+          grade: null,
+          remark: "",
+        };
+      }
+
       const { weightedAverage } = getThirdTermCalculation(entry);
 
       if (!Number.isFinite(weightedAverage)) {
@@ -302,7 +313,7 @@ const ResultScoreEntry = ({
       return calculateResultGrade(weightedAverage);
     }
 
-    // Preserve existing first- and second-term grading behavior.
+    // Preserve first- and second-term grading behavior.
     if (!entry.offered || !hasCompleteScores(entry)) {
       return {
         grade: null,
@@ -312,14 +323,10 @@ const ResultScoreEntry = ({
 
     return calculateResultGrade(getTotal(entry));
   };
+
   /*
   |--------------------------------------------------------------------------
   | Overall Result Summary
-  |--------------------------------------------------------------------------
-  |
-  | For Third Term, the backend calculates the overall percentage from
-  | all applicable subject-term combinations. Previous-term subjects
-  | still contribute even when they are not in the current subject list.
   |--------------------------------------------------------------------------
   */
 
@@ -334,16 +341,31 @@ const ResultScoreEntry = ({
         if (!Array.isArray(result?.subjectResults)) continue;
 
         result.subjectResults.forEach((subjectResult) => {
-          if (subjectResult.offered && Number.isFinite(subjectResult.total)) {
-            totalScore += subjectResult.total;
-            totalPossibleScore += 100;
+          if (subjectResult.offered !== true) return;
+
+          const total = Number(subjectResult.total);
+
+          if (
+            subjectResult.total === null ||
+            subjectResult.total === undefined ||
+            subjectResult.total === "" ||
+            !Number.isFinite(total)
+          ) {
+            return;
           }
+
+          totalScore += total;
+          totalPossibleScore += 100;
         });
       }
     }
 
     scoreEntries.forEach((entry) => {
       if (!entry.offered) return;
+
+      // Avoid treating incomplete current-term scores as a completed
+      // zero score in the overall summary.
+      if (!hasCompleteScores(entry)) return;
 
       totalScore += getTotal(entry);
       totalPossibleScore += 100;
@@ -478,7 +500,6 @@ const ResultScoreEntry = ({
         {/* Phase Progress Indicator */}
         <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900 p-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Selection - completed */}
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
                 <FaCheckCircle />
@@ -491,7 +512,6 @@ const ResultScoreEntry = ({
 
             <div className="h-px flex-1 bg-emerald-500" />
 
-            {/* Scores - current phase */}
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
                 2
@@ -502,7 +522,6 @@ const ResultScoreEntry = ({
 
             <div className="h-px flex-1 bg-slate-800" />
 
-            {/* Attendance */}
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
                 3
@@ -515,7 +534,6 @@ const ResultScoreEntry = ({
 
             <div className="hidden h-px flex-1 bg-slate-800 md:block" />
 
-            {/* Affective Domain */}
             <div className="hidden shrink-0 items-center gap-2 md:flex">
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
                 4
@@ -526,7 +544,6 @@ const ResultScoreEntry = ({
 
             <div className="hidden h-px flex-1 bg-slate-800 lg:block" />
 
-            {/* Psychomotor Domain */}
             <div className="hidden shrink-0 items-center gap-2 lg:flex">
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
                 5
@@ -703,16 +720,25 @@ const ResultScoreEntry = ({
                 {scoreEntries.map((entry, index) => {
                   const total = getTotal(entry);
                   const { grade, remark } = getGrade(entry);
+
                   const thirdTermCalculation = isThirdTerm
                     ? getThirdTermCalculation(entry)
                     : null;
+
+                  const hasCumulativeScore =
+                    thirdTermCalculation?.cumulativeScore !== null &&
+                    thirdTermCalculation?.cumulativeScore !== undefined;
+
+                  const hasWeightedAverage =
+                    thirdTermCalculation?.weightedAverage !== null &&
+                    thirdTermCalculation?.weightedAverage !== undefined;
 
                   return (
                     <tr
                       key={entry.subjectId}
                       className="transition-colors hover:bg-slate-800/40"
                     >
-                      {/* Subject - no previous-term scores underneath */}
+                      {/* Subject */}
                       <td className="px-3 py-4 align-middle">
                         <div className="flex items-center gap-3">
                           <label className="relative inline-flex cursor-pointer items-center">
@@ -838,14 +864,12 @@ const ResultScoreEntry = ({
                         <td className="px-2 py-4 text-center align-middle">
                           <div
                             className={`mx-auto flex h-10 w-16 items-center justify-center rounded-lg text-sm font-bold ${
-                              entry.offered
+                              hasCumulativeScore
                                 ? "bg-slate-800 text-white"
                                 : "bg-slate-900 text-slate-600"
                             }`}
                           >
-                            {entry.offered
-                              ? thirdTermCalculation.cumulativeScore
-                              : "—"}
+                            {thirdTermCalculation.cumulativeScore ?? "—"}
                           </div>
                         </td>
                       )}
@@ -855,12 +879,12 @@ const ResultScoreEntry = ({
                         <td className="px-2 py-4 text-center align-middle">
                           <div
                             className={`mx-auto flex h-10 w-16 items-center justify-center rounded-lg text-sm font-bold ${
-                              entry.offered
+                              hasWeightedAverage
                                 ? "bg-blue-500/10 text-blue-400"
                                 : "bg-slate-900 text-slate-600"
                             }`}
                           >
-                            {entry.offered
+                            {hasWeightedAverage
                               ? thirdTermCalculation.weightedAverage.toFixed(2)
                               : "—"}
                           </div>
