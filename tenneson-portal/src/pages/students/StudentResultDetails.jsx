@@ -330,10 +330,21 @@ function StudentResultDetails() {
 
   // Support common date field names without assuming every result
   // document stores dates in the same location.
+
+  const matchingTerm = Array.isArray(academicSession.terms)
+    ? academicSession.terms.find(
+        (term) =>
+          term.key?.toLowerCase() === result.term?.toLowerCase() ||
+          term.name?.toLowerCase() === result.term?.toLowerCase(),
+      )
+    : null;
+
   const closingDate =
     result.termDates?.closingDate ??
     result.closingDate ??
     result.termClosingDate ??
+    matchingTerm?.closingDate ??
+    matchingTerm?.endDate ??
     academicSession.closingDate ??
     academicSession.termClosingDate;
 
@@ -341,6 +352,7 @@ function StudentResultDetails() {
     result.termDates?.resumptionDate ??
     result.resumptionDate ??
     result.termResumptionDate ??
+    matchingTerm?.resumptionDate ??
     academicSession.resumptionDate ??
     academicSession.termResumptionDate;
 
