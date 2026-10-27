@@ -331,12 +331,14 @@ function StudentResultDetails() {
   // Support common date field names without assuming every result
   // document stores dates in the same location.
   const closingDate =
+    result.termDates?.closingDate ??
     result.closingDate ??
     result.termClosingDate ??
     academicSession.closingDate ??
     academicSession.termClosingDate;
 
   const resumptionDate =
+    result.termDates?.resumptionDate ??
     result.resumptionDate ??
     result.termResumptionDate ??
     academicSession.resumptionDate ??
