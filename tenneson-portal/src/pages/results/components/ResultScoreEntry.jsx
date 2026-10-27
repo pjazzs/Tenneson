@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FaArrowLeft, FaArrowRight, FaCheckCircle } from "react-icons/fa";
 
+import { getResults, getResult } from "../../../api/resultApi";
 import calculateResultGrade from "../../../utils/resultGrade";
 
 const ResultScoreEntry = ({
@@ -13,6 +14,139 @@ const ResultScoreEntry = ({
   onContinue,
   error,
 }) => {
+  const [previousTermResults, setPreviousTermResults] = useState({
+    first: null,
+    second: null,
+  });
+
+  const [previousTermsLoading, setPreviousTermsLoading] = useState(false);
+  const [previousTermsError, setPreviousTermsError] = useState("");
+
+  const currentTermKey = String(term || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s*term\s*/g, "");
+
+  const termsToRetrieve = useMemo(() => {
+    if (currentTermKey === "second") return ["first"];
+    if (currentTermKey === "third") return ["first", "second"];
+    return [];
+  }, [currentTermKey]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Retrieve Previous-Term Results
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const retrievePreviousTermResults = async () => {
+      setPreviousTermResults({
+        first: null,
+        second: null,
+      });
+      setPreviousTermsError("");
+
+      const studentId = selectedStudent?.studentId;
+      const sessionId = academicSession?._id;
+
+      if (!studentId || !sessionId || termsToRetrieve.length === 0) {
+        setPreviousTermsLoading(false);
+        return;
+      }
+
+      setPreviousTermsLoading(true);
+
+      const retrieved = {
+        first: null,
+        second: null,
+      };
+
+      try {
+        for (const previousTerm of termsToRetrieve) {
+          const response = await getResults({
+            studentId,
+            academicSessionId: sessionId,
+            term: previousTerm,
+            page: 1,
+            limit: 100,
+          });
+
+          const results = Array.isArray(response?.results)
+            ? response.results
+            : [];
+
+          const matchingResult = results.find((result) => {
+            const resultStudentId =
+              typeof result.student === "object"
+                ? result.student?.studentId
+                : result.student;
+
+            const resultSessionId =
+              typeof result.academicSession === "object"
+                ? result.academicSession?._id
+                : result.academicSession;
+
+            return (
+              String(resultStudentId || "") === String(studentId) &&
+              String(resultSessionId || "") === String(sessionId) &&
+              String(result.term || "").toLowerCase() === previousTerm &&
+              ["approved", "published"].includes(
+                String(result.status || "").toLowerCase(),
+              )
+            );
+          });
+
+          if (!matchingResult?._id) continue;
+
+          const detailResponse = await getResult(matchingResult._id);
+          const fullResult = detailResponse?.result;
+
+          if (
+            fullResult &&
+            String(fullResult.term || "").toLowerCase() === previousTerm &&
+            ["approved", "published"].includes(
+              String(fullResult.status || "").toLowerCase(),
+            )
+          ) {
+            retrieved[previousTerm] = fullResult;
+          }
+        }
+
+        if (!cancelled) {
+          setPreviousTermResults(retrieved);
+        }
+      } catch (fetchError) {
+        console.error("Failed to retrieve previous-term results:", fetchError);
+
+        if (!cancelled) {
+          setPreviousTermResults(retrieved);
+          setPreviousTermsError(
+            "Previous-term scores could not be loaded. Current-term score entry is still available.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPreviousTermsLoading(false);
+        }
+      }
+    };
+
+    retrievePreviousTermResults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStudent?.studentId, academicSession?._id, termsToRetrieve]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current-Term Total
+  |--------------------------------------------------------------------------
+  */
+
   const getTotal = (entry) => {
     const ca1 = Number(entry.ca1) || 0;
     const ca2 = Number(entry.ca2) || 0;
@@ -21,38 +155,207 @@ const ResultScoreEntry = ({
     return ca1 + ca2 + exam;
   };
 
+  const hasCompleteScores = (entry) => {
+    return (
+      entry.ca1 !== "" &&
+      entry.ca1 !== null &&
+      entry.ca1 !== undefined &&
+      entry.ca2 !== "" &&
+      entry.ca2 !== null &&
+      entry.ca2 !== undefined &&
+      entry.exam !== "" &&
+      entry.exam !== null &&
+      entry.exam !== undefined
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Previous-Term Subject Lookup
+  |--------------------------------------------------------------------------
+  |
+  | The backend matches previous-term subject results by Subject ObjectId.
+  | A score of 0 is valid when offered is true.
+  |--------------------------------------------------------------------------
+  */
+
+  const getPreviousSubjectResult = (previousTerm, entry) => {
+    const result = previousTermResults[previousTerm];
+
+    if (!result || !entry?.subjectId) return null;
+
+    return (
+      result.subjectResults?.find((item) => {
+        const subjectId =
+          typeof item.subject === "object"
+            ? item.subject?._id
+            : item.subject || item.subjectId;
+
+        return String(subjectId || "") === String(entry.subjectId);
+      }) || null
+    );
+  };
+
+  const getPreviousSubjectInfo = (previousTerm, entry) => {
+    const subjectResult = getPreviousSubjectResult(previousTerm, entry);
+
+    if (!subjectResult || !subjectResult.offered) {
+      return {
+        offered: false,
+        total: null,
+      };
+    }
+
+    const total = subjectResult.total;
+
+    return {
+      offered: Number.isFinite(total),
+      total: Number.isFinite(total) ? total : null,
+    };
+  };
+
+  const getPreviousSubjectScore = (previousTerm, entry) => {
+    const previous = getPreviousSubjectInfo(previousTerm, entry);
+
+    return previous.offered ? previous.total : null;
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Third-Term Cumulative Score and Weighted Average
+  |--------------------------------------------------------------------------
+  |
+  | This mirrors resultCalculationService.js:
+  |
+  | cumulativeScore = applicable First + Second + Third Term totals
+  |
+  | weightedAverage = cumulativeScore / number of applicable terms
+  |
+  | Only previous terms where the subject was offered and has a valid
+  | saved total contribute to the cumulative score and denominator.
+  |--------------------------------------------------------------------------
+  */
+
+  const getThirdTermCalculation = (entry) => {
+    if (!entry.offered) {
+      return {
+        cumulativeScore: null,
+        weightedAverage: null,
+        termsOffered: 0,
+      };
+    }
+
+    let cumulativeScore = getTotal(entry);
+    let termsOffered = 1;
+
+    for (const previousTerm of ["first", "second"]) {
+      const previous = getPreviousSubjectInfo(previousTerm, entry);
+
+      if (previous.offered && Number.isFinite(previous.total)) {
+        cumulativeScore += previous.total;
+        termsOffered += 1;
+      }
+    }
+
+    cumulativeScore =
+      Math.round((cumulativeScore + Number.EPSILON) * 100) / 100;
+
+    const weightedAverage =
+      Math.round((cumulativeScore / termsOffered + Number.EPSILON) * 100) / 100;
+
+    return {
+      cumulativeScore,
+      weightedAverage,
+      termsOffered,
+    };
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Grade and Remark
+  |--------------------------------------------------------------------------
+  |
+  | First/Second Term: grade the current-term total.
+  | Third Term: grade the weighted average, as the backend does.
+  |--------------------------------------------------------------------------
+  */
+
   const getGrade = (entry) => {
-    if (entry.ca1 === "" || entry.ca2 === "" || entry.exam === "") {
+    if (!entry.offered || !hasCompleteScores(entry)) {
       return {
         grade: null,
         remark: "",
       };
     }
 
-    const total = getTotal(entry);
+    if (currentTermKey === "third") {
+      const { weightedAverage } = getThirdTermCalculation(entry);
 
-    return calculateResultGrade(total);
+      if (!Number.isFinite(weightedAverage)) {
+        return {
+          grade: null,
+          remark: "",
+        };
+      }
+
+      return calculateResultGrade(weightedAverage);
+    }
+
+    return calculateResultGrade(getTotal(entry));
   };
 
-  const totalScore = useMemo(() => {
-    return scoreEntries.reduce((sum, entry) => {
-      if (!entry.offered) return sum;
-      return sum + getTotal(entry);
-    }, 0);
-  }, [scoreEntries]);
+  /*
+  |--------------------------------------------------------------------------
+  | Overall Result Summary
+  |--------------------------------------------------------------------------
+  |
+  | For Third Term, the backend calculates the overall percentage from
+  | all applicable subject-term combinations. Previous-term subjects
+  | still contribute even when they are not in the current subject list.
+  |--------------------------------------------------------------------------
+  */
 
-  const totalPossibleScore = useMemo(() => {
-    return scoreEntries.reduce((sum, entry) => {
-      if (!entry.offered) return sum;
-      return sum + 100;
-    }, 0);
-  }, [scoreEntries]);
+  const overallSummary = useMemo(() => {
+    let totalScore = 0;
+    let totalPossibleScore = 0;
 
-  const overallPercentage = useMemo(() => {
-    if (totalPossibleScore === 0) return 0;
+    if (currentTermKey === "third") {
+      for (const previousTerm of ["first", "second"]) {
+        const result = previousTermResults[previousTerm];
 
-    return (totalScore / totalPossibleScore) * 100;
-  }, [totalScore, totalPossibleScore]);
+        if (!Array.isArray(result?.subjectResults)) continue;
+
+        result.subjectResults.forEach((subjectResult) => {
+          if (subjectResult.offered && Number.isFinite(subjectResult.total)) {
+            totalScore += subjectResult.total;
+            totalPossibleScore += 100;
+          }
+        });
+      }
+    }
+
+    scoreEntries.forEach((entry) => {
+      if (!entry.offered) return;
+
+      totalScore += getTotal(entry);
+      totalPossibleScore += 100;
+    });
+
+    const overallPercentage =
+      totalPossibleScore === 0 ? 0 : (totalScore / totalPossibleScore) * 100;
+
+    return {
+      totalScore: Math.round((totalScore + Number.EPSILON) * 100) / 100,
+      totalPossibleScore,
+      overallPercentage,
+    };
+  }, [scoreEntries, previousTermResults, currentTermKey]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Scores
+  |--------------------------------------------------------------------------
+  */
 
   const handleScoreChange = (index, field, value) => {
     if (value === "") {
@@ -72,9 +375,7 @@ const ResultScoreEntry = ({
 
     const numericValue = Number(value);
 
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
+    if (!Number.isFinite(numericValue)) return;
 
     const limits = {
       ca1: 20,
@@ -84,9 +385,7 @@ const ResultScoreEntry = ({
 
     const max = limits[field];
 
-    if (numericValue < 0 || numericValue > max) {
-      return;
-    }
+    if (numericValue < 0 || numericValue > max) return;
 
     onScoreEntriesChange(
       scoreEntries.map((entry, entryIndex) =>
@@ -126,6 +425,16 @@ const ResultScoreEntry = ({
     );
   };
 
+  const isSecondTerm = currentTermKey === "second";
+  const isThirdTerm = currentTermKey === "third";
+  const showFirstTermColumn = currentTermKey !== "first";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
+
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
@@ -153,7 +462,69 @@ const ResultScoreEntry = ({
             </div>
 
             <div className="mt-1 text-xl font-bold text-blue-400">
-              {overallPercentage.toFixed(2)}%
+              {overallSummary.overallPercentage.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+
+        {/* Phase Progress Indicator */}
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Selection - completed */}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
+                <FaCheckCircle />
+              </div>
+
+              <span className="hidden text-sm font-medium text-emerald-400 sm:block">
+                Selection
+              </span>
+            </div>
+
+            <div className="h-px flex-1 bg-emerald-500" />
+
+            {/* Scores - current phase */}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+                2
+              </div>
+
+              <span className="text-sm font-medium text-white">Scores</span>
+            </div>
+
+            <div className="h-px flex-1 bg-slate-800" />
+
+            {/* Attendance */}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
+                3
+              </div>
+
+              <span className="hidden text-sm text-slate-500 sm:block">
+                Attendance
+              </span>
+            </div>
+
+            <div className="hidden h-px flex-1 bg-slate-800 md:block" />
+
+            {/* Affective Domain */}
+            <div className="hidden shrink-0 items-center gap-2 md:flex">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
+                4
+              </div>
+
+              <span className="text-sm text-slate-500">Affective</span>
+            </div>
+
+            <div className="hidden h-px flex-1 bg-slate-800 lg:block" />
+
+            {/* Psychomotor Domain */}
+            <div className="hidden shrink-0 items-center gap-2 lg:flex">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-sm font-semibold text-slate-500">
+                5
+              </div>
+
+              <span className="text-sm text-slate-500">Psychomotor</span>
             </div>
           </div>
         </div>
@@ -190,11 +561,11 @@ const ResultScoreEntry = ({
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Total Score
+              {isThirdTerm ? "Cumulative Score" : "Total Score"}
             </div>
 
             <div className="mt-2 font-semibold text-white">
-              {totalScore} / {totalPossibleScore}
+              {overallSummary.totalScore} / {overallSummary.totalPossibleScore}
             </div>
 
             <div className="mt-1 text-sm text-slate-400">
@@ -211,37 +582,110 @@ const ResultScoreEntry = ({
           </div>
         )}
 
+        {/* Previous-Term Retrieval Status */}
+        {termsToRetrieve.length > 0 && (
+          <div
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+              previousTermsError
+                ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-300"
+                : "border-slate-800 bg-slate-900 text-slate-300"
+            }`}
+          >
+            {previousTermsLoading ? (
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-blue-400" />
+                Loading previous-term scores...
+              </div>
+            ) : previousTermsError ? (
+              previousTermsError
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                {termsToRetrieve.map((previousTerm) => (
+                  <div key={previousTerm} className="flex items-center gap-2">
+                    <FaCheckCircle
+                      className={
+                        previousTermResults[previousTerm]
+                          ? "text-emerald-400"
+                          : "text-slate-500"
+                      }
+                    />
+
+                    <span>
+                      {previousTerm === "first" ? "First" : "Second"} Term:{" "}
+                      {previousTermResults[previousTerm]
+                        ? "Previous result retrieved"
+                        : "No approved or published result found"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Score Table */}
         <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed overflow-hidden">
+            <table className="w-full min-w-300 table-fixed">
               <thead className="border-b border-slate-800 bg-slate-950/70">
                 <tr>
-                  <th className="w-[19%] px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th
+                    className={`px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 ${
+                      isThirdTerm
+                        ? "w-[14%]"
+                        : isSecondTerm
+                          ? "w-[18%]"
+                          : "w-[20%]"
+                    }`}
+                  >
                     Subject
                   </th>
 
-                  <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {showFirstTermColumn && (
+                    <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      First Term
+                    </th>
+                  )}
+
+                  {isThirdTerm && (
+                    <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Second Term
+                    </th>
+                  )}
+
+                  <th className="w-[7%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                     CA1
                   </th>
 
-                  <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="w-[7%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                     CA2
                   </th>
 
-                  <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="w-[7%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Exam
                   </th>
 
-                  <th className="w-[9%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Total
+                  <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Term Total
                   </th>
 
-                  <th className="w-[8%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {isThirdTerm && (
+                    <>
+                      <th className="w-[9%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Cumulative
+                      </th>
+
+                      <th className="w-[9%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Weighted Avg.
+                      </th>
+                    </>
+                  )}
+
+                  <th className="w-[7%] px-2 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Grade
                   </th>
 
-                  <th className="w-[40%] px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="w-[24%] px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Teacher Comment
                   </th>
                 </tr>
@@ -251,13 +695,16 @@ const ResultScoreEntry = ({
                 {scoreEntries.map((entry, index) => {
                   const total = getTotal(entry);
                   const { grade, remark } = getGrade(entry);
+                  const thirdTermCalculation = isThirdTerm
+                    ? getThirdTermCalculation(entry)
+                    : null;
 
                   return (
                     <tr
                       key={entry.subjectId}
                       className="transition-colors hover:bg-slate-800/40"
                     >
-                      {/* Subject */}
+                      {/* Subject - no previous-term scores underneath */}
                       <td className="px-3 py-4 align-middle">
                         <div className="flex items-center gap-3">
                           <label className="relative inline-flex cursor-pointer items-center">
@@ -293,8 +740,32 @@ const ResultScoreEntry = ({
                         </div>
                       </td>
 
+                      {/* First Term Score */}
+                      {showFirstTermColumn && (
+                        <td className="px-2 py-4 text-center align-middle">
+                          <div className="mx-auto flex h-10 w-14 items-center justify-center rounded-lg bg-slate-800 text-sm font-semibold text-slate-300">
+                            {previousTermsLoading
+                              ? "..."
+                              : (getPreviousSubjectScore("first", entry) ??
+                                "—")}
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Second Term Score */}
+                      {isThirdTerm && (
+                        <td className="px-2 py-4 text-center align-middle">
+                          <div className="mx-auto flex h-10 w-14 items-center justify-center rounded-lg bg-slate-800 text-sm font-semibold text-slate-300">
+                            {previousTermsLoading
+                              ? "..."
+                              : (getPreviousSubjectScore("second", entry) ??
+                                "—")}
+                          </div>
+                        </td>
+                      )}
+
                       {/* CA1 */}
-                      <td className="px-2 py-4 align-middle text-center">
+                      <td className="px-2 py-4 text-center align-middle">
                         <input
                           type="number"
                           min="0"
@@ -310,7 +781,7 @@ const ResultScoreEntry = ({
                       </td>
 
                       {/* CA2 */}
-                      <td className="px-2 py-4 align-middle text-center">
+                      <td className="px-2 py-4 text-center align-middle">
                         <input
                           type="number"
                           min="0"
@@ -326,7 +797,7 @@ const ResultScoreEntry = ({
                       </td>
 
                       {/* Exam */}
-                      <td className="px-2 py-4 align-middle text-center">
+                      <td className="px-2 py-4 text-center align-middle">
                         <input
                           type="number"
                           min="0"
@@ -341,8 +812,8 @@ const ResultScoreEntry = ({
                         />
                       </td>
 
-                      {/* Total */}
-                      <td className="px-2 py-4 align-middle text-center">
+                      {/* Current Term Total */}
+                      <td className="px-2 py-4 text-center align-middle">
                         <div
                           className={`mx-auto flex h-10 w-14 items-center justify-center rounded-lg text-sm font-bold ${
                             entry.offered
@@ -354,8 +825,42 @@ const ResultScoreEntry = ({
                         </div>
                       </td>
 
+                      {/* Third-Term Cumulative Score */}
+                      {isThirdTerm && (
+                        <td className="px-2 py-4 text-center align-middle">
+                          <div
+                            className={`mx-auto flex h-10 w-16 items-center justify-center rounded-lg text-sm font-bold ${
+                              entry.offered
+                                ? "bg-slate-800 text-white"
+                                : "bg-slate-900 text-slate-600"
+                            }`}
+                          >
+                            {entry.offered
+                              ? thirdTermCalculation.cumulativeScore
+                              : "—"}
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Third-Term Weighted Average */}
+                      {isThirdTerm && (
+                        <td className="px-2 py-4 text-center align-middle">
+                          <div
+                            className={`mx-auto flex h-10 w-16 items-center justify-center rounded-lg text-sm font-bold ${
+                              entry.offered
+                                ? "bg-blue-500/10 text-blue-400"
+                                : "bg-slate-900 text-slate-600"
+                            }`}
+                          >
+                            {entry.offered
+                              ? thirdTermCalculation.weightedAverage.toFixed(2)
+                              : "—"}
+                          </div>
+                        </td>
+                      )}
+
                       {/* Grade */}
-                      <td className="px-2 py-4 align-middle text-center">
+                      <td className="px-2 py-4 text-center align-middle">
                         <div className="flex flex-col items-center justify-center gap-1">
                           <div
                             className={`mx-auto flex h-10 w-12 items-center justify-center rounded-lg text-sm font-bold ${
@@ -408,13 +913,21 @@ const ResultScoreEntry = ({
                 <span className="mx-2 text-slate-700">+</span>
                 <span className="font-semibold text-white">Exam / 70</span>
                 <span className="mx-2 text-slate-700">=</span>
-                <span className="font-semibold text-blue-400">Total / 100</span>
+                <span className="font-semibold text-blue-400">
+                  Term Total / 100
+                </span>
+                {isThirdTerm && (
+                  <span className="ml-3 text-slate-400">
+                    Grade is based on the weighted average.
+                  </span>
+                )}
               </div>
 
               <div className="text-slate-400">
-                Overall:
+                {isThirdTerm ? "Cumulative Overall" : "Overall"}:
                 <span className="ml-2 font-bold text-white">
-                  {totalScore} / {totalPossibleScore}
+                  {overallSummary.totalScore} /{" "}
+                  {overallSummary.totalPossibleScore}
                 </span>
               </div>
             </div>

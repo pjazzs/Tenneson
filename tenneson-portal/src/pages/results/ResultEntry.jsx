@@ -18,6 +18,113 @@ import api from "../../api/axios";
 import { createResult, getResult, getResults } from "../../api/resultApi";
 import calculateResultGrade from "../../utils/resultGrade";
 
+/*
+|--------------------------------------------------------------------------
+| Result reference helpers
+|--------------------------------------------------------------------------
+| MongoDB references may arrive as an ID string or as a populated object.
+| These helpers support both formats.
+*/
+
+const getReferenceId = (value) => {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "object") {
+    return String(value._id ?? value.id ?? "");
+  }
+
+  return String(value);
+};
+
+const getResultStudentIds = (result) => {
+  const ids = [
+    result?.student?.studentId,
+    result?.studentId,
+    getReferenceId(result?.student),
+  ];
+
+  return [...new Set(ids.filter(Boolean).map(String))];
+};
+
+const resultMatchesStudent = (result, student) => {
+  const expectedIds = [student?.studentId, student?._id]
+    .filter(Boolean)
+    .map(String);
+
+  const resultIds = getResultStudentIds(result);
+
+  return resultIds.some((id) => expectedIds.includes(id));
+};
+
+const resultMatchesSession = (result, sessionId) => {
+  const resultSessionId = getReferenceId(
+    result?.academicSession ?? result?.academicSessionId,
+  );
+
+  return resultSessionId === String(sessionId);
+};
+
+const resultMatchesTerm = (result, term) => {
+  return (
+    String(result?.term ?? "").toLowerCase() ===
+    String(term ?? "").toLowerCase()
+  );
+};
+
+const getSubjectResultId = (subjectResult) => {
+  return getReferenceId(subjectResult?.subjectId ?? subjectResult?.subject);
+};
+
+const unwrapResult = (response) => {
+  if (!response) return null;
+
+  // Support API helpers returning either response.data or response.data.result.
+  if (response.result && typeof response.result === "object") {
+    return response.result;
+  }
+
+  if (response.data?.result && typeof response.data.result === "object") {
+    return response.data.result;
+  }
+
+  if (response.data && typeof response.data === "object") {
+    return response.data;
+  }
+
+  return response;
+};
+
+const getEmptyAttendance = () => ({
+  daysSchoolOpened: "",
+  daysPresent: "",
+  daysAbsent: "",
+});
+
+const getEmptyAffectiveDomain = () => ({
+  punctuality: "",
+  attentiveness: "",
+  neatness: "",
+  politeness: "",
+  reliability: "",
+  honesty: "",
+  initiative: "",
+  attitudeToWork: "",
+});
+
+const getEmptyPsychomotorDomain = () => ({
+  sportingActivities: "",
+  handWriting: "",
+  fluency: "",
+  drawingAndPainting: "",
+  musicalAbility: "",
+});
+
+const getEmptyComments = () => ({
+  classTeacher: "",
+  principal: "",
+  performance: "",
+});
+
 const ResultEntry = () => {
   const [academicSessions, setAcademicSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -38,69 +145,35 @@ const ResultEntry = () => {
 
   const [scoreEntries, setScoreEntries] = useState([]);
 
-  const [attendance, setAttendance] = useState({
-    daysSchoolOpened: "",
-    daysPresent: "",
-    daysAbsent: "",
-  });
+  const [attendance, setAttendance] = useState(getEmptyAttendance);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Affective Domain
-  |--------------------------------------------------------------------------
-  */
+  const [affectiveDomain, setAffectiveDomain] = useState(
+    getEmptyAffectiveDomain,
+  );
 
-  const [affectiveDomain, setAffectiveDomain] = useState({
-    punctuality: "",
-    attentiveness: "",
-    neatness: "",
-    politeness: "",
-    reliability: "",
-    honesty: "",
-    initiative: "",
-    attitudeToWork: "",
-  });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Psychomotor Domain
-  |--------------------------------------------------------------------------
-  */
-
-  const [psychomotorDomain, setPsychomotorDomain] = useState({
-    sportingActivities: "",
-    handWriting: "",
-    fluency: "",
-    drawingAndPainting: "",
-    musicalAbility: "",
-  });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Conduct
-  |--------------------------------------------------------------------------
-  */
+  const [psychomotorDomain, setPsychomotorDomain] = useState(
+    getEmptyPsychomotorDomain,
+  );
 
   const [conduct, setConduct] = useState("");
-
-  /*
-  |--------------------------------------------------------------------------
-  | Additional Information
-  |--------------------------------------------------------------------------
-  */
 
   const [sports, setSports] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [specialReport, setSpecialReport] = useState("");
 
-  const [comments, setComments] = useState({
-    classTeacher: "",
-    principal: "",
-    performance: "",
-  });
+  const [comments, setComments] = useState(getEmptyComments);
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Result Retrieval State
+  |--------------------------------------------------------------------------
+  */
+
+  const [existingResultId, setExistingResultId] = useState("");
+  const [retrievingResult, setRetrievingResult] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -260,6 +333,26 @@ const ResultEntry = () => {
 
   /*
   |--------------------------------------------------------------------------
+  | Reset Retrieved Result Data
+  |--------------------------------------------------------------------------
+  | Used when the user changes student, session, or term.
+  */
+
+  const resetRetrievedResultData = () => {
+    setExistingResultId("");
+    setScoreEntries([]);
+    setAttendance(getEmptyAttendance());
+    setAffectiveDomain(getEmptyAffectiveDomain());
+    setPsychomotorDomain(getEmptyPsychomotorDomain());
+    setConduct("");
+    setSports([]);
+    setClubs([]);
+    setSpecialReport("");
+    setComments(getEmptyComments());
+  };
+
+  /*
+  |--------------------------------------------------------------------------
   | Select Student
   |--------------------------------------------------------------------------
   */
@@ -268,6 +361,8 @@ const ResultEntry = () => {
     setSelectedStudent(student);
     setStudentSearch(student.studentId);
     setStudents([]);
+    setSelectedSubjectIds([]);
+    resetRetrievedResultData();
     setError("");
     setSuccessMessage("");
   };
@@ -282,6 +377,8 @@ const ResultEntry = () => {
     setSelectedStudent(null);
     setStudentSearch("");
     setStudents([]);
+    setSelectedSubjectIds([]);
+    resetRetrievedResultData();
     setError("");
     setSuccessMessage("");
   };
@@ -307,11 +404,155 @@ const ResultEntry = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Continue To Scores
+  | Find Existing Result
   |--------------------------------------------------------------------------
+  | Search results are filtered against the exact student, session, and term.
+  | A result belonging to another student must never be retrieved by mistake.
   */
 
-  const handleContinueToScores = () => {
+  const findExistingResult = async () => {
+    if (!selectedStudent?.studentId || !selectedSession?._id || !term) {
+      return null;
+    }
+
+    const response = await getResults({
+      search: selectedStudent.studentId,
+      page: 1,
+      limit: 100,
+    });
+
+    const results = response?.results || response?.data?.results || [];
+
+    return (
+      results.find(
+        (result) =>
+          resultMatchesStudent(result, selectedStudent) &&
+          resultMatchesSession(result, selectedSession._id) &&
+          resultMatchesTerm(result, term),
+      ) || null
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Restore Existing Result
+  |--------------------------------------------------------------------------
+  | Fetch the complete result record and populate all relevant form fields.
+  */
+
+  const restoreExistingResult = (result) => {
+    const savedSubjectResults = Array.isArray(result?.subjectResults)
+      ? result.subjectResults
+      : [];
+
+    const savedSubjectIds = savedSubjectResults
+      .map(getSubjectResultId)
+      .filter(Boolean);
+
+    // Restore only subjects that are still available in the active subject list.
+    const availableSavedSubjectIds = subjects
+      .filter((subject) => savedSubjectIds.includes(String(subject._id)))
+      .map((subject) => subject._id);
+
+    const subjectIdsToRestore =
+      availableSavedSubjectIds.length > 0
+        ? availableSavedSubjectIds
+        : selectedSubjectIds;
+
+    setSelectedSubjectIds(subjectIdsToRestore);
+
+    const restoredEntries = subjects
+      .filter((subject) => subjectIdsToRestore.includes(subject._id))
+      .map((subject) => {
+        const savedEntry = savedSubjectResults.find(
+          (item) => getSubjectResultId(item) === String(subject._id),
+        );
+
+        if (!savedEntry) {
+          return {
+            subjectId: subject._id,
+            subjectName: subject.name,
+            subjectCode: subject.code || "",
+            offered: true,
+            ca1: "",
+            ca2: "",
+            exam: "",
+            total: 0,
+            grade: "",
+            remark: "",
+            teacherComment: "",
+          };
+        }
+
+        const ca1 = savedEntry.ca1 ?? "";
+        const ca2 = savedEntry.ca2 ?? "";
+        const exam = savedEntry.exam ?? "";
+
+        const allScoresPresent = ca1 !== "" && ca2 !== "" && exam !== "";
+
+        const total = allScoresPresent
+          ? Number(ca1) + Number(ca2) + Number(exam)
+          : Number(savedEntry.total ?? 0);
+
+        const calculatedGrade = calculateResultGrade(total);
+
+        return {
+          subjectId: subject._id,
+          subjectName: subject.name,
+          subjectCode: subject.code || "",
+          offered: savedEntry.offered ?? true,
+          ca1,
+          ca2,
+          exam,
+          total,
+          grade: savedEntry.grade || calculatedGrade.grade || "",
+          remark: savedEntry.remark || calculatedGrade.remark || "",
+          teacherComment: savedEntry.teacherComment || "",
+        };
+      });
+
+    setScoreEntries(restoredEntries);
+
+    const savedAttendance = result?.attendance || {};
+
+    setAttendance({
+      daysSchoolOpened: savedAttendance.daysSchoolOpened ?? "",
+      daysPresent: savedAttendance.daysPresent ?? "",
+      daysAbsent: savedAttendance.daysAbsent ?? "",
+    });
+
+    setAffectiveDomain({
+      ...getEmptyAffectiveDomain(),
+      ...(result?.affectiveDomain || {}),
+    });
+
+    setPsychomotorDomain({
+      ...getEmptyPsychomotorDomain(),
+      ...(result?.psychomotorDomain || {}),
+    });
+
+    setConduct(result?.conduct ?? "");
+    setSports(Array.isArray(result?.sports) ? result.sports : []);
+    setClubs(Array.isArray(result?.clubs) ? result.clubs : []);
+    setSpecialReport(result?.specialReport ?? "");
+
+    setComments({
+      ...getEmptyComments(),
+      ...(result?.comments || {}),
+    });
+
+    setExistingResultId(result?._id || "");
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Continue To Scores — Retrieve Existing Result First
+  |--------------------------------------------------------------------------
+  | If a matching result exists, retrieve and restore it instead of starting
+  | with an empty form. If no result exists, prepare a new entry.
+  */
+
+  const handleContinueToScores = async () => {
     setError("");
     setSuccessMessage("");
 
@@ -335,13 +576,48 @@ const ResultEntry = () => {
       return;
     }
 
-    const entries = selectedSubjects.map((subject) => {
-      const existingEntry = scoreEntries.find(
-        (entry) => entry.subjectId === subject._id,
-      );
+    if (!selectedSession) {
+      setError("Academic session information could not be found.");
+      return;
+    }
 
-      return (
-        existingEntry || {
+    try {
+      setRetrievingResult(true);
+
+      const existingSummary = await findExistingResult();
+
+      if (existingSummary?._id) {
+        // Retrieve the full result rather than relying on a search summary.
+        const retrievedResponse = await getResult(existingSummary._id);
+        const retrievedResult = unwrapResult(retrievedResponse);
+
+        if (!retrievedResult?._id) {
+          throw new Error(
+            "The existing result was found, but its details could not be retrieved.",
+          );
+        }
+
+        // Verify the retrieved record again before restoring it.
+        if (
+          !resultMatchesStudent(retrievedResult, selectedStudent) ||
+          !resultMatchesSession(retrievedResult, selectedSession._id) ||
+          !resultMatchesTerm(retrievedResult, term)
+        ) {
+          throw new Error(
+            "The retrieved result does not match the selected student, session, and term.",
+          );
+        }
+
+        restoreExistingResult(retrievedResult);
+
+        setSuccessMessage(
+          "Existing result retrieved successfully. You can review or edit the saved details.",
+        );
+      } else {
+        // No matching result exists, so prepare a fresh entry.
+        setExistingResultId("");
+
+        const entries = selectedSubjects.map((subject) => ({
           subjectId: subject._id,
           subjectName: subject.name,
           subjectCode: subject.code || "",
@@ -353,12 +629,31 @@ const ResultEntry = () => {
           grade: "",
           remark: "",
           teacherComment: "",
-        }
-      );
-    });
+        }));
 
-    setScoreEntries(entries);
-    setCurrentStep("scores");
+        setScoreEntries(entries);
+        setAttendance(getEmptyAttendance());
+        setAffectiveDomain(getEmptyAffectiveDomain());
+        setPsychomotorDomain(getEmptyPsychomotorDomain());
+        setConduct("");
+        setSports([]);
+        setClubs([]);
+        setSpecialReport("");
+        setComments(getEmptyComments());
+      }
+
+      setCurrentStep("scores");
+    } catch (error) {
+      console.error("Failed to retrieve existing result:", error);
+
+      setError(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to retrieve the existing result. Please try again.",
+      );
+    } finally {
+      setRetrievingResult(false);
+    }
   };
 
   /*
@@ -400,7 +695,6 @@ const ResultEntry = () => {
         entry.exam === "" || entry.exam === null ? 0 : Number(entry.exam);
 
       const total = ca1 + ca2 + exam;
-
       const { grade, remark } = calculateResultGrade(total);
 
       return {
@@ -438,7 +732,6 @@ const ResultEntry = () => {
       setError(
         `Please complete the scores for ${incompleteEntry.subjectName}.`,
       );
-
       return;
     }
 
@@ -681,43 +974,108 @@ const ResultEntry = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Find Existing Result
+  | Build Result Payload
   |--------------------------------------------------------------------------
   */
 
-  const findExistingResult = async () => {
-    console.log("Checking for existing result:", {
+  const buildPayload = () => {
+    const subjectResults = scoreEntries.map((entry) => ({
+      subjectId: entry.subjectId,
+      offered: Boolean(entry.offered),
+      ca1: entry.ca1 === "" || entry.ca1 === null ? null : Number(entry.ca1),
+      ca2: entry.ca2 === "" || entry.ca2 === null ? null : Number(entry.ca2),
+      exam:
+        entry.exam === "" || entry.exam === null ? null : Number(entry.exam),
+      teacherComment: entry.teacherComment || "",
+    }));
+
+    return {
       studentId: selectedStudent.studentId,
       academicSessionId: selectedSession._id,
       term,
-    });
-
-    const response = await getResults({
-      search: selectedStudent.studentId,
-      page: 1,
-      limit: 10,
-    });
-
-    const results = response?.results || [];
-
-    console.log("Existing result search response:", response);
-
-    const existingResult = results.find((result) => {
-      const resultSessionId =
-        typeof result.academicSession === "object"
-          ? result.academicSession?._id
-          : result.academicSession;
-
-      return resultSessionId === selectedSession._id && result.term === term;
-    });
-
-    return existingResult || null;
+      subjectResults,
+      attendance: {
+        daysSchoolOpened:
+          attendance.daysSchoolOpened === ""
+            ? 0
+            : Number(attendance.daysSchoolOpened),
+        daysPresent:
+          attendance.daysPresent === "" ? 0 : Number(attendance.daysPresent),
+        daysAbsent:
+          attendance.daysAbsent === "" ? 0 : Number(attendance.daysAbsent),
+      },
+      affectiveDomain: {
+        punctuality:
+          affectiveDomain.punctuality === ""
+            ? 0
+            : Number(affectiveDomain.punctuality),
+        attentiveness:
+          affectiveDomain.attentiveness === ""
+            ? 0
+            : Number(affectiveDomain.attentiveness),
+        neatness:
+          affectiveDomain.neatness === ""
+            ? 0
+            : Number(affectiveDomain.neatness),
+        politeness:
+          affectiveDomain.politeness === ""
+            ? 0
+            : Number(affectiveDomain.politeness),
+        reliability:
+          affectiveDomain.reliability === ""
+            ? 0
+            : Number(affectiveDomain.reliability),
+        honesty:
+          affectiveDomain.honesty === "" ? 0 : Number(affectiveDomain.honesty),
+        initiative:
+          affectiveDomain.initiative === ""
+            ? 0
+            : Number(affectiveDomain.initiative),
+        attitudeToWork:
+          affectiveDomain.attitudeToWork === ""
+            ? 0
+            : Number(affectiveDomain.attitudeToWork),
+      },
+      psychomotorDomain: {
+        sportingActivities:
+          psychomotorDomain.sportingActivities === ""
+            ? 0
+            : Number(psychomotorDomain.sportingActivities),
+        handWriting:
+          psychomotorDomain.handWriting === ""
+            ? 0
+            : Number(psychomotorDomain.handWriting),
+        fluency:
+          psychomotorDomain.fluency === ""
+            ? 0
+            : Number(psychomotorDomain.fluency),
+        drawingAndPainting:
+          psychomotorDomain.drawingAndPainting === ""
+            ? 0
+            : Number(psychomotorDomain.drawingAndPainting),
+        musicalAbility:
+          psychomotorDomain.musicalAbility === ""
+            ? 0
+            : Number(psychomotorDomain.musicalAbility),
+      },
+      conduct,
+      sports,
+      clubs,
+      specialReport,
+      comments: {
+        classTeacher: comments.classTeacher || "",
+        principal: comments.principal || "",
+        performance: comments.performance || "",
+      },
+    };
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Continue From Review
+  | Continue From Review — Create Or Update
   |--------------------------------------------------------------------------
+  | If an existing result was retrieved, update that record instead of
+  | attempting to create a duplicate.
   */
 
   const handleContinueFromReview = async () => {
@@ -745,199 +1103,87 @@ const ResultEntry = () => {
         return;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Check Existing Result First
-      |--------------------------------------------------------------------------
-      */
+      const payload = buildPayload();
 
-      console.log(
-        "Checking whether a result already exists before creating a draft...",
-      );
+      if (existingResultId) {
+        /*
+         * Load the update function dynamically to avoid changing the other
+         * API imports. The backend must expose an update route for this call.
+         */
+        const resultApi = await import("../../api/resultApi");
 
-      const existingResult = await findExistingResult();
+        if (typeof resultApi.updateResult !== "function") {
+          setError(
+            "This result already exists, but the updateResult API function is not available. No duplicate was created.",
+          );
+          return;
+        }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Existing Result Found
-      |--------------------------------------------------------------------------
-      */
-
-      if (existingResult?._id) {
-        console.log("Existing result found:", existingResult._id);
-
-        console.log("Retrieving result:", existingResult._id);
-
-        const retrievedResponse = await getResult(existingResult._id);
-
-        console.log("Single result retrieved:", retrievedResponse);
+        const response = await resultApi.updateResult(
+          existingResultId,
+          payload,
+        );
 
         setSuccessMessage(
-          "An existing result draft was retrieved successfully.",
+          response?.message || "Existing result updated successfully.",
         );
 
         return;
       }
 
       /*
-      |--------------------------------------------------------------------------
-      | Build Subject Results
-      |--------------------------------------------------------------------------
-      */
+       * Final duplicate check in case another user created the result while
+       * this form was open.
+       */
+      const existingSummary = await findExistingResult();
 
-      const subjectResults = scoreEntries.map((entry) => ({
-        subjectId: entry.subjectId,
+      if (existingSummary?._id) {
+        const retrievedResponse = await getResult(existingSummary._id);
+        const retrievedResult = unwrapResult(retrievedResponse);
 
-        offered: Boolean(entry.offered),
+        if (
+          !retrievedResult?._id ||
+          !resultMatchesStudent(retrievedResult, selectedStudent) ||
+          !resultMatchesSession(retrievedResult, selectedSession._id) ||
+          !resultMatchesTerm(retrievedResult, term)
+        ) {
+          setError(
+            "A possible existing result was found, but its identity could not be verified. No new result was created.",
+          );
+          return;
+        }
 
-        ca1: entry.ca1 === "" || entry.ca1 === null ? null : Number(entry.ca1),
-
-        ca2: entry.ca2 === "" || entry.ca2 === null ? null : Number(entry.ca2),
-
-        exam:
-          entry.exam === "" || entry.exam === null ? null : Number(entry.exam),
-
-        teacherComment: entry.teacherComment || "",
-      }));
-
-      /*
-      |--------------------------------------------------------------------------
-      | Build Result Payload
-      |--------------------------------------------------------------------------
-      */
-
-      const payload = {
-        studentId: selectedStudent.studentId,
-
-        academicSessionId: selectedSession._id,
-
-        term,
-
-        subjectResults,
-
-        attendance: {
-          daysSchoolOpened:
-            attendance.daysSchoolOpened === ""
-              ? 0
-              : Number(attendance.daysSchoolOpened),
-
-          daysPresent:
-            attendance.daysPresent === "" ? 0 : Number(attendance.daysPresent),
-
-          daysAbsent:
-            attendance.daysAbsent === "" ? 0 : Number(attendance.daysAbsent),
-        },
-
-        affectiveDomain: {
-          punctuality:
-            affectiveDomain.punctuality === ""
-              ? 0
-              : Number(affectiveDomain.punctuality),
-
-          attentiveness:
-            affectiveDomain.attentiveness === ""
-              ? 0
-              : Number(affectiveDomain.attentiveness),
-
-          neatness:
-            affectiveDomain.neatness === ""
-              ? 0
-              : Number(affectiveDomain.neatness),
-
-          politeness:
-            affectiveDomain.politeness === ""
-              ? 0
-              : Number(affectiveDomain.politeness),
-
-          reliability:
-            affectiveDomain.reliability === ""
-              ? 0
-              : Number(affectiveDomain.reliability),
-
-          honesty:
-            affectiveDomain.honesty === ""
-              ? 0
-              : Number(affectiveDomain.honesty),
-
-          initiative:
-            affectiveDomain.initiative === ""
-              ? 0
-              : Number(affectiveDomain.initiative),
-
-          attitudeToWork:
-            affectiveDomain.attitudeToWork === ""
-              ? 0
-              : Number(affectiveDomain.attitudeToWork),
-        },
-
-        psychomotorDomain: {
-          sportingActivities:
-            psychomotorDomain.sportingActivities === ""
-              ? 0
-              : Number(psychomotorDomain.sportingActivities),
-
-          handWriting:
-            psychomotorDomain.handWriting === ""
-              ? 0
-              : Number(psychomotorDomain.handWriting),
-
-          fluency:
-            psychomotorDomain.fluency === ""
-              ? 0
-              : Number(psychomotorDomain.fluency),
-
-          drawingAndPainting:
-            psychomotorDomain.drawingAndPainting === ""
-              ? 0
-              : Number(psychomotorDomain.drawingAndPainting),
-
-          musicalAbility:
-            psychomotorDomain.musicalAbility === ""
-              ? 0
-              : Number(psychomotorDomain.musicalAbility),
-        },
-
-        conduct,
-
-        sports,
-
-        clubs,
-
-        specialReport,
-
-        comments: {
-          classTeacher: comments.classTeacher || "",
-          principal: comments.principal || "",
-          performance: comments.performance || "",
-        },
-      };
-
-      /*
-      |--------------------------------------------------------------------------
-      | Create Result Draft
-      |--------------------------------------------------------------------------
-      */
-
-      console.log("No existing result found. Creating result draft...");
+        restoreExistingResult(retrievedResult);
+        setCurrentStep("scores");
+        setSuccessMessage(
+          "An existing result was found and retrieved. Review its details before continuing.",
+        );
+        return;
+      }
 
       const response = await createResult(payload);
-
-      console.log("Result draft created:", response);
-
-      const createdResultId = response?.result?._id;
-
-      /*
-      |--------------------------------------------------------------------------
-      | Verify Newly Created Draft
-      |--------------------------------------------------------------------------
-      */
+      const createdResult = unwrapResult(response);
+      const createdResultId = createdResult?._id;
 
       if (createdResultId) {
-        console.log("Retrieving newly created result:", createdResultId);
+        setExistingResultId(createdResultId);
 
-        const retrievedResponse = await getResult(createdResultId);
+        // Verify the newly created record when the API supports retrieval.
+        try {
+          const retrievedResponse = await getResult(createdResultId);
+          const retrievedResult = unwrapResult(retrievedResponse);
 
-        console.log("Newly created result retrieved:", retrievedResponse);
+          if (retrievedResult?._id) {
+            restoreExistingResult(retrievedResult);
+          }
+        } catch (retrievalError) {
+          // Creation succeeded. A verification retrieval failure should not
+          // incorrectly report that creation itself failed.
+          console.error(
+            "Result was created, but verification retrieval failed:",
+            retrievalError,
+          );
+        }
       }
 
       setSuccessMessage(
@@ -945,7 +1191,7 @@ const ResultEntry = () => {
       );
     } catch (error) {
       console.error(
-        "Failed to create or retrieve result draft:",
+        "Failed to create, retrieve, or update result:",
         error.response?.data || error.message,
       );
 
@@ -953,7 +1199,7 @@ const ResultEntry = () => {
 
       setError(
         error.response?.data?.message ||
-          "Failed to create or retrieve result draft.",
+          "Failed to create, retrieve, or update the result.",
       );
     }
   };
@@ -1027,6 +1273,13 @@ const ResultEntry = () => {
             </div>
           )}
 
+          {/* Success */}
+          {successMessage && (
+            <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              {successMessage}
+            </div>
+          )}
+
           {/* Selection Grid */}
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Academic Session */}
@@ -1051,6 +1304,8 @@ const ResultEntry = () => {
                     onChange={(event) => {
                       setAcademicSessionId(event.target.value);
                       setTerm("");
+                      setSelectedSubjectIds([]);
+                      resetRetrievedResultData();
                       setError("");
                       setSuccessMessage("");
                     }}
@@ -1100,6 +1355,8 @@ const ResultEntry = () => {
                     value={term}
                     onChange={(event) => {
                       setTerm(event.target.value);
+                      setSelectedSubjectIds([]);
+                      resetRetrievedResultData();
                       setError("");
                       setSuccessMessage("");
                     }}
@@ -1315,10 +1572,20 @@ const ResultEntry = () => {
             <button
               type="button"
               onClick={handleContinueToScores}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+              disabled={retrievingResult || subjectsLoading || sessionsLoading}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Continue to Scores
-              <FaArrowRight />
+              {retrievingResult ? (
+                <>
+                  <FaSpinner className="animate-spin" />
+                  Retrieving Result...
+                </>
+              ) : (
+                <>
+                  Continue to Scores
+                  <FaArrowRight />
+                </>
+              )}
             </button>
           </div>
         </div>

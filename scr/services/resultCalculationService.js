@@ -468,130 +468,75 @@ const calculateThirdTermSubject = (
     total: null,
   };
 
-  /*
-   |--------------------------------------------------------------------------
-   | Subject Not Offered In Third Term
-   |--------------------------------------------------------------------------
-   */
+  let thirdTermTotal = null;
 
-  if (!subject.offered) {
+  if (subject.offered) {
+    thirdTermTotal = roundToTwo(subject.ca1 + subject.ca2 + subject.exam);
+  }
+
+  let cumulativeScore = 0;
+  let totalTermsOffered = 0;
+
+  if (firstTerm.offered && isValidNumber(firstTerm.total)) {
+    cumulativeScore += firstTerm.total;
+    totalTermsOffered += 1;
+  }
+
+  if (secondTerm.offered && isValidNumber(secondTerm.total)) {
+    cumulativeScore += secondTerm.total;
+    totalTermsOffered += 1;
+  }
+
+  if (subject.offered && isValidNumber(thirdTermTotal)) {
+    cumulativeScore += thirdTermTotal;
+    totalTermsOffered += 1;
+  }
+
+  const firstTermData = {
+    offered: firstTerm.offered,
+    total: firstTerm.total,
+  };
+
+  const secondTermData = {
+    offered: secondTerm.offered,
+    total: secondTerm.total,
+  };
+
+  if (totalTermsOffered === 0) {
     return {
       ...subject,
-
       ca1: null,
       ca2: null,
       exam: null,
-
       total: null,
-
-      firstTerm: {
-        offered: firstTerm.offered,
-        total: firstTerm.total,
-      },
-
-      secondTerm: {
-        offered: secondTerm.offered,
-        total: secondTerm.total,
-      },
-
+      firstTerm: firstTermData,
+      secondTerm: secondTermData,
       cumulativeScore: null,
-
       weightedAverage: null,
-
       grade: null,
-
       remark: "",
     };
   }
 
-  /*
-   |--------------------------------------------------------------------------
-   | Calculate Third Term Score
-   |--------------------------------------------------------------------------
-   */
+  const roundedCumulativeScore = roundToTwo(cumulativeScore);
 
-  const thirdTermTotal = subject.ca1 + subject.ca2 + subject.exam;
+  const weightedAverage = roundToTwo(
+    roundedCumulativeScore / totalTermsOffered,
+  );
 
-  const roundedThirdTermTotal = roundToTwo(thirdTermTotal);
-
-  /*
-   |--------------------------------------------------------------------------
-   | Calculate Cumulative Score
-   |--------------------------------------------------------------------------
-   */
-
-  let cumulativeScore = roundedThirdTermTotal;
-
-  let totalTermsOffered = 1;
-
-  /*
-   * First Term contributes only when:
-   *
-   * 1. The subject was offered.
-   * 2. A valid previous total exists.
-   */
-  if (firstTerm.offered && isValidNumber(firstTerm.total)) {
-    cumulativeScore += firstTerm.total;
-
-    totalTermsOffered += 1;
-  }
-
-  /*
-   * Second Term contributes only when:
-   *
-   * 1. The subject was offered.
-   * 2. A valid previous total exists.
-   */
-  if (secondTerm.offered && isValidNumber(secondTerm.total)) {
-    cumulativeScore += secondTerm.total;
-
-    totalTermsOffered += 1;
-  }
-
-  /*
-   |--------------------------------------------------------------------------
-   | Weighted Average
-   |--------------------------------------------------------------------------
-   |
-   | The denominator is the number of applicable terms.
-   |
-   | All three terms:
-   |
-   | 180 / 3 = 60
-   |
-   | First + Third only:
-   |
-   | 127 / 2 = 63.5
-   |
-   */
-
-  const weightedAverage = cumulativeScore / totalTermsOffered;
-
-  const roundedWeightedAverage = roundToTwo(weightedAverage);
-
-  const { grade, remark } = calculateGrade(roundedWeightedAverage);
+  const { grade, remark } = calculateGrade(weightedAverage);
 
   return {
     ...subject,
-
-    total: roundedThirdTermTotal,
-
-    firstTerm: {
-      offered: firstTerm.offered,
-      total: firstTerm.total,
-    },
-
-    secondTerm: {
-      offered: secondTerm.offered,
-      total: secondTerm.total,
-    },
-
-    cumulativeScore: roundToTwo(cumulativeScore),
-
-    weightedAverage: roundedWeightedAverage,
-
+    ca1: subject.offered ? subject.ca1 : null,
+    ca2: subject.offered ? subject.ca2 : null,
+    exam: subject.offered ? subject.exam : null,
+    total: thirdTermTotal,
+    firstTerm: firstTermData,
+    secondTerm: secondTermData,
+    cumulativeScore: roundedCumulativeScore,
+    weightedAverage,
     grade,
-
     remark,
   };
 };

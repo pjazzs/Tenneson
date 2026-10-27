@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const generateToken = require("../utils/generateToken");
 const createAuditLog = require("../utils/createAuditLog");
 const asyncHandler = require("express-async-handler");
+
 exports.registerAdmin = async (req, res) => {
   try {
     const { fullName, email, password, role, permissions } = req.body;

@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { getResult, getResults } from "../../api/resultApi";
+import {
+  approveResult,
+  getResult,
+  getResults,
+  publishResult,
+  submitResult,
+} from "../../api/resultApi";
 
 const Results = () => {
   const [results, setResults] = useState([]);
@@ -30,6 +36,7 @@ const Results = () => {
   const [selectedResult, setSelectedResult] = useState(null);
   const [selectedResultLoading, setSelectedResultLoading] = useState(false);
   const [selectedResultError, setSelectedResultError] = useState("");
+  const [workflowActionLoading, setWorkflowActionLoading] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -157,6 +164,101 @@ const Results = () => {
   const handleCloseResult = () => {
     setSelectedResult(null);
     setSelectedResultError("");
+  };
+
+  const handleWorkflowAction = async (action) => {
+    const resultId = selectedResult?._id;
+
+    if (!resultId || workflowActionLoading) return;
+
+    try {
+      setWorkflowActionLoading(true);
+
+      if (action === "submit") {
+        if (!window.confirm("Submit this result for Principal review?")) {
+          return;
+        }
+
+        await submitResult(resultId);
+      }
+
+      if (action === "approve") {
+        const principalComment = window.prompt(
+          "Enter the Principal's comment:",
+        );
+
+        if (principalComment === null) return;
+
+        if (!principalComment.trim()) {
+          window.alert("A Principal comment is required.");
+          return;
+        }
+
+        const payload = {
+          principalComment: principalComment.trim(),
+        };
+
+        if (selectedResult.term === "third") {
+          const decision = window.prompt(
+            'Enter "promoted" or "repeat" for Third Term:',
+          );
+
+          if (decision === null) return;
+
+          const normalized = decision.trim().toLowerCase();
+
+          if (!["promoted", "repeat"].includes(normalized)) {
+            window.alert('Enter "promoted" or "repeat".');
+            return;
+          }
+
+          payload.principalDecision = normalized;
+        }
+
+        await approveResult(resultId, payload);
+      }
+
+      if (action === "publish") {
+        if (
+          !window.confirm("Publish this result so the student can view it?")
+        ) {
+          return;
+        }
+
+        await publishResult(resultId);
+      }
+
+      // Reload the selected result after a successful action.
+      const response = await getResult(resultId);
+
+      setSelectedResult(response?.result || response);
+
+      // Reload the list while preserving the current filters.
+      const params = { page, limit: 10 };
+
+      if (searchInput.trim()) params.search = searchInput.trim();
+      if (term) params.term = term;
+      if (status) params.status = status;
+      if (currentClass) params.currentClass = currentClass;
+
+      const listResponse = await getResults(params);
+
+      setResults(listResponse.results || []);
+
+      if (listResponse.pagination) {
+        setPagination(listResponse.pagination);
+      }
+
+      window.alert("Result workflow action completed successfully.");
+    } catch (err) {
+      window.alert(
+        err.response?.data?.message ||
+          err.message ||
+          "The workflow action failed.",
+      );
+    } finally {
+      setWorkflowActionLoading(false);
+    }
   };
 
   /*
@@ -1207,6 +1309,58 @@ const Results = () => {
               </p>
             </div>
           </div>
+        </section>
+
+        {/* Workflow Actions */}
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <h3 className="mb-4 text-lg font-semibold">
+            Result Workflow Actions
+          </h3>
+
+          <div className="flex flex-wrap gap-3">
+            {selectedResult.status === "draft" && (
+              <button
+                type="button"
+                onClick={() => handleWorkflowAction("submit")}
+                disabled={workflowActionLoading}
+                className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+              >
+                {workflowActionLoading ? "Processing..." : "Submit for Review"}
+              </button>
+            )}
+
+            {selectedResult.status === "submitted" && (
+              <button
+                type="button"
+                onClick={() => handleWorkflowAction("approve")}
+                disabled={workflowActionLoading}
+                className="rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+              >
+                {workflowActionLoading ? "Processing..." : "Approve Result"}
+              </button>
+            )}
+
+            {selectedResult.status === "approved" && (
+              <button
+                type="button"
+                onClick={() => handleWorkflowAction("publish")}
+                disabled={workflowActionLoading}
+                className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white disabled:opacity-50"
+              >
+                {workflowActionLoading ? "Processing..." : "Publish to Student"}
+              </button>
+            )}
+
+            {selectedResult.status === "published" && (
+              <span className="rounded-lg bg-blue-500/10 px-4 py-2 text-blue-300">
+                Published to student
+              </span>
+            )}
+          </div>
+
+          <p className="mt-4 text-sm text-slate-400">
+            Current status: {selectedResult.status}
+          </p>
         </section>
 
         {/* Audit Information */}

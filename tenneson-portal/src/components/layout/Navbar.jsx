@@ -1,8 +1,4 @@
-import {
-  FaUserCircle,
-  FaSignOutAlt,
-  FaBars,
-} from "react-icons/fa";
+import { FaUserCircle, FaSignOutAlt, FaBars } from "react-icons/fa";
 
 import { logout } from "../../utils/auth";
 
@@ -16,7 +12,7 @@ function Navbar({ onMenuClick }) {
         right-0
         md:left-72
         z-40
-        h-[80px]
+        h-20
         bg-slate-950
         border-b
         border-white/10
@@ -31,7 +27,6 @@ function Navbar({ onMenuClick }) {
     >
       {/* Left Section */}
       <div className="flex items-center gap-3 min-w-0">
-
         {/* Mobile Menu Button */}
         <button
           type="button"
@@ -54,7 +49,6 @@ function Navbar({ onMenuClick }) {
         </button>
 
         <div className="min-w-0">
-
           <h2
             className="
               text-lg
@@ -76,10 +70,8 @@ function Navbar({ onMenuClick }) {
           >
             Manage students and school activities
           </p>
-
         </div>
       </div>
-
 
       {/* Right Section */}
       <div
@@ -91,7 +83,6 @@ function Navbar({ onMenuClick }) {
           ml-3
         "
       >
-
         {/* Admin Info */}
         <div
           className="
@@ -105,26 +96,14 @@ function Navbar({ onMenuClick }) {
             rounded-xl
           "
         >
-
-          <FaUserCircle
-            size={30}
-            className="text-green-500"
-          />
+          <FaUserCircle size={30} className="text-green-500" />
 
           <div>
+            <p className="text-sm font-semibold">Administrator</p>
 
-            <p className="text-sm font-semibold">
-              Administrator
-            </p>
-
-            <p className="text-xs text-gray-400">
-              School Portal
-            </p>
-
+            <p className="text-xs text-gray-400">School Portal</p>
           </div>
-
         </div>
-
 
         {/* Mobile User Icon */}
         <div
@@ -138,14 +117,8 @@ function Navbar({ onMenuClick }) {
             p-2
           "
         >
-
-          <FaUserCircle
-            size={24}
-            className="text-green-500"
-          />
-
+          <FaUserCircle size={24} className="text-green-500" />
         </div>
-
 
         {/* Logout */}
         <button
@@ -169,17 +142,11 @@ function Navbar({ onMenuClick }) {
             whitespace-nowrap
           "
         >
-
           <FaSignOutAlt />
 
-          <span className="hidden sm:inline">
-            Logout
-          </span>
-
+          <span className="hidden sm:inline">Logout</span>
         </button>
-
       </div>
-
     </header>
   );
 }
