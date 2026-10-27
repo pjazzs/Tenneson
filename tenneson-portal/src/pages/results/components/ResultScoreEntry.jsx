@@ -237,17 +237,18 @@ const ResultScoreEntry = ({
   */
 
   const getThirdTermCalculation = (entry) => {
-    if (!entry.offered) {
-      return {
-        cumulativeScore: null,
-        weightedAverage: null,
-        termsOffered: 0,
-      };
+    let cumulativeScore = 0;
+    let termsOffered = 0;
+
+    // Include the current term only when the subject is offered
+    // and all three score fields have been entered.
+    if (entry.offered && hasCompleteScores(entry)) {
+      cumulativeScore += getTotal(entry);
+      termsOffered += 1;
     }
 
-    let cumulativeScore = getTotal(entry);
-    let termsOffered = 1;
-
+    // Previous-term scores remain applicable even if the subject
+    // is not offered in the current (third) term.
     for (const previousTerm of ["first", "second"]) {
       const previous = getPreviousSubjectInfo(previousTerm, entry);
 
@@ -255,6 +256,14 @@ const ResultScoreEntry = ({
         cumulativeScore += previous.total;
         termsOffered += 1;
       }
+    }
+
+    if (termsOffered === 0) {
+      return {
+        cumulativeScore: null,
+        weightedAverage: null,
+        termsOffered: 0,
+      };
     }
 
     cumulativeScore =
@@ -269,7 +278,6 @@ const ResultScoreEntry = ({
       termsOffered,
     };
   };
-
   /*
   |--------------------------------------------------------------------------
   | Grade and Remark
@@ -281,13 +289,6 @@ const ResultScoreEntry = ({
   */
 
   const getGrade = (entry) => {
-    if (!entry.offered || !hasCompleteScores(entry)) {
-      return {
-        grade: null,
-        remark: "",
-      };
-    }
-
     if (currentTermKey === "third") {
       const { weightedAverage } = getThirdTermCalculation(entry);
 
@@ -301,9 +302,16 @@ const ResultScoreEntry = ({
       return calculateResultGrade(weightedAverage);
     }
 
+    // Preserve existing first- and second-term grading behavior.
+    if (!entry.offered || !hasCompleteScores(entry)) {
+      return {
+        grade: null,
+        remark: "",
+      };
+    }
+
     return calculateResultGrade(getTotal(entry));
   };
-
   /*
   |--------------------------------------------------------------------------
   | Overall Result Summary
