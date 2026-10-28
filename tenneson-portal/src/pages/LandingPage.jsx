@@ -512,17 +512,29 @@ function LandingPage() {
                 </button>
               </div>
 
-              <div
-                className="
-                  mt-8
-                  pt-7
-                  border-t
-                  border-slate-200
-                "
-              >
+              <div className="mt-8 pt-7 border-t border-slate-200">
                 <p className="font-bold text-slate-900">Warm regards,</p>
 
-                <p className="mt-1 font-semibold text-green-700">
+                {/* Proprietor's Portrait */}
+                <div className="mt-5 mb-4">
+                  <img
+                    src="/dupe.jpg"
+                    alt="Mrs Modupeola Abigail Fatukasi, School Proprietor"
+                    className="
+        h-32
+        w-32
+        rounded-xl
+        object-cover
+        object-top
+        border-2
+        border-green-100
+        shadow-md
+      "
+                    loading="lazy"
+                  />
+                </div>
+
+                <p className="font-semibold text-green-700">
                   Mrs Modupeola Abigail Fatukasi
                 </p>
 
