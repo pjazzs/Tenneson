@@ -516,7 +516,13 @@ function StudentResultDetails() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Promotion Status</p>
             <p className="text-2xl font-bold mt-2 capitalize">
-              {result.promotionStatus || "—"}
+              {result.promotion?.decision
+                ? {
+                    promoted: "Promoted",
+                    repeat: "Repeat",
+                    graduated: "Graduated",
+                  }[result.promotion.decision] || result.promotion.decision
+                : "Not yet applied"}
             </p>
           </div>
         </section>
