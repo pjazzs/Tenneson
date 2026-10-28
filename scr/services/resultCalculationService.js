@@ -20,20 +20,25 @@ const isValidNumber = (value) => {
   return typeof value === "number" && Number.isFinite(value);
 };
 
-const getSubjectKey = (subject) => {
-  if (!subject) {
+const getSubjectKey = (subjectResult) => {
+  if (!subjectResult) {
     return null;
   }
 
-  if (typeof subject === "string") {
-    return subject;
+  const reference =
+    subjectResult.subjectId ?? subjectResult.subject ?? subjectResult._id;
+
+  if (!reference) {
+    return null;
   }
 
-  if (subject._id) {
-    return subject._id.toString();
+  if (typeof reference === "object") {
+    const id = reference._id ?? reference.id;
+
+    return id ? String(id) : null;
   }
 
-  return subject.toString();
+  return String(reference);
 };
 
 /*
@@ -400,14 +405,14 @@ const buildPreviousTermLookup = (subjectResults) => {
     return lookup;
   }
 
-  subjectResults.forEach((subject) => {
-    const subjectKey = getSubjectKey(subject.subject);
+  subjectResults.forEach((subjectResult) => {
+    const subjectKey = getSubjectKey(subjectResult);
 
     if (!subjectKey) {
       return;
     }
 
-    lookup.set(subjectKey, normalizePreviousTermSubject(subject));
+    lookup.set(subjectKey, normalizePreviousTermSubject(subjectResult));
   });
 
   return lookup;

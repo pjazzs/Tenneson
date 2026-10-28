@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 
 import BulkImportStudents from "../../components/students/BulkImportStudents";
+import ResetStudentPassword from "../../components/students/ResetStudentPassword";
 
 import {
   FaPlus,
@@ -1137,6 +1138,10 @@ function Students() {
 
                           <span>View</span>
                         </button>
+                        {student.isActive &&
+                          hasPermission("students.update") && (
+                            <ResetStudentPassword student={student} />
+                          )}
                       </td>
                     </tr>
                   ))
