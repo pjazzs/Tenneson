@@ -9,9 +9,7 @@ import {
 
 const Results = () => {
   const [results, setResults] = useState([]);
-
   const [page, setPage] = useState(1);
-
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -26,12 +24,6 @@ const Results = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  /*
-  |--------------------------------------------------------------------------
-  | Selected Result
-  |--------------------------------------------------------------------------
-  */
 
   const [selectedResult, setSelectedResult] = useState(null);
   const [selectedResultLoading, setSelectedResultLoading] = useState(false);
@@ -54,35 +46,18 @@ const Results = () => {
         setLoading(true);
         setError("");
 
-        const params = {
-          page,
-          limit: 10,
-        };
+        const params = { page, limit: 10 };
 
-        if (searchInput.trim()) {
-          params.search = searchInput.trim();
-        }
-
-        if (term) {
-          params.term = term;
-        }
-
-        if (status) {
-          params.status = status;
-        }
-
-        if (currentClass) {
-          params.currentClass = currentClass;
-        }
+        if (searchInput.trim()) params.search = searchInput.trim();
+        if (term) params.term = term;
+        if (status) params.status = status;
+        if (currentClass) params.currentClass = currentClass;
 
         const response = await getResults(params);
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         setResults(response.results || []);
-
         setPagination(
           response.pagination || {
             page,
@@ -92,9 +67,7 @@ const Results = () => {
           },
         );
       } catch (err) {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         console.error(
           "Failed to fetch results:",
@@ -102,12 +75,9 @@ const Results = () => {
         );
 
         setError(err.response?.data?.message || "Failed to load results.");
-
         setResults([]);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }, delay);
 
@@ -134,17 +104,17 @@ const Results = () => {
       setSelectedResultError("");
       setSelectedResult(null);
 
-      console.log("Retrieving result:", resultId);
-
       const response = await getResult(resultId);
+      const result = response?.result || response;
 
-      console.log("Single result retrieved:", response);
+      console.log("Single result retrieved:", result);
+
       console.log(
         "THIRD TERM SUBJECT DETAILS:",
-        JSON.stringify(response.result.subjectResults, null, 2),
+        JSON.stringify(result?.subjectResults || [], null, 2),
       );
 
-      setSelectedResult(response?.result || response);
+      setSelectedResult(result);
     } catch (err) {
       console.error(
         "Failed to retrieve result:",
@@ -169,6 +139,12 @@ const Results = () => {
     setSelectedResult(null);
     setSelectedResultError("");
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Result Workflow Actions
+  |--------------------------------------------------------------------------
+  */
 
   const handleWorkflowAction = async (action) => {
     const resultId = selectedResult?._id;
@@ -232,12 +208,9 @@ const Results = () => {
         await publishResult(resultId);
       }
 
-      // Reload the selected result after a successful action.
       const response = await getResult(resultId);
-
       setSelectedResult(response?.result || response);
 
-      // Reload the list while preserving the current filters.
       const params = { page, limit: 10 };
 
       if (searchInput.trim()) params.search = searchInput.trim();
@@ -306,19 +279,13 @@ const Results = () => {
   */
 
   const handlePreviousPage = () => {
-    if (page <= 1) {
-      return;
-    }
-
-    setPage((currentPage) => currentPage - 1);
+    if (page > 1) setPage((currentPage) => currentPage - 1);
   };
 
   const handleNextPage = () => {
-    if (page >= pagination.totalPages) {
-      return;
+    if (page < pagination.totalPages) {
+      setPage((currentPage) => currentPage + 1);
     }
-
-    setPage((currentPage) => currentPage + 1);
   };
 
   /*
@@ -332,15 +299,11 @@ const Results = () => {
   );
 
   const formatDate = (date) => {
-    if (!date) {
-      return "—";
-    }
+    if (!date) return "—";
 
     const parsedDate = new Date(date);
 
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "—";
-    }
+    if (Number.isNaN(parsedDate.getTime())) return "—";
 
     return parsedDate.toLocaleDateString("en-NG", {
       year: "numeric",
@@ -350,15 +313,11 @@ const Results = () => {
   };
 
   const formatDateTime = (date) => {
-    if (!date) {
-      return "—";
-    }
+    if (!date) return "—";
 
     const parsedDate = new Date(date);
 
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "—";
-    }
+    if (Number.isNaN(parsedDate.getTime())) return "—";
 
     return parsedDate.toLocaleString("en-NG", {
       year: "numeric",
@@ -370,9 +329,7 @@ const Results = () => {
   };
 
   const formatLabel = (value) => {
-    if (!value) {
-      return "—";
-    }
+    if (!value) return "—";
 
     return String(value)
       .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -457,20 +414,15 @@ const Results = () => {
     );
   };
 
-  const getFullName = (student) => {
-    return [student?.firstName, student?.lastName, student?.otherName]
+  const getFullName = (student) =>
+    [student?.firstName, student?.lastName, student?.otherName]
       .filter(Boolean)
       .join(" ");
-  };
 
   const getPhotoUrl = (student) => {
-    if (!student?.photo) {
-      return "";
-    }
+    if (!student?.photo) return "";
 
-    if (typeof student.photo === "string") {
-      return student.photo;
-    }
+    if (typeof student.photo === "string") return student.photo;
 
     return (
       student.photo.url || student.photo.secure_url || student.photo.path || ""
@@ -484,9 +436,7 @@ const Results = () => {
   */
 
   const getSubjectName = (subjectResult) => {
-    if (!subjectResult) {
-      return "Unknown Subject";
-    }
+    if (!subjectResult) return "Unknown Subject";
 
     if (typeof subjectResult.subject === "string") {
       return subjectResult.subject;
@@ -501,30 +451,43 @@ const Results = () => {
   };
 
   const getSubjectCode = (subjectResult) => {
-    if (!subjectResult) {
-      return "";
-    }
+    if (!subjectResult) return "";
 
-    if (typeof subjectResult.subject === "object") {
-      return subjectResult.subject?.code || "";
+    if (subjectResult.subject && typeof subjectResult.subject === "object") {
+      return subjectResult.subject.code || "";
     }
 
     return subjectResult.subjectCode || subjectResult.code || "";
   };
 
-  const getScoreValue = (subjectResult, keys) => {
+  const getScoreValue = (source, keys) => {
     for (const key of keys) {
       if (
-        subjectResult &&
-        subjectResult[key] !== undefined &&
-        subjectResult[key] !== null &&
-        subjectResult[key] !== ""
+        source &&
+        source[key] !== undefined &&
+        source[key] !== null &&
+        source[key] !== ""
       ) {
-        return subjectResult[key];
+        return source[key];
       }
     }
 
     return "—";
+  };
+
+  const formatAverage = (value) => {
+    if (
+      value === undefined ||
+      value === null ||
+      value === "" ||
+      value === "—"
+    ) {
+      return "—";
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number.toFixed(2) : "—";
   };
 
   /*
@@ -574,22 +537,26 @@ const Results = () => {
   |--------------------------------------------------------------------------
   */
 
+  const renderPrimitiveValue = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+
+    if (typeof value === "object") return JSON.stringify(value);
+
+    return String(value);
+  };
+
   const renderValue = (value) => {
-    if (value === null || value === undefined || value === "") {
-      return "—";
-    }
+    if (value === null || value === undefined || value === "") return "—";
 
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        return "—";
-      }
+      if (value.length === 0) return "—";
 
       return value.map((item, index) => (
         <div
           key={index}
           className="rounded-lg border border-white/10 bg-slate-900/70 p-3"
         >
-          {typeof item === "object" ? (
+          {typeof item === "object" && item !== null ? (
             <div className="space-y-2">
               {Object.entries(item).map(([key, nestedValue]) => (
                 <div key={key}>
@@ -627,18 +594,6 @@ const Results = () => {
     return String(value);
   };
 
-  const renderPrimitiveValue = (value) => {
-    if (value === null || value === undefined || value === "") {
-      return "—";
-    }
-
-    if (typeof value === "object") {
-      return JSON.stringify(value);
-    }
-
-    return String(value);
-  };
-
   /*
   |--------------------------------------------------------------------------
   | Result Details
@@ -646,16 +601,16 @@ const Results = () => {
   */
 
   const renderResultDetails = () => {
-    if (!selectedResult) {
-      return null;
-    }
+    if (!selectedResult) return null;
 
     const student = selectedResult.student || {};
     const academicSession = selectedResult.academicSession || {};
+
     const subjectResults = Array.isArray(selectedResult.subjectResults)
       ? selectedResult.subjectResults
       : [];
 
+    const isThirdTerm = selectedResult.term === "third";
     const photoUrl = getPhotoUrl(student);
 
     return (
@@ -694,7 +649,6 @@ const Results = () => {
 
               <div className="flex flex-wrap items-center gap-2">
                 {getStatusBadge(selectedResult.status)}
-
                 {getDecisionBadge(selectedResult.principalDecision)}
               </div>
             </div>
@@ -739,7 +693,6 @@ const Results = () => {
             <h3 className="text-lg font-semibold text-white">
               Student Information
             </h3>
-
             <p className="mt-1 text-sm text-slate-500">
               Student information attached to this result.
             </p>
@@ -881,9 +834,10 @@ const Results = () => {
             <h3 className="text-lg font-semibold text-white">
               Subject Results
             </h3>
-
             <p className="mt-1 text-sm text-slate-500">
               Scores, grades and teacher comments for each subject.
+              {isThirdTerm &&
+                " Third-term results include previous-term scores and cumulative performance."}
             </p>
           </div>
 
@@ -900,30 +854,47 @@ const Results = () => {
                       Subject
                     </th>
 
+                    {isThirdTerm && (
+                      <>
+                        <th className="whitespace-nowrap px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          First Term
+                        </th>
+                        <th className="whitespace-nowrap px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Second Term
+                        </th>
+                      </>
+                    )}
+
                     <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                       CA1
                     </th>
-
                     <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                       CA2
                     </th>
-
                     <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Exam
                     </th>
-
                     <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Total
                     </th>
 
+                    {isThirdTerm && (
+                      <>
+                        <th className="whitespace-nowrap px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Cumulative Score
+                        </th>
+                        <th className="whitespace-nowrap px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Weighted Average
+                        </th>
+                      </>
+                    )}
+
                     <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Grade
                     </th>
-
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Remark
                     </th>
-
                     <th className="min-w-70 px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Teacher Comment
                     </th>
@@ -933,6 +904,44 @@ const Results = () => {
                 <tbody className="divide-y divide-white/10">
                   {subjectResults.map((subjectResult, index) => {
                     const grade = getScoreValue(subjectResult, ["grade"]);
+
+                    const firstTerm = subjectResult.firstTerm;
+                    const secondTerm = subjectResult.secondTerm;
+
+                    const firstTermScore =
+                      firstTerm?.offered === true
+                        ? getScoreValue(firstTerm, [
+                            "total",
+                            "totalScore",
+                            "score",
+                          ])
+                        : "—";
+
+                    const secondTermScore =
+                      secondTerm?.offered === true
+                        ? getScoreValue(secondTerm, [
+                            "total",
+                            "totalScore",
+                            "score",
+                          ])
+                        : "—";
+
+                    const totalScore =
+                      isThirdTerm && subjectResult.offered === false
+                        ? "Not Offered"
+                        : getScoreValue(subjectResult, [
+                            "total",
+                            "totalScore",
+                            "score",
+                          ]);
+
+                    const cumulativeScore = getScoreValue(subjectResult, [
+                      "cumulativeScore",
+                    ]);
+
+                    const weightedAverage = formatAverage(
+                      subjectResult.weightedAverage,
+                    );
 
                     return (
                       <tr
@@ -953,6 +962,17 @@ const Results = () => {
                           )}
                         </td>
 
+                        {isThirdTerm && (
+                          <>
+                            <td className="whitespace-nowrap px-5 py-4 text-center text-sm text-slate-300">
+                              {firstTermScore}
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-4 text-center text-sm text-slate-300">
+                              {secondTermScore}
+                            </td>
+                          </>
+                        )}
+
                         <td className="px-5 py-4 text-center text-sm text-slate-300">
                           {getScoreValue(subjectResult, [
                             "ca1",
@@ -960,7 +980,6 @@ const Results = () => {
                             "firstCA",
                           ])}
                         </td>
-
                         <td className="px-5 py-4 text-center text-sm text-slate-300">
                           {getScoreValue(subjectResult, [
                             "ca2",
@@ -968,7 +987,6 @@ const Results = () => {
                             "secondCA",
                           ])}
                         </td>
-
                         <td className="px-5 py-4 text-center text-sm text-slate-300">
                           {getScoreValue(subjectResult, [
                             "exam",
@@ -976,28 +994,34 @@ const Results = () => {
                             "examScore",
                           ])}
                         </td>
-
-                        <td className="px-5 py-4 text-center">
+                        <td className="whitespace-nowrap px-5 py-4 text-center">
                           <span className="font-semibold text-white">
-                            {getScoreValue(subjectResult, [
-                              "total",
-                              "totalScore",
-                              "score",
-                            ])}
+                            {totalScore}
                           </span>
                         </td>
+
+                        {isThirdTerm && (
+                          <>
+                            <td className="whitespace-nowrap px-5 py-4 text-center text-sm font-semibold text-indigo-300">
+                              {cumulativeScore}
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-4 text-center text-sm font-semibold text-indigo-300">
+                              {weightedAverage}
+                            </td>
+                          </>
+                        )}
 
                         <td className="px-5 py-4 text-center">
                           <span
                             className={`inline-flex min-w-10 items-center justify-center rounded-lg px-2 py-1 text-xs font-bold ${
                               grade === "F"
                                 ? "bg-red-500/10 text-red-400"
-                                : grade
+                                : grade !== "—"
                                   ? "bg-blue-500/10 text-blue-400"
                                   : "bg-slate-900 text-slate-500"
                             }`}
                           >
-                            {grade || "—"}
+                            {grade}
                           </span>
                         </td>
 
@@ -1026,7 +1050,6 @@ const Results = () => {
         <section className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5">
           <div className="mb-5">
             <h3 className="text-lg font-semibold text-white">Overall Result</h3>
-
             <p className="mt-1 text-sm text-slate-500">
               Calculated result information returned by the server.
             </p>
@@ -1035,7 +1058,6 @@ const Results = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
               <p className="text-xs text-slate-500">Total Score</p>
-
               <p className="mt-2 text-2xl font-bold text-white">
                 {selectedResult.totalScore ?? "—"}
               </p>
@@ -1043,7 +1065,6 @@ const Results = () => {
 
             <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
               <p className="text-xs text-slate-500">Total Obtainable</p>
-
               <p className="mt-2 text-2xl font-bold text-white">
                 {selectedResult.totalObtainableMarks ?? "—"}
               </p>
@@ -1051,7 +1072,6 @@ const Results = () => {
 
             <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
               <p className="text-xs text-slate-500">Overall Percentage</p>
-
               <p className="mt-2 text-2xl font-bold text-indigo-300">
                 {selectedResult.overallPercentage !== undefined &&
                 selectedResult.overallPercentage !== null
@@ -1062,7 +1082,6 @@ const Results = () => {
 
             <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
               <p className="text-xs text-slate-500">Promotion Status</p>
-
               <div className="mt-2">
                 {getPromotionBadge(selectedResult.promotionStatus)}
               </div>
@@ -1074,7 +1093,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Performance Comment
               </p>
-
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 {selectedResult.performanceComment}
               </p>
@@ -1091,7 +1109,6 @@ const Results = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
               <p className="text-xs text-slate-500">Days School Opened</p>
-
               <p className="mt-2 text-2xl font-bold text-white">
                 {selectedResult.attendance?.daysSchoolOpened ?? "—"}
               </p>
@@ -1099,7 +1116,6 @@ const Results = () => {
 
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
               <p className="text-xs text-slate-500">Days Present</p>
-
               <p className="mt-2 text-2xl font-bold text-emerald-400">
                 {selectedResult.attendance?.daysPresent ?? "—"}
               </p>
@@ -1107,7 +1123,6 @@ const Results = () => {
 
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
               <p className="text-xs text-slate-500">Days Absent</p>
-
               <p className="mt-2 text-2xl font-bold text-red-400">
                 {selectedResult.attendance?.daysAbsent ?? "—"}
               </p>
@@ -1121,12 +1136,10 @@ const Results = () => {
             <h3 className="text-lg font-semibold text-white">
               Affective Domain
             </h3>
-
             <p className="mt-1 text-sm text-slate-500">
               Student behavioural and attitude assessment.
             </p>
           </div>
-
           {renderDomainEntries(selectedResult.affectiveDomain)}
         </section>
 
@@ -1136,12 +1149,10 @@ const Results = () => {
             <h3 className="text-lg font-semibold text-white">
               Psychomotor Domain
             </h3>
-
             <p className="mt-1 text-sm text-slate-500">
               Practical and skill-based assessment.
             </p>
           </div>
-
           {renderDomainEntries(selectedResult.psychomotorDomain)}
         </section>
 
@@ -1153,7 +1164,6 @@ const Results = () => {
 
           <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
             <p className="text-xs text-slate-500">Conduct Assessment</p>
-
             <p className="mt-2 text-base font-semibold text-slate-200">
               {selectedResult.conduct
                 ? formatLabel(selectedResult.conduct)
@@ -1175,7 +1185,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Class Teacher
               </p>
-
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 {selectedResult.comments?.classTeacher || "—"}
               </p>
@@ -1185,7 +1194,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Performance
               </p>
-
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 {selectedResult.comments?.performance ||
                   selectedResult.performanceComment ||
@@ -1197,7 +1205,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Principal
               </p>
-
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 {selectedResult.comments?.principal || "—"}
               </p>
@@ -1209,7 +1216,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Special Report
               </p>
-
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 {selectedResult.specialReport || "—"}
               </p>
@@ -1219,7 +1225,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Sports
               </p>
-
               <div className="mt-2 text-sm leading-6 text-slate-300">
                 {renderValue(selectedResult.sports)}
               </div>
@@ -1229,7 +1234,6 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Clubs
               </p>
-
               <div className="mt-2 text-sm leading-6 text-slate-300">
                 {renderValue(selectedResult.clubs)}
               </div>
@@ -1248,7 +1252,6 @@ const Results = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <p className="text-xs text-slate-500">Decision</p>
-
               <div className="mt-2">
                 {getDecisionBadge(selectedResult.principalDecision)}
               </div>
@@ -1256,7 +1259,6 @@ const Results = () => {
 
             <div>
               <p className="text-xs text-slate-500">Promotion Status</p>
-
               <div className="mt-2">
                 {getPromotionBadge(selectedResult.promotionStatus)}
               </div>
@@ -1264,7 +1266,6 @@ const Results = () => {
 
             <div>
               <p className="text-xs text-slate-500">Principal Comment</p>
-
               <p className="mt-2 text-sm text-slate-300">
                 {selectedResult.comments?.principal || "—"}
               </p>
@@ -1283,7 +1284,6 @@ const Results = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-xs text-slate-500">Submitted At</p>
-
               <p className="mt-1 text-sm text-slate-300">
                 {formatDateTime(selectedResult.submittedAt)}
               </p>
@@ -1291,7 +1291,6 @@ const Results = () => {
 
             <div>
               <p className="text-xs text-slate-500">Approved At</p>
-
               <p className="mt-1 text-sm text-slate-300">
                 {formatDateTime(selectedResult.approvedAt)}
               </p>
@@ -1299,7 +1298,6 @@ const Results = () => {
 
             <div>
               <p className="text-xs text-slate-500">Published At</p>
-
               <p className="mt-1 text-sm text-slate-300">
                 {formatDateTime(selectedResult.publishedAt)}
               </p>
@@ -1307,7 +1305,6 @@ const Results = () => {
 
             <div>
               <p className="text-xs text-slate-500">Updated At</p>
-
               <p className="mt-1 text-sm text-slate-300">
                 {formatDateTime(selectedResult.updatedAt)}
               </p>
@@ -1380,11 +1377,9 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Created By
               </p>
-
               <p className="mt-2 text-sm font-medium text-slate-200">
                 {selectedResult.createdBy?.fullName || "—"}
               </p>
-
               {selectedResult.createdBy?.email && (
                 <p className="mt-1 text-xs text-slate-500">
                   {selectedResult.createdBy.email}
@@ -1396,11 +1391,9 @@ const Results = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Updated By
               </p>
-
               <p className="mt-2 text-sm font-medium text-slate-200">
                 {selectedResult.updatedBy?.fullName || "—"}
               </p>
-
               {selectedResult.updatedBy?.email && (
                 <p className="mt-1 text-xs text-slate-500">
                   {selectedResult.updatedBy.email}
@@ -1424,7 +1417,6 @@ const Results = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Results</h1>
-
         <p className="mt-1 text-sm text-slate-400">
           View and manage student academic results.
         </p>
@@ -1435,7 +1427,6 @@ const Results = () => {
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Result Records</h2>
-
             <p className="text-sm text-slate-400">
               Search and filter student results.
             </p>
@@ -1453,7 +1444,6 @@ const Results = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* Search */}
           <div>
             <label
               htmlFor="result-search"
@@ -1461,7 +1451,6 @@ const Results = () => {
             >
               Search
             </label>
-
             <input
               id="result-search"
               type="text"
@@ -1472,7 +1461,6 @@ const Results = () => {
             />
           </div>
 
-          {/* Term */}
           <div>
             <label
               htmlFor="result-term"
@@ -1480,7 +1468,6 @@ const Results = () => {
             >
               Term
             </label>
-
             <select
               id="result-term"
               value={term}
@@ -1494,7 +1481,6 @@ const Results = () => {
             </select>
           </div>
 
-          {/* Status */}
           <div>
             <label
               htmlFor="result-status"
@@ -1502,7 +1488,6 @@ const Results = () => {
             >
               Status
             </label>
-
             <select
               id="result-status"
               value={status}
@@ -1517,7 +1502,6 @@ const Results = () => {
             </select>
           </div>
 
-          {/* Class */}
           <div>
             <label
               htmlFor="result-class"
@@ -1525,7 +1509,6 @@ const Results = () => {
             >
               Class
             </label>
-
             <select
               id="result-class"
               value={currentClass}
@@ -1564,7 +1547,6 @@ const Results = () => {
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4">
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm text-red-300">{selectedResultError}</p>
-
             <button
               type="button"
               onClick={() => setSelectedResultError("")}
@@ -1602,27 +1584,21 @@ const Results = () => {
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Student
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Class
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Session
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Term
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Status
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Decision
                   </th>
-
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Created
                   </th>
@@ -1645,7 +1621,6 @@ const Results = () => {
                       <div className="text-sm font-medium text-slate-300">
                         No results found.
                       </div>
-
                       <p className="mt-1 text-sm text-slate-500">
                         {hasFilters
                           ? "Try adjusting your search or filters."
@@ -1657,7 +1632,6 @@ const Results = () => {
                   results.map((result) => {
                     const student = result.student || {};
                     const academicSession = result.academicSession || {};
-
                     const fullName = getFullName(student);
 
                     return (
@@ -1671,7 +1645,6 @@ const Results = () => {
                           <div className="font-medium text-white">
                             {fullName || "Unknown student"}
                           </div>
-
                           <div className="mt-1 text-xs text-slate-500">
                             {student.studentId || "—"}
                           </div>
@@ -1726,8 +1699,7 @@ const Results = () => {
                 <span className="font-medium text-slate-300">
                   {pagination.total}
                 </span>{" "}
-                total result
-                {pagination.total === 1 ? "" : "s"}
+                total result{pagination.total === 1 ? "" : "s"}
               </div>
 
               <div className="flex items-center gap-2">
