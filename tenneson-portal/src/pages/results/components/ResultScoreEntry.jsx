@@ -292,15 +292,9 @@ const ResultScoreEntry = ({
 
   const getGrade = (entry) => {
     if (currentTermKey === "third") {
-      // If the subject is offered this term, don't show a grade
-      // until all current-term score fields have been completed.
-      if (entry.offered && !hasCompleteScores(entry)) {
-        return {
-          grade: null,
-          remark: "",
-        };
-      }
-
+      // Calculate the grade from all valid available term scores.
+      // Previous-term scores can produce a grade before third-term
+      // scores are entered.
       const { weightedAverage } = getThirdTermCalculation(entry);
 
       if (!Number.isFinite(weightedAverage)) {

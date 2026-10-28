@@ -21,16 +21,16 @@ const isValidNumber = (value) => {
 };
 
 const getSubjectKey = (subjectResult) => {
-  if (!subjectResult) {
-    return null;
-  }
+  if (!subjectResult) return null;
 
+  // Support a subject result object or a direct subject reference.
   const reference =
-    subjectResult.subjectId ?? subjectResult.subject ?? subjectResult._id;
+    subjectResult.subjectId ??
+    subjectResult.subject ??
+    subjectResult._id ??
+    subjectResult;
 
-  if (!reference) {
-    return null;
-  }
+  if (!reference) return null;
 
   if (typeof reference === "object") {
     const id = reference._id ?? reference.id;
@@ -408,9 +408,7 @@ const buildPreviousTermLookup = (subjectResults) => {
   subjectResults.forEach((subjectResult) => {
     const subjectKey = getSubjectKey(subjectResult);
 
-    if (!subjectKey) {
-      return;
-    }
+    if (!subjectKey) return;
 
     lookup.set(subjectKey, normalizePreviousTermSubject(subjectResult));
   });
