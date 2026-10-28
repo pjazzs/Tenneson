@@ -60,6 +60,7 @@ const ResultScoreEntry = ({
         return;
       }
 
+      setPreviousTermsError("");
       setPreviousTermsLoading(true);
 
       const retrieved = {
@@ -96,7 +97,7 @@ const ResultScoreEntry = ({
               String(resultStudentId || "") === String(studentId) &&
               String(resultSessionId || "") === String(sessionId) &&
               String(result.term || "").toLowerCase() === previousTerm &&
-              ["approved", "published"].includes(
+              ["draft", "submitted", "approved", "published"].includes(
                 String(result.status || "").toLowerCase(),
               )
             );
@@ -110,7 +111,7 @@ const ResultScoreEntry = ({
           if (
             fullResult &&
             String(fullResult.term || "").toLowerCase() === previousTerm &&
-            ["approved", "published"].includes(
+            ["draft", "submitted", "approved", "published"].includes(
               String(fullResult.status || "").toLowerCase(),
             )
           ) {
@@ -644,7 +645,7 @@ const ResultScoreEntry = ({
                       {previousTerm === "first" ? "First" : "Second"} Term:{" "}
                       {previousTermResults[previousTerm]
                         ? "Previous result retrieved"
-                        : "No approved or published result found"}
+                        : "No previous-term result found"}
                     </span>
                   </div>
                 ))}
