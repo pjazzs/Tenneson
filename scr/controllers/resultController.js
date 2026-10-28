@@ -5,6 +5,7 @@ const Student = require("../models/student");
 const AcademicSession = require("../models/AcademicSession");
 const Subject = require("../models/Subject");
 const Result = require("../models/Result");
+const Promotion = require("../models/Promotion");
 
 const {
   calculateResult,
@@ -2468,10 +2469,18 @@ exports.getMyPublishedResults = asyncHandler(async (req, res) => {
 
       .lean();
 
+    const promotion = await Promotion.findOne({
+      sourceResult: result._id,
+    })
+      .select("decision fromClass toClass appliedAt")
+      .lean();
+
     return res.status(200).json({
       success: true,
-
-      results,
+      result: {
+        ...result,
+        promotion: promotion || null,
+      },
     });
   } catch (error) {
     return sendError(
