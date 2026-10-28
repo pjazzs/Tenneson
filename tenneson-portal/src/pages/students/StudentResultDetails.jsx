@@ -324,6 +324,9 @@ function StudentResultDetails() {
     ? result.subjectResults
     : [];
 
+  const isThirdTerm = result.term?.toLowerCase() === "third";
+  const subjectTableColumnCount = isThirdTerm ? 11 : 7;
+
   const attendance = result.attendance || {};
 
   const academicSession = result.academicSession || {};
@@ -539,6 +542,23 @@ function StudentResultDetails() {
                       Total
                     </th>
 
+                    {isThirdTerm && (
+                      <>
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          First Term
+                        </th>
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          Second Term
+                        </th>
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          Cumulative Score
+                        </th>
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          Weighted Average
+                        </th>
+                      </>
+                    )}
+
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       Grade
                     </th>
@@ -553,7 +573,7 @@ function StudentResultDetails() {
                   {subjectResults.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={subjectTableColumnCount}
                         className="px-5 py-8 text-center text-slate-400"
                       >
                         No subject results are available for this term.
@@ -603,6 +623,23 @@ function StudentResultDetails() {
                           <td className="text-center px-4 py-4 font-semibold">
                             {subject.offered ? formatScore(subject.total) : "—"}
                           </td>
+
+                          {isThirdTerm && (
+                            <>
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                {formatScore(subject.firstTerm?.total)}
+                              </td>
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                {formatScore(subject.secondTerm?.total)}
+                              </td>
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                {formatScore(subject.cumulativeScore)}
+                              </td>
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                {formatScore(subject.weightedAverage)}
+                              </td>
+                            </>
+                          )}
 
                           <td className="text-center px-4 py-4">
                             <span className="inline-flex min-w-10 justify-center px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 font-semibold">
