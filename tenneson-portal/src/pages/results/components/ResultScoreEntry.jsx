@@ -10,6 +10,7 @@ const ResultScoreEntry = ({
   term,
   scoreEntries,
   onScoreEntriesChange,
+  onPreviousTermResultsChange,
   onBack,
   onContinue,
   error,
@@ -43,11 +44,13 @@ const ResultScoreEntry = ({
     let cancelled = false;
 
     const retrievePreviousTermResults = async () => {
-      setPreviousTermResults({
+      const emptyPreviousResults = {
         first: null,
         second: null,
-      });
-      setPreviousTermsError("");
+      };
+
+      setPreviousTermResults(emptyPreviousResults);
+      onPreviousTermResultsChange?.(emptyPreviousResults);
 
       const studentId = selectedStudent?.studentId;
       const sessionId = academicSession?._id;
@@ -117,12 +120,15 @@ const ResultScoreEntry = ({
 
         if (!cancelled) {
           setPreviousTermResults(retrieved);
+          onPreviousTermResultsChange?.(retrieved);
         }
       } catch (fetchError) {
         console.error("Failed to retrieve previous-term results:", fetchError);
 
         if (!cancelled) {
           setPreviousTermResults(retrieved);
+          onPreviousTermResultsChange?.(retrieved);
+
           setPreviousTermsError(
             "Previous-term scores could not be loaded. Current-term score entry is still available.",
           );
@@ -139,7 +145,12 @@ const ResultScoreEntry = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedStudent?.studentId, academicSession?._id, termsToRetrieve]);
+  }, [
+    selectedStudent?.studentId,
+    academicSession?._id,
+    termsToRetrieve,
+    onPreviousTermResultsChange,
+  ]);
 
   /*
   |--------------------------------------------------------------------------

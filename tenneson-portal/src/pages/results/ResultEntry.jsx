@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import ResultAttendance from "./components/ResultAttendance";
 import ResultScoreEntry from "./components/ResultScoreEntry";
 import ResultAffectiveDomain from "./components/ResultAffectiveDomain";
@@ -144,6 +144,14 @@ const ResultEntry = () => {
   const [currentStep, setCurrentStep] = useState("selection");
 
   const [scoreEntries, setScoreEntries] = useState([]);
+  const [previousTermResults, setPreviousTermResults] = useState({
+    first: null,
+    second: null,
+  });
+
+  const handlePreviousTermResultsChange = useCallback((results) => {
+    setPreviousTermResults(results);
+  }, []);
 
   const [attendance, setAttendance] = useState(getEmptyAttendance);
 
@@ -349,6 +357,10 @@ const ResultEntry = () => {
     setClubs([]);
     setSpecialReport("");
     setComments(getEmptyComments());
+    setPreviousTermResults({
+      first: null,
+      second: null,
+    });
   };
 
   /*
@@ -1633,6 +1645,7 @@ const ResultEntry = () => {
       <ResultScoreEntry
         selectedStudent={selectedStudent}
         academicSession={selectedSession}
+        onPreviousTermResultsChange={handlePreviousTermResultsChange}
         term={term}
         scoreEntries={scoreEntries}
         onScoreEntriesChange={handleScoreEntriesChange}
@@ -1767,6 +1780,7 @@ const ResultEntry = () => {
         academicSession={selectedSession}
         term={term}
         scoreEntries={scoreEntries}
+        previousTermResults={previousTermResults}
         attendance={attendance}
         affectiveDomain={affectiveDomain}
         psychomotorDomain={psychomotorDomain}

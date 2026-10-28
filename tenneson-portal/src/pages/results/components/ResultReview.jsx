@@ -19,6 +19,7 @@ const ResultReview = ({
   academicSession,
   term,
   scoreEntries,
+  previousTermResults = { first: null, second: null },
   attendance,
   affectiveDomain,
   psychomotorDomain,
@@ -33,6 +34,49 @@ const ResultReview = ({
   error,
   successMessage,
 }) => {
+  const currentTermKey = String(term || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s*term\s*/g, "");
+
+  const showFirstTerm = ["second", "third"].includes(currentTermKey);
+  const showSecondTerm = currentTermKey === "third";
+
+  const getPreviousTermTotal = (previousTerm, entry) => {
+    const result = previousTermResults?.[previousTerm];
+
+    if (!result || !entry?.subjectId) {
+      return "—";
+    }
+
+    const subjectResult = result.subjectResults?.find((item) => {
+      const subject =
+        item.subject && typeof item.subject === "object"
+          ? item.subject._id
+          : item.subject;
+
+      return (
+        String(subject || item.subjectId || "") === String(entry.subjectId)
+      );
+    });
+
+    if (!subjectResult || subjectResult.offered !== true) {
+      return "—";
+    }
+
+    const total = Number(subjectResult.total);
+
+    if (
+      subjectResult.total === null ||
+      subjectResult.total === undefined ||
+      subjectResult.total === "" ||
+      !Number.isFinite(total)
+    ) {
+      return "—";
+    }
+
+    return total;
+  };
   const totalSubjects = scoreEntries.length;
 
   const completedSubjects = scoreEntries.filter(
@@ -213,6 +257,17 @@ const ResultReview = ({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Subject
                     </th>
+                    {showFirstTerm && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        First Term
+                      </th>
+                    )}
+
+                    {showSecondTerm && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Second Term
+                      </th>
+                    )}
 
                     <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                       CA1
@@ -244,7 +299,9 @@ const ResultReview = ({
                   {scoreEntries.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={
+                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 1 : 0)
+                        }
                         className="px-4 py-8 text-center text-sm text-slate-500"
                       >
                         No subjects have been entered.
@@ -279,6 +336,22 @@ const ResultReview = ({
                               </p>
                             )}
                           </td>
+
+                          {showFirstTerm && (
+                            <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
+                              {formatValue(
+                                getPreviousTermTotal("first", entry),
+                              )}
+                            </td>
+                          )}
+
+                          {showSecondTerm && (
+                            <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
+                              {formatValue(
+                                getPreviousTermTotal("second", entry),
+                              )}
+                            </td>
+                          )}
 
                           {/* CA1 */}
                           <td className="px-3 py-4 text-center text-sm text-slate-300">
