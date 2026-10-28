@@ -141,7 +141,6 @@ function ResultDataValue({ value, depth = 0 }) {
           }
         >
           <p className="text-sm text-slate-400 mb-1">{formatLabel(key)}</p>
-
           <ResultDataValue value={nestedValue} depth={depth + 1} />
         </div>
       ))}
@@ -158,7 +157,6 @@ function ResultDataSection({ title, icon: Icon, value }) {
     <section className="mt-8">
       <div className="flex items-center gap-3 mb-4">
         {Icon && <Icon className="text-blue-400" size={20} />}
-
         <h2 className="text-xl font-semibold">{title}</h2>
       </div>
 
@@ -170,9 +168,7 @@ function ResultDataSection({ title, icon: Icon, value }) {
 }
 
 /**
- * Returns the first meaningful text field from a list of possible
- * field names. This supports result documents that use either
- * "remark" or "comment" for a term's subject feedback.
+ * Gets the first meaningful subject remark from a term result.
  */
 const getTermRemark = (termResult) => {
   if (!termResult || typeof termResult !== "object") {
@@ -296,20 +292,11 @@ function StudentResultDetails() {
     return Number.isFinite(number) ? `${number.toFixed(2)}%` : "—";
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   if (!hasResultId) {
     return (
       <div className="min-h-screen bg-slate-950 text-white px-4 flex items-center justify-center">
         <div className="max-w-md w-full text-center">
           <h1 className="text-xl font-semibold">No Result Selected</h1>
-
           <p className="text-slate-400 mt-2">Please select a result to view.</p>
 
           <button
@@ -365,7 +352,6 @@ function StudentResultDetails() {
   const isThirdTerm =
     typeof result.term === "string" && result.term.toLowerCase() === "third";
 
-  // Seven columns for first/second term; eleven for third term.
   const subjectTableColumnCount = isThirdTerm ? 11 : 7;
 
   const attendance = result.attendance || {};
@@ -436,7 +422,6 @@ function StudentResultDetails() {
 
             <div className="lg:text-right">
               <p className="text-sm text-slate-400">Overall Percentage</p>
-
               <p className="text-4xl font-bold text-blue-400 mt-1">
                 {formatPercentage(result.overallPercentage)}
               </p>
@@ -451,7 +436,6 @@ function StudentResultDetails() {
               <FiUser />
               Student
             </div>
-
             <p className="mt-2 font-semibold">
               {[student.firstName, student.otherName, student.lastName]
                 .filter(Boolean)
@@ -464,7 +448,6 @@ function StudentResultDetails() {
               <FiUser />
               Student ID
             </div>
-
             <p className="mt-2 font-semibold">{student.studentId || "—"}</p>
           </div>
 
@@ -473,7 +456,6 @@ function StudentResultDetails() {
               <FiBookOpen />
               Class
             </div>
-
             <p className="mt-2 font-semibold">
               {student.currentClass || result.currentClass || "—"}
             </p>
@@ -484,7 +466,6 @@ function StudentResultDetails() {
               <FiCalendar />
               Term
             </div>
-
             <p className="mt-2 font-semibold">{formatTerm(result.term)}</p>
           </div>
         </section>
@@ -498,7 +479,6 @@ function StudentResultDetails() {
                   <FiCalendar />
                   Term Closing Date
                 </div>
-
                 <p className="mt-2 font-semibold">{formatDate(closingDate)}</p>
               </div>
             )}
@@ -509,7 +489,6 @@ function StudentResultDetails() {
                   <FiCalendar />
                   Resumption Date
                 </div>
-
                 <p className="mt-2 font-semibold">
                   {formatDate(resumptionDate)}
                 </p>
@@ -522,7 +501,6 @@ function StudentResultDetails() {
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Total Score</p>
-
             <p className="text-2xl font-bold mt-2">
               {result.totalScore ?? "—"}
             </p>
@@ -530,7 +508,6 @@ function StudentResultDetails() {
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Total Obtainable</p>
-
             <p className="text-2xl font-bold mt-2">
               {result.totalObtainableMarks ?? "—"}
             </p>
@@ -538,7 +515,6 @@ function StudentResultDetails() {
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Promotion Status</p>
-
             <p className="text-2xl font-bold mt-2 capitalize">
               {result.promotionStatus || "—"}
             </p>
@@ -549,7 +525,6 @@ function StudentResultDetails() {
         <section className="mt-8">
           <div className="flex items-center gap-3 mb-4">
             <FiBookOpen className="text-blue-400" />
-
             <h2 className="text-xl font-semibold">Subject Results</h2>
           </div>
 
@@ -562,13 +537,11 @@ function StudentResultDetails() {
                       Subject
                     </th>
 
-                    {/* Historical terms come before third-term scores. */}
                     {isThirdTerm && (
                       <>
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           First Term
                         </th>
-
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           Second Term
                         </th>
@@ -578,15 +551,12 @@ function StudentResultDetails() {
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       CA 1
                     </th>
-
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       CA 2
                     </th>
-
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       Exam
                     </th>
-
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       {isThirdTerm ? "Third Term Total" : "Total"}
                     </th>
@@ -596,7 +566,6 @@ function StudentResultDetails() {
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           Cumulative Score
                         </th>
-
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           Weighted Average
                         </th>
@@ -606,7 +575,6 @@ function StudentResultDetails() {
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       Grade
                     </th>
-
                     <th className="text-left px-5 py-4 text-sm font-semibold text-slate-300">
                       Remark
                     </th>
@@ -639,21 +607,27 @@ function StudentResultDetails() {
                       const firstTermRemark = getTermRemark(firstTerm);
                       const secondTermRemark = getTermRemark(secondTerm);
 
-                      /*
-                       * "Not Offered" applies to the current term only.
-                       * Do not use it to erase historical scores or remarks.
-                       */
                       const notOfferedThisTerm = subject.offered === false;
 
-                      const currentRemark = notOfferedThisTerm
-                        ? "Not Offered"
-                        : subject.remark || subject.comment || "—";
-
                       /*
-                       * Display a saved grade whenever one exists. Do not
-                       * hide it merely because the offered flag is false.
-                       * No grade is invented when the API has no saved grade.
+                       * For a third-term subject that was not offered:
+                       * 1. Keep the second-term remark if one exists.
+                       * 2. Otherwise retain the first-term remark.
+                       * 3. Only show "Not Offered" if neither has a remark.
+                       *
+                       * For subjects offered this term, use the current
+                       * term's remark normally.
                        */
+                      const currentTermRemark =
+                        getTermRemark(subject) ||
+                        (typeof subject.remark === "string"
+                          ? subject.remark.trim()
+                          : "");
+
+                      const currentRemark = notOfferedThisTerm
+                        ? secondTermRemark || firstTermRemark || "Not Offered"
+                        : currentTermRemark || "—";
+
                       const currentGrade =
                         subject.grade ?? subject.finalGrade ?? "";
 
@@ -781,14 +755,12 @@ function StudentResultDetails() {
           <section className="mt-8">
             <div className="flex items-center gap-3 mb-4">
               <FiCalendar className="text-blue-400" />
-
               <h2 className="text-xl font-semibold">Attendance</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <p className="text-sm text-slate-400">Days School Opened</p>
-
                 <p className="text-2xl font-bold mt-2">
                   {attendance.daysSchoolOpened ?? 0}
                 </p>
@@ -796,7 +768,6 @@ function StudentResultDetails() {
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <p className="text-sm text-slate-400">Days Present</p>
-
                 <p className="text-2xl font-bold text-emerald-400 mt-2">
                   {attendance.daysPresent ?? 0}
                 </p>
@@ -804,7 +775,6 @@ function StudentResultDetails() {
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <p className="text-sm text-slate-400">Days Absent</p>
-
                 <p className="text-2xl font-bold text-red-400 mt-2">
                   {attendance.daysAbsent ?? 0}
                 </p>
@@ -862,7 +832,6 @@ function StudentResultDetails() {
           <section className="mt-8">
             <div className="flex items-center gap-3 mb-4">
               <FiMessageSquare className="text-blue-400" />
-
               <h2 className="text-xl font-semibold">Comments</h2>
             </div>
 
@@ -870,7 +839,6 @@ function StudentResultDetails() {
               {result.comments?.classTeacher && (
                 <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                   <p className="text-sm text-slate-400">Class Teacher</p>
-
                   <p className="mt-2 text-slate-200 leading-7 whitespace-pre-wrap">
                     {result.comments.classTeacher}
                   </p>
@@ -880,7 +848,6 @@ function StudentResultDetails() {
               {result.comments?.principal && (
                 <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                   <p className="text-sm text-slate-400">Principal</p>
-
                   <p className="mt-2 text-slate-200 leading-7 whitespace-pre-wrap">
                     {result.comments.principal}
                   </p>
@@ -890,7 +857,6 @@ function StudentResultDetails() {
               {result.performanceComment && (
                 <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                   <p className="text-sm text-slate-400">Performance Comment</p>
-
                   <p className="mt-2 text-slate-200 leading-7 whitespace-pre-wrap">
                     {result.performanceComment}
                   </p>
