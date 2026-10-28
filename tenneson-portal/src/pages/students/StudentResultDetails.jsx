@@ -14,10 +14,8 @@ import {
 
 import studentApi from "../../api/studentApi";
 
-/**
- * Convert a field name such as "daysSchoolOpened" into
- * a readable label such as "Days School Opened".
- */
+const HIDDEN_FIELDS = ["_id", "id", "__v", "createdAt", "updatedAt"];
+
 const formatLabel = (value) => {
   if (typeof value !== "string") return "";
 
@@ -41,8 +39,7 @@ const isMeaningfulValue = (value) => {
   if (typeof value === "object") {
     return Object.entries(value).some(
       ([key, nestedValue]) =>
-        !["_id", "id", "__v", "createdAt", "updatedAt"].includes(key) &&
-        isMeaningfulValue(nestedValue),
+        !HIDDEN_FIELDS.includes(key) && isMeaningfulValue(nestedValue),
     );
   }
 
@@ -85,10 +82,6 @@ const formatDisplayValue = (value) => {
   return null;
 };
 
-/**
- * Render saved values without assuming that domains, sports,
- * clubs, or conduct use one particular data structure.
- */
 function ResultDataValue({ value, depth = 0 }) {
   if (!isMeaningfulValue(value)) {
     return <span className="text-slate-500">—</span>;
@@ -112,11 +105,7 @@ function ResultDataValue({ value, depth = 0 }) {
             key={item?._id || index}
             className="rounded-xl border border-slate-800 bg-slate-950/40 p-4"
           >
-            {typeof item === "object" && item !== null ? (
-              <ResultDataValue value={item} depth={depth + 1} />
-            ) : (
-              <ResultDataValue value={item} depth={depth + 1} />
-            )}
+            <ResultDataValue value={item} depth={depth + 1} />
           </div>
         ))}
       </div>
@@ -125,8 +114,7 @@ function ResultDataValue({ value, depth = 0 }) {
 
   const entries = Object.entries(value).filter(
     ([key, nestedValue]) =>
-      !["_id", "id", "__v", "createdAt", "updatedAt"].includes(key) &&
-      isMeaningfulValue(nestedValue),
+      !HIDDEN_FIELDS.includes(key) && isMeaningfulValue(nestedValue),
   );
 
   if (!entries.length) {
@@ -161,9 +149,6 @@ function ResultDataValue({ value, depth = 0 }) {
   );
 }
 
-/**
- * Display a result section only when it contains saved data.
- */
 function ResultDataSection({ title, icon: Icon, value }) {
   if (!isMeaningfulValue(value)) {
     return null;
@@ -184,6 +169,46 @@ function ResultDataSection({ title, icon: Icon, value }) {
   );
 }
 
+/**
+ * Returns the first meaningful text field from a list of possible
+ * field names. This supports result documents that use either
+ * "remark" or "comment" for a term's subject feedback.
+ */
+const getTermRemark = (termResult) => {
+  if (!termResult || typeof termResult !== "object") {
+    return "";
+  }
+
+  const candidates = [
+    termResult.remark,
+    termResult.comment,
+    termResult.teacherComment,
+    termResult.performanceComment,
+  ];
+
+  const match = candidates.find(
+    (value) => typeof value === "string" && value.trim() !== "",
+  );
+
+  return match || "";
+};
+
+const getTermGrade = (termResult) => {
+  if (!termResult || typeof termResult !== "object") {
+    return "";
+  }
+
+  return termResult.grade ?? termResult.finalGrade ?? "";
+};
+
+const getTermTotal = (termResult) => {
+  if (!termResult || typeof termResult !== "object") {
+    return undefined;
+  }
+
+  return termResult.total ?? termResult.totalScore ?? termResult.score;
+};
+
 function StudentResultDetails() {
   const navigate = useNavigate();
   const { resultId } = useParams();
@@ -191,10 +216,13 @@ function StudentResultDetails() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const hasResultId = Boolean(resultId);
 
   useEffect(() => {
-    if (!hasResultId) return;
+    if (!hasResultId) {
+      return undefined;
+    }
 
     let isMounted = true;
 
@@ -236,25 +264,6 @@ function StudentResultDetails() {
     };
   }, [resultId, navigate, hasResultId]);
 
-  if (!hasResultId) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white px-4 flex items-center justify-center">
-        <div className="max-w-md w-full text-center">
-          <h1 className="text-xl font-semibold">No Result Selected</h1>
-
-          <p className="text-slate-400 mt-2">Please select a result to view.</p>
-
-          <button
-            onClick={() => navigate("/student/results")}
-            className="mt-6 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 transition"
-          >
-            Back to Results
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const formatTerm = (term) => {
     const terms = {
       first: "First Term",
@@ -262,7 +271,9 @@ function StudentResultDetails() {
       third: "Third Term",
     };
 
-    return terms[term] || term || "Term";
+    const normalizedTerm = typeof term === "string" ? term.toLowerCase() : "";
+
+    return terms[normalizedTerm] || term || "Term";
   };
 
   const formatScore = (value) => {
@@ -284,6 +295,33 @@ function StudentResultDetails() {
 
     return Number.isFinite(number) ? `${number.toFixed(2)}%` : "—";
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!hasResultId) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white px-4 flex items-center justify-center">
+        <div className="max-w-md w-full text-center">
+          <h1 className="text-xl font-semibold">No Result Selected</h1>
+
+          <p className="text-slate-400 mt-2">Please select a result to view.</p>
+
+          <button
+            onClick={() => navigate("/student/results")}
+            className="mt-6 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 transition"
+          >
+            Back to Results
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -324,15 +362,14 @@ function StudentResultDetails() {
     ? result.subjectResults
     : [];
 
-  const isThirdTerm = result.term?.toLowerCase() === "third";
+  const isThirdTerm =
+    typeof result.term === "string" && result.term.toLowerCase() === "third";
+
+  // Seven columns for first/second term; eleven for third term.
   const subjectTableColumnCount = isThirdTerm ? 11 : 7;
 
   const attendance = result.attendance || {};
-
   const academicSession = result.academicSession || {};
-
-  // Support common date field names without assuming every result
-  // document stores dates in the same location.
 
   const matchingTerm = Array.isArray(academicSession.terms)
     ? academicSession.terms.find(
@@ -363,7 +400,6 @@ function StudentResultDetails() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <button
@@ -519,12 +555,25 @@ function StudentResultDetails() {
 
           <div className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-212.5">
+              <table className="w-full min-w-225">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-800/40">
                     <th className="text-left px-5 py-4 text-sm font-semibold text-slate-300">
                       Subject
                     </th>
+
+                    {/* Historical terms come before third-term scores. */}
+                    {isThirdTerm && (
+                      <>
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          First Term
+                        </th>
+
+                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
+                          Second Term
+                        </th>
+                      </>
+                    )}
 
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                       CA 1
@@ -539,20 +588,15 @@ function StudentResultDetails() {
                     </th>
 
                     <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
-                      Total
+                      {isThirdTerm ? "Third Term Total" : "Total"}
                     </th>
 
                     {isThirdTerm && (
                       <>
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
-                          First Term
-                        </th>
-                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
-                          Second Term
-                        </th>
-                        <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           Cumulative Score
                         </th>
+
                         <th className="text-center px-4 py-4 text-sm font-semibold text-slate-300">
                           Weighted Average
                         </th>
@@ -586,6 +630,33 @@ function StudentResultDetails() {
                         subject.subject?.name ||
                         "Subject";
 
+                      const firstTerm = subject.firstTerm || {};
+                      const secondTerm = subject.secondTerm || {};
+
+                      const firstTermTotal = getTermTotal(firstTerm);
+                      const secondTermTotal = getTermTotal(secondTerm);
+
+                      const firstTermRemark = getTermRemark(firstTerm);
+                      const secondTermRemark = getTermRemark(secondTerm);
+
+                      /*
+                       * "Not Offered" applies to the current term only.
+                       * Do not use it to erase historical scores or remarks.
+                       */
+                      const notOfferedThisTerm = subject.offered === false;
+
+                      const currentRemark = notOfferedThisTerm
+                        ? "Not Offered"
+                        : subject.remark || subject.comment || "—";
+
+                      /*
+                       * Display a saved grade whenever one exists. Do not
+                       * hide it merely because the offered flag is false.
+                       * No grade is invented when the API has no saved grade.
+                       */
+                      const currentGrade =
+                        subject.grade ?? subject.finalGrade ?? "";
+
                       return (
                         <tr
                           key={
@@ -608,33 +679,78 @@ function StudentResultDetails() {
                             )}
                           </td>
 
+                          {isThirdTerm && (
+                            <>
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                <div>{formatScore(firstTermTotal)}</div>
+
+                                {firstTermRemark && (
+                                  <p
+                                    className="mt-1 max-w-44 mx-auto text-xs text-slate-500 whitespace-normal"
+                                    title={firstTermRemark}
+                                  >
+                                    {firstTermRemark}
+                                  </p>
+                                )}
+
+                                {getTermGrade(firstTerm) && (
+                                  <p className="mt-1 text-xs text-blue-300">
+                                    Grade: {getTermGrade(firstTerm)}
+                                  </p>
+                                )}
+                              </td>
+
+                              <td className="text-center px-4 py-4 text-slate-300">
+                                <div>{formatScore(secondTermTotal)}</div>
+
+                                {secondTermRemark && (
+                                  <p
+                                    className="mt-1 max-w-44 mx-auto text-xs text-slate-500 whitespace-normal"
+                                    title={secondTermRemark}
+                                  >
+                                    {secondTermRemark}
+                                  </p>
+                                )}
+
+                                {getTermGrade(secondTerm) && (
+                                  <p className="mt-1 text-xs text-blue-300">
+                                    Grade: {getTermGrade(secondTerm)}
+                                  </p>
+                                )}
+                              </td>
+                            </>
+                          )}
+
                           <td className="text-center px-4 py-4 text-slate-300">
-                            {subject.offered ? formatScore(subject.ca1) : "—"}
+                            {notOfferedThisTerm
+                              ? "—"
+                              : formatScore(subject.ca1)}
                           </td>
 
                           <td className="text-center px-4 py-4 text-slate-300">
-                            {subject.offered ? formatScore(subject.ca2) : "—"}
+                            {notOfferedThisTerm
+                              ? "—"
+                              : formatScore(subject.ca2)}
                           </td>
 
                           <td className="text-center px-4 py-4 text-slate-300">
-                            {subject.offered ? formatScore(subject.exam) : "—"}
+                            {notOfferedThisTerm
+                              ? "—"
+                              : formatScore(subject.exam)}
                           </td>
 
-                          <td className="text-center px-4 py-4 font-semibold">
-                            {subject.offered ? formatScore(subject.total) : "—"}
+                          <td className="text-center px-4 py-4 font-semibold text-white">
+                            {notOfferedThisTerm
+                              ? "—"
+                              : formatScore(subject.total)}
                           </td>
 
                           {isThirdTerm && (
                             <>
                               <td className="text-center px-4 py-4 text-slate-300">
-                                {formatScore(subject.firstTerm?.total)}
-                              </td>
-                              <td className="text-center px-4 py-4 text-slate-300">
-                                {formatScore(subject.secondTerm?.total)}
-                              </td>
-                              <td className="text-center px-4 py-4 text-slate-300">
                                 {formatScore(subject.cumulativeScore)}
                               </td>
+
                               <td className="text-center px-4 py-4 text-slate-300">
                                 {formatScore(subject.weightedAverage)}
                               </td>
@@ -643,14 +759,12 @@ function StudentResultDetails() {
 
                           <td className="text-center px-4 py-4">
                             <span className="inline-flex min-w-10 justify-center px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 font-semibold">
-                              {subject.offered ? subject.grade || "—" : "—"}
+                              {currentGrade || "—"}
                             </span>
                           </td>
 
-                          <td className="px-5 py-4 text-slate-400">
-                            {subject.offered
-                              ? subject.remark || "—"
-                              : "Not Offered"}
+                          <td className="px-5 py-4 text-slate-400 whitespace-normal">
+                            {currentRemark}
                           </td>
                         </tr>
                       );
@@ -741,7 +855,7 @@ function StudentResultDetails() {
           value={result.specialReport}
         />
 
-        {/* Comments */}
+        {/* General result comments */}
         {(result.comments?.classTeacher ||
           result.comments?.principal ||
           result.performanceComment) && (
