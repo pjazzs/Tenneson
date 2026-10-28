@@ -924,7 +924,7 @@ const ResultScoreEntry = ({
                         <input
                           type="text"
                           value={entry.teacherComment}
-                          disabled={!entry.offered}
+                          // disabled={!entry.offered}
                           onChange={(event) =>
                             handleCommentChange(index, event.target.value)
                           }

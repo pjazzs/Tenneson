@@ -1,3 +1,4 @@
+import calculateResultGrade from "../../../utils/resultGrade";
 import { FaArrowLeft, FaArrowRight, FaEdit } from "react-icons/fa";
 
 const formatValue = (value) => {
@@ -77,73 +78,43 @@ const ResultReview = ({
 
     return total;
   };
+
   const totalSubjects = scoreEntries.length;
 
   const completedSubjects = scoreEntries.filter(
     (entry) =>
       !entry.offered ||
-      (entry.ca1 !== "" && entry.ca2 !== "" && entry.exam !== ""),
+      (entry.ca1 !== "" &&
+        entry.ca1 !== null &&
+        entry.ca1 !== undefined &&
+        entry.ca2 !== "" &&
+        entry.ca2 !== null &&
+        entry.ca2 !== undefined &&
+        entry.exam !== "" &&
+        entry.exam !== null &&
+        entry.exam !== undefined),
   ).length;
 
   const affectiveFields = [
-    {
-      key: "punctuality",
-      label: "Punctuality",
-    },
-    {
-      key: "attentiveness",
-      label: "Attentiveness",
-    },
-    {
-      key: "neatness",
-      label: "Neatness",
-    },
-    {
-      key: "politeness",
-      label: "Politeness",
-    },
-    {
-      key: "reliability",
-      label: "Reliability",
-    },
-    {
-      key: "honesty",
-      label: "Honesty",
-    },
-    {
-      key: "initiative",
-      label: "Initiative",
-    },
-    {
-      key: "attitudeToWork",
-      label: "Attitude to Work",
-    },
+    { key: "punctuality", label: "Punctuality" },
+    { key: "attentiveness", label: "Attentiveness" },
+    { key: "neatness", label: "Neatness" },
+    { key: "politeness", label: "Politeness" },
+    { key: "reliability", label: "Reliability" },
+    { key: "honesty", label: "Honesty" },
+    { key: "initiative", label: "Initiative" },
+    { key: "attitudeToWork", label: "Attitude to Work" },
   ];
 
   const psychomotorFields = [
-    {
-      key: "sportingActivities",
-      label: "Sporting Activities",
-    },
-    {
-      key: "handWriting",
-      label: "Handwriting",
-    },
-    {
-      key: "fluency",
-      label: "Fluency",
-    },
-    {
-      key: "drawingAndPainting",
-      label: "Drawing & Painting",
-    },
-    {
-      key: "musicalAbility",
-      label: "Musical Ability",
-    },
+    { key: "sportingActivities", label: "Sporting Activities" },
+    { key: "handWriting", label: "Handwriting" },
+    { key: "fluency", label: "Fluency" },
+    { key: "drawingAndPainting", label: "Drawing & Painting" },
+    { key: "musicalAbility", label: "Musical Ability" },
   ];
 
-  const termName = TERM_NAMES[term] || term;
+  const termName = TERM_NAMES[currentTermKey] || term;
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 lg:px-8">
@@ -168,7 +139,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Student Information</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Basic information for this result.
               </p>
@@ -189,7 +159,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Student
               </p>
-
               <p className="mt-1 font-semibold text-white">
                 {selectedStudent?.firstName} {selectedStudent?.lastName}
               </p>
@@ -199,7 +168,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Student ID
               </p>
-
               <p className="mt-1 font-semibold text-white">
                 {formatValue(selectedStudent?.studentId)}
               </p>
@@ -209,7 +177,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Academic Session
               </p>
-
               <p className="mt-1 font-semibold text-white">
                 {formatValue(academicSession?.name)}
               </p>
@@ -219,7 +186,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Term
               </p>
-
               <p className="mt-1 font-semibold text-white">
                 {formatValue(termName)}
               </p>
@@ -232,7 +198,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Subject Scores</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 {completedSubjects} of {totalSubjects} subject entries
                 completed.
@@ -257,6 +222,7 @@ const ResultReview = ({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Subject
                     </th>
+
                     {showFirstTerm && (
                       <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                         First Term
@@ -285,6 +251,12 @@ const ResultReview = ({
                       Total
                     </th>
 
+                    {showSecondTerm && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Cumulative Score
+                      </th>
+                    )}
+
                     <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Grade
                     </th>
@@ -300,7 +272,7 @@ const ResultReview = ({
                     <tr>
                       <td
                         colSpan={
-                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 1 : 0)
+                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 2 : 0)
                         }
                         className="px-4 py-8 text-center text-sm text-slate-500"
                       >
@@ -309,15 +281,102 @@ const ResultReview = ({
                     </tr>
                   ) : (
                     scoreEntries.map((entry) => {
-                      const total =
-                        Number(entry.ca1 || 0) +
-                        Number(entry.ca2 || 0) +
-                        Number(entry.exam || 0);
+                      const isThirdTerm = currentTermKey === "third";
+
+                      const scoresComplete =
+                        entry.ca1 !== "" &&
+                        entry.ca1 !== null &&
+                        entry.ca1 !== undefined &&
+                        entry.ca2 !== "" &&
+                        entry.ca2 !== null &&
+                        entry.ca2 !== undefined &&
+                        entry.exam !== "" &&
+                        entry.exam !== null &&
+                        entry.exam !== undefined;
+
+                      const currentTotal = scoresComplete
+                        ? Number(entry.ca1) +
+                          Number(entry.ca2) +
+                          Number(entry.exam)
+                        : null;
+
+                      const previousFirstTotal = getPreviousTermTotal(
+                        "first",
+                        entry,
+                      );
+
+                      const previousSecondTotal = getPreviousTermTotal(
+                        "second",
+                        entry,
+                      );
+
+                      let cumulativeScore = null;
+                      let weightedAverage = null;
+                      let termsOffered = 0;
+
+                      if (isThirdTerm) {
+                        let cumulative = 0;
+
+                        // Only include the current third-term score when
+                        // the subject is offered and every score is entered.
+                        if (
+                          entry.offered &&
+                          scoresComplete &&
+                          Number.isFinite(currentTotal)
+                        ) {
+                          cumulative += currentTotal;
+                          termsOffered += 1;
+                        }
+
+                        // Include eligible first- and second-term totals.
+                        for (const previousTotal of [
+                          previousFirstTotal,
+                          previousSecondTotal,
+                        ]) {
+                          if (
+                            previousTotal !== "—" &&
+                            Number.isFinite(Number(previousTotal))
+                          ) {
+                            cumulative += Number(previousTotal);
+                            termsOffered += 1;
+                          }
+                        }
+
+                        if (termsOffered > 0) {
+                          cumulativeScore =
+                            Math.round((cumulative + Number.EPSILON) * 100) /
+                            100;
+
+                          weightedAverage =
+                            Math.round(
+                              (cumulativeScore / termsOffered +
+                                Number.EPSILON) *
+                                100,
+                            ) / 100;
+                        }
+                      }
+
+                      // Total is the current term's score only.
+                      // It remains blank when the subject is not offered
+                      // or its scores are incomplete.
+                      const displayedTotal =
+                        entry.offered && scoresComplete ? currentTotal : "—";
+
+                      // Third-term grades use the average of eligible
+                      // term scores. First and second terms use their
+                      // own completed current-term scores.
+                      const gradeResult = isThirdTerm
+                        ? weightedAverage !== null
+                          ? calculateResultGrade(weightedAverage)
+                          : null
+                        : entry.offered && scoresComplete
+                          ? calculateResultGrade(currentTotal)
+                          : null;
 
                       const grade =
-                        entry.grade || (entry.offered ? "—" : "N/A");
+                        gradeResult?.grade || (entry.offered ? "—" : "N/A");
 
-                      const remark = entry.remark || "";
+                      const remark = gradeResult?.remark || "";
 
                       return (
                         <tr
@@ -337,19 +396,17 @@ const ResultReview = ({
                             )}
                           </td>
 
+                          {/* First Term */}
                           {showFirstTerm && (
                             <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
-                              {formatValue(
-                                getPreviousTermTotal("first", entry),
-                              )}
+                              {formatValue(previousFirstTotal)}
                             </td>
                           )}
 
+                          {/* Second Term */}
                           {showSecondTerm && (
                             <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
-                              {formatValue(
-                                getPreviousTermTotal("second", entry),
-                              )}
+                              {formatValue(previousSecondTotal)}
                             </td>
                           )}
 
@@ -368,12 +425,21 @@ const ResultReview = ({
                             {formatValue(entry.exam)}
                           </td>
 
-                          {/* Total */}
+                          {/* Current Term Total */}
                           <td className="px-3 py-4 text-center">
                             <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-blue-500/10 px-2 py-1 text-sm font-semibold text-blue-300">
-                              {entry.offered ? total : "—"}
+                              {formatValue(displayedTotal)}
                             </span>
                           </td>
+
+                          {/* Cumulative Score */}
+                          {showSecondTerm && (
+                            <td className="px-3 py-4 text-center">
+                              <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-violet-500/10 px-2 py-1 text-sm font-semibold text-violet-300">
+                                {formatValue(cumulativeScore)}
+                              </span>
+                            </td>
+                          )}
 
                           {/* Grade */}
                           <td className="px-3 py-4 text-center">
@@ -419,7 +485,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Attendance</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Student attendance for the term.
               </p>
@@ -440,7 +505,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 School Opened
               </p>
-
               <p className="mt-2 text-2xl font-bold text-white">
                 {formatValue(attendance?.daysSchoolOpened)}
               </p>
@@ -450,7 +514,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Days Present
               </p>
-
               <p className="mt-2 text-2xl font-bold text-emerald-400">
                 {formatValue(attendance?.daysPresent)}
               </p>
@@ -460,7 +523,6 @@ const ResultReview = ({
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 Days Absent
               </p>
-
               <p className="mt-2 text-2xl font-bold text-red-400">
                 {formatValue(attendance?.daysAbsent)}
               </p>
@@ -473,7 +535,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Affective Domain</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Behavioural and social development assessment.
               </p>
@@ -496,10 +557,8 @@ const ResultReview = ({
                 className="rounded-xl border border-white/10 bg-slate-950/60 p-4"
               >
                 <p className="text-xs text-slate-400">{field.label}</p>
-
                 <p className="mt-2 text-xl font-bold text-white">
                   {formatValue(affectiveDomain?.[field.key])}
-
                   <span className="ml-1 text-xs font-normal text-slate-500">
                     /5
                   </span>
@@ -514,7 +573,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Psychomotor Domain</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Practical and physical skill assessment.
               </p>
@@ -537,10 +595,8 @@ const ResultReview = ({
                 className="rounded-xl border border-white/10 bg-slate-950/60 p-4"
               >
                 <p className="text-xs text-slate-400">{field.label}</p>
-
                 <p className="mt-2 text-xl font-bold text-white">
                   {formatValue(psychomotorDomain?.[field.key])}
-
                   <span className="ml-1 text-xs font-normal text-slate-500">
                     /5
                   </span>
@@ -555,7 +611,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Conduct</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Overall conduct assessment.
               </p>
@@ -575,7 +630,6 @@ const ResultReview = ({
             <p className="text-xs uppercase tracking-wide text-slate-500">
               Conduct
             </p>
-
             <p className="mt-2 text-lg font-semibold capitalize text-white">
               {formatValue(conduct)}
             </p>
@@ -587,7 +641,6 @@ const ResultReview = ({
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">Additional Information</h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Extracurricular activities and result comments.
               </p>
@@ -622,7 +675,6 @@ const ResultReview = ({
                       <p className="text-sm font-semibold text-blue-300">
                         {sport.event}
                       </p>
-
                       {sport.remark && (
                         <p className="mt-1 text-xs text-slate-400">
                           {sport.remark}
@@ -675,7 +727,6 @@ const ResultReview = ({
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                 Special Report
               </p>
-
               <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                 <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                   {formatValue(specialReport)}
@@ -689,7 +740,6 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Class Teacher's Comment
                 </p>
-
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.classTeacher)}
@@ -701,7 +751,6 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Performance Comment
                 </p>
-
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.performance)}
@@ -713,7 +762,6 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Principal's Comment
                 </p>
-
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.principal)}
