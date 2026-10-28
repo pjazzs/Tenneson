@@ -23,6 +23,13 @@ export function StudentAuthProvider({ children }) {
     setStudent(studentData);
   }, []);
 
+  const updateStudent = useCallback((studentData) => {
+    if (!studentData) return;
+
+    localStorage.setItem("student", JSON.stringify(studentData));
+    setStudent(studentData);
+  }, []);
+
   const logoutStudent = useCallback(() => {
     localStorage.removeItem("studentToken");
     localStorage.removeItem("student");
@@ -37,6 +44,7 @@ export function StudentAuthProvider({ children }) {
         student,
         studentToken,
         loginStudent,
+        updateStudent,
         logoutStudent,
       }}
     >
