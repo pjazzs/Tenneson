@@ -502,23 +502,42 @@ const ResultEntry = () => {
 
         const allScoresPresent = ca1 !== "" && ca2 !== "" && exam !== "";
 
-        const total = allScoresPresent
-          ? Number(ca1) + Number(ca2) + Number(exam)
-          : Number(savedEntry.total ?? 0);
+        const offered = savedEntry.offered ?? true;
 
-        const calculatedGrade = calculateResultGrade(total);
+        const currentTotal =
+          offered && allScoresPresent
+            ? Number(ca1) + Number(ca2) + Number(exam)
+            : "";
+
+        const isThirdTerm = term === "third";
+
+        const gradeScore = isThirdTerm
+          ? savedEntry.weightedAverage
+          : currentTotal;
+
+        const hasValidGradeScore =
+          gradeScore !== null &&
+          gradeScore !== undefined &&
+          gradeScore !== "" &&
+          Number.isFinite(Number(gradeScore));
+
+        const calculatedGrade = hasValidGradeScore
+          ? calculateResultGrade(Number(gradeScore))
+          : { grade: "", remark: "" };
 
         return {
           subjectId: subject._id,
           subjectName: subject.name,
           subjectCode: subject.code || "",
-          offered: savedEntry.offered ?? true,
+          offered,
           ca1,
           ca2,
           exam,
-          total,
-          grade: savedEntry.grade || calculatedGrade.grade || "",
-          remark: savedEntry.remark || calculatedGrade.remark || "",
+          total: currentTotal,
+          cumulativeScore: savedEntry.cumulativeScore ?? "",
+          weightedAverage: savedEntry.weightedAverage ?? "",
+          grade: calculatedGrade.grade || "",
+          remark: calculatedGrade.remark || "",
           teacherComment: savedEntry.teacherComment || "",
         };
       });
@@ -688,48 +707,128 @@ const ResultEntry = () => {
 
   const handleScoreEntriesChange = (updatedEntries) => {
     const entriesWithGrades = updatedEntries.map((entry) => {
-      if (!entry.offered) {
-        // Preserve the existing weighted average for a subject not
-        // offered this term. Only calculate its grade if the average exists.
-        const total =
-          entry.total === "" ||
-          entry.total === null ||
-          entry.total === undefined
-            ? null
-            : Number(entry.total);
-
-        if (total === null || !Number.isFinite(total)) {
+      // First and second terms: grade the current term total.
+      if (term !== "third") {
+        if (!entry.offered) {
           return {
             ...entry,
+            total: "",
             grade: "",
             remark: "",
           };
         }
 
+        const scoresComplete =
+          entry.ca1 !== "" &&
+          entry.ca1 !== null &&
+          entry.ca1 !== undefined &&
+          entry.ca2 !== "" &&
+          entry.ca2 !== null &&
+          entry.ca2 !== undefined &&
+          entry.exam !== "" &&
+          entry.exam !== null &&
+          entry.exam !== undefined;
+
+        if (!scoresComplete) {
+          return {
+            ...entry,
+            total: "",
+            grade: "",
+            remark: "",
+          };
+        }
+
+        const total =
+          Number(entry.ca1) + Number(entry.ca2) + Number(entry.exam);
+
         const { grade, remark } = calculateResultGrade(total);
 
+        return { ...entry, total, grade, remark };
+      }
+
+      // Third term: calculate cumulative score and weighted average.
+      const getPreviousTotal = (previousTerm) => {
+        const result = previousTermResults[previousTerm];
+
+        if (!Array.isArray(result?.subjectResults)) return null;
+
+        const previousSubject = result.subjectResults.find((item) => {
+          const subjectId =
+            typeof item.subject === "object"
+              ? item.subject?._id
+              : item.subject || item.subjectId;
+
+          return String(subjectId || "") === String(entry.subjectId);
+        });
+
+        if (
+          !previousSubject ||
+          previousSubject.offered !== true ||
+          previousSubject.total === null ||
+          previousSubject.total === undefined ||
+          previousSubject.total === ""
+        ) {
+          return null;
+        }
+
+        const total = Number(previousSubject.total);
+        return Number.isFinite(total) && total >= 0 && total <= 100
+          ? total
+          : null;
+      };
+
+      const firstTotal = getPreviousTotal("first");
+      const secondTotal = getPreviousTotal("second");
+
+      const scoresComplete =
+        entry.ca1 !== "" &&
+        entry.ca1 !== null &&
+        entry.ca1 !== undefined &&
+        entry.ca2 !== "" &&
+        entry.ca2 !== null &&
+        entry.ca2 !== undefined &&
+        entry.exam !== "" &&
+        entry.exam !== null &&
+        entry.exam !== undefined;
+
+      const currentTotal =
+        entry.offered && scoresComplete
+          ? Number(entry.ca1) + Number(entry.ca2) + Number(entry.exam)
+          : null;
+
+      const eligibleTotals = [firstTotal, secondTotal, currentTotal].filter(
+        (score) => score !== null,
+      );
+
+      const cumulativeScore = eligibleTotals.reduce(
+        (sum, score) => sum + score,
+        0,
+      );
+
+      const weightedAverage =
+        eligibleTotals.length > 0
+          ? cumulativeScore / eligibleTotals.length
+          : null;
+
+      if (weightedAverage === null) {
         return {
           ...entry,
-          grade,
-          remark,
+          total: entry.offered ? (currentTotal ?? "") : "",
+          cumulativeScore: "",
+          weightedAverage: "",
+          grade: "",
+          remark: "",
         };
       }
 
-      const ca1 =
-        entry.ca1 === "" || entry.ca1 === null ? 0 : Number(entry.ca1);
-
-      const ca2 =
-        entry.ca2 === "" || entry.ca2 === null ? 0 : Number(entry.ca2);
-
-      const exam =
-        entry.exam === "" || entry.exam === null ? 0 : Number(entry.exam);
-
-      const total = ca1 + ca2 + exam;
-      const { grade, remark } = calculateResultGrade(total);
+      const { grade, remark } = calculateResultGrade(weightedAverage);
 
       return {
         ...entry,
-        total,
+        // Total remains the current third-term total only.
+        total: entry.offered ? (currentTotal ?? "") : "",
+        cumulativeScore,
+        weightedAverage,
         grade,
         remark,
       };
