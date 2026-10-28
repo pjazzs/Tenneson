@@ -80,7 +80,9 @@ const ResultScoreEntry = ({
 
           const results = Array.isArray(response?.results)
             ? response.results
-            : [];
+            : Array.isArray(response?.data?.results)
+              ? response.data.results
+              : [];
 
           const matchingResult = results.find((result) => {
             const resultStudentId =
@@ -106,7 +108,11 @@ const ResultScoreEntry = ({
           if (!matchingResult?._id) continue;
 
           const detailResponse = await getResult(matchingResult._id);
-          const fullResult = detailResponse?.result;
+
+          const fullResult =
+            detailResponse?.result ??
+            detailResponse?.data?.result ??
+            (detailResponse?._id ? detailResponse : null);
 
           if (
             fullResult &&
@@ -187,6 +193,16 @@ const ResultScoreEntry = ({
 
   const getPreviousSubjectResult = (previousTerm, entry) => {
     const result = previousTermResults[previousTerm];
+
+    console.log(`[${previousTerm.toUpperCase()} TERM]`, {
+      currentSubjectId: entry?.subjectId,
+      previousSubjectIds: result?.subjectResults?.map((item) => ({
+        subject: item.subject,
+        subjectId: item.subjectId,
+        total: item.total,
+        offered: item.offered,
+      })),
+    });
 
     if (!result || !entry?.subjectId) return null;
 
