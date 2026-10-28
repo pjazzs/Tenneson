@@ -3,21 +3,13 @@ import { getResults } from "../../api/resultApi";
 import { applyPromotion } from "../../api/promotionApi";
 
 const getDecisionLabel = (decision) => {
-  if (decision === "promoted") {
-    return "Promoted";
-  }
-
-  if (decision === "repeat") {
-    return "Repeat";
-  }
-
+  if (decision === "promoted") return "Promoted";
+  if (decision === "repeat") return "Repeat";
   return "Pending";
 };
 
 const getTargetClass = (currentClass, decision) => {
-  if (decision === "repeat") {
-    return currentClass;
-  }
+  if (decision === "repeat") return currentClass;
 
   const promotionMap = {
     JSS1: "JSS2",
@@ -50,19 +42,18 @@ function ApplyPromotion({ onPromotionApplied }) {
     try {
       setLoading(true);
       setError("");
-      setSuccess("");
 
       const response = await getResults({
         page,
         limit: 20,
         term: "third",
-        status: "approved",
+        status: "published",
       });
 
       const eligibleResults = (response.results || []).filter(
         (result) =>
-          result.principalDecision === "promoted" ||
-          result.principalDecision === "repeat",
+          ["promoted", "repeat"].includes(result.principalDecision) &&
+          !result.promotionApplied,
       );
 
       setResults(eligibleResults);
@@ -71,8 +62,8 @@ function ApplyPromotion({ onPromotionApplied }) {
         response.pagination || {
           page,
           limit: 20,
-          total: 0,
-          totalPages: 0,
+          total: eligibleResults.length,
+          totalPages: 1,
         },
       );
     } catch (err) {
@@ -92,12 +83,16 @@ function ApplyPromotion({ onPromotionApplied }) {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchEligibleResults(1);
-    }, 0);
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        fetchEligibleResults(1);
+      }
+    });
 
     return () => {
-      clearTimeout(timer);
+      cancelled = true;
     };
   }, []);
 
@@ -109,14 +104,14 @@ function ApplyPromotion({ onPromotionApplied }) {
       .join(" ");
 
     const decision = getDecisionLabel(result.principalDecision);
+    const currentClass = result.currentClass || student?.currentClass;
+    const targetClass = getTargetClass(currentClass, result.principalDecision);
 
     const confirmed = window.confirm(
-      `Apply ${decision.toLowerCase()} for ${fullName} (${student?.studentId})?`,
+      `Apply ${targetClass === "Graduated" ? "graduation" : decision.toLowerCase()} for ${fullName} (${student?.studentId})?`,
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setApplyingId(result._id);
@@ -147,19 +142,15 @@ function ApplyPromotion({ onPromotionApplied }) {
   };
 
   const handlePrevious = () => {
-    if (pagination.page <= 1) {
-      return;
+    if (pagination.page > 1) {
+      fetchEligibleResults(pagination.page - 1);
     }
-
-    fetchEligibleResults(pagination.page - 1);
   };
 
   const handleNext = () => {
-    if (pagination.page >= pagination.totalPages) {
-      return;
+    if (pagination.page < pagination.totalPages) {
+      fetchEligibleResults(pagination.page + 1);
     }
-
-    fetchEligibleResults(pagination.page + 1);
   };
 
   return (
@@ -170,7 +161,7 @@ function ApplyPromotion({ onPromotionApplied }) {
             <h2 className="text-xl font-semibold">Apply Promotion</h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Process approved third-term results with a final principal
+              Process published third-term results with a final principal
               decision.
             </p>
           </div>
@@ -209,8 +200,9 @@ function ApplyPromotion({ onPromotionApplied }) {
           </p>
 
           <p className="mt-1 text-xs text-slate-500">
-            Students must have an approved third-term result and a final
-            principal decision.
+            Students must have a published third-term result and a final
+            principal decision. Already processed students should not appear
+            again.
           </p>
         </div>
       ) : (
@@ -219,25 +211,16 @@ function ApplyPromotion({ onPromotionApplied }) {
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Student
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Class
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Session
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Decision
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Target
-                  </th>
+                  {["Student", "Class", "Session", "Decision", "Target"].map(
+                    (heading) => (
+                      <th
+                        key={heading}
+                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400"
+                      >
+                        {heading}
+                      </th>
+                    ),
+                  )}
 
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Action
@@ -258,7 +241,6 @@ function ApplyPromotion({ onPromotionApplied }) {
                     .join(" ");
 
                   const decision = result.principalDecision;
-
                   const currentClass =
                     result.currentClass || student?.currentClass;
 
@@ -270,15 +252,13 @@ function ApplyPromotion({ onPromotionApplied }) {
                       className="transition hover:bg-white/5"
                     >
                       <td className="whitespace-nowrap px-4 py-4">
-                        <div>
-                          <p className="font-medium text-white">
-                            {fullName || "Unknown student"}
-                          </p>
+                        <p className="font-medium text-white">
+                          {fullName || "Unknown student"}
+                        </p>
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            {student?.studentId || "—"}
-                          </p>
-                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {student?.studentId || "—"}
+                        </p>
                       </td>
 
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-300">
@@ -312,7 +292,11 @@ function ApplyPromotion({ onPromotionApplied }) {
                           disabled={applyingId === result._id}
                           className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {applyingId === result._id ? "Applying..." : "Apply"}
+                          {applyingId === result._id
+                            ? "Applying..."
+                            : targetClass === "Graduated"
+                              ? "Graduate"
+                              : "Apply"}
                         </button>
                       </td>
                     </tr>

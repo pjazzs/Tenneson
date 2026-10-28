@@ -125,10 +125,10 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
   |--------------------------------------------------------------------------
   */
 
-  if (result.status !== "approved") {
+  if (result.status !== "published") {
     return res.status(400).json({
       success: false,
-      message: "Only approved results can be used for promotion.",
+      message: "Only published third-term results can be used for promotion.",
     });
   }
 
@@ -245,8 +245,7 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
     toClass = fromClass;
     decision = "repeat";
   } else if (fromClass === "SS3") {
-
-  /*
+    /*
   |--------------------------------------------------------------------------
   | Graduation
   |--------------------------------------------------------------------------
@@ -265,8 +264,7 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
     toClass = "SS3";
     decision = "graduated";
   } else {
-
-  /*
+    /*
   |--------------------------------------------------------------------------
   | Normal Promotion
   |--------------------------------------------------------------------------

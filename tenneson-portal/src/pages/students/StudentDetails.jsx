@@ -75,9 +75,7 @@ function StudentDetails() {
 
       const response = await api.patch(
         `/students/${student._id}/photo`,
-
         formData,
-
         {
           headers: {
             "Content-Type": "multipart/form-data",
@@ -87,13 +85,16 @@ function StudentDetails() {
 
       setStudent((prev) => ({
         ...prev,
-
         photo: response.data.photo,
       }));
     } catch (error) {
       console.log("Upload error:", error.response?.data || error.message);
     } finally {
       setUploading(false);
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
     }
   };
 
@@ -272,7 +273,7 @@ function StudentDetails() {
 
           {hasPermission("students.update") && (
             <ActionButton
-              onClick={() => fileRef.current.click()}
+              onClick={() => fileRef.current?.click()}
               color="green"
               icon={<FaUpload />}
               text={
@@ -282,6 +283,7 @@ function StudentDetails() {
                     ? "Change Photo"
                     : "Upload Photo"
               }
+              disabled={uploading}
             />
           )}
 
@@ -639,50 +641,30 @@ function StudentDetails() {
     ACTION BUTTON COMPONENT
 */
 
-function ActionButton({ onClick, color, icon, text }) {
+function ActionButton({ onClick, color, icon, text, disabled = false }) {
   const colors = {
     green: "bg-green-600 hover:bg-green-700",
-
     blue: "bg-blue-600 hover:bg-blue-700",
-
     red: "bg-red-600 hover:bg-red-700",
-
     purple: "bg-purple-600 hover:bg-purple-700",
-
     orange: "bg-orange-600 hover:bg-orange-700",
-
     gray: "bg-gray-600 hover:bg-gray-700",
   };
 
   return (
     <button
+      type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`
         ${colors[color]}
-
-        flex
-
-        items-center
-
-        gap-2
-
-        px-4
-
-        py-2
-
-        rounded-xl
-
-        text-sm
-
-        transition
-
-        shadow-lg
-
+        flex items-center gap-2 px-4 py-2
+        rounded-xl text-sm transition shadow-lg
         active:scale-95
+        disabled:opacity-50 disabled:cursor-not-allowed
       `}
     >
       {icon}
-
       {text}
     </button>
   );
