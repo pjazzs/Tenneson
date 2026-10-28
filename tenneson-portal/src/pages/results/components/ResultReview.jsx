@@ -257,6 +257,12 @@ const ResultReview = ({
                       </th>
                     )}
 
+                    {showSecondTerm && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Weighted Average
+                      </th>
+                    )}
+
                     <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Grade
                     </th>
@@ -272,7 +278,7 @@ const ResultReview = ({
                     <tr>
                       <td
                         colSpan={
-                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 2 : 0)
+                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 3 : 0)
                         }
                         className="px-4 py-8 text-center text-sm text-slate-500"
                       >
@@ -437,6 +443,15 @@ const ResultReview = ({
                             <td className="px-3 py-4 text-center">
                               <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-violet-500/10 px-2 py-1 text-sm font-semibold text-violet-300">
                                 {formatValue(cumulativeScore)}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Weighted Average */}
+                          {showSecondTerm && (
+                            <td className="px-3 py-4 text-center">
+                              <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-emerald-500/10 px-2 py-1 text-sm font-semibold text-emerald-300">
+                                {formatValue(weightedAverage)}
                               </span>
                             </td>
                           )}
