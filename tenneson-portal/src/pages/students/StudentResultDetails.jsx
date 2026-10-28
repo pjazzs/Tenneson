@@ -625,7 +625,10 @@ function StudentResultDetails() {
                           : "");
 
                       const currentRemark = notOfferedThisTerm
-                        ? secondTermRemark || firstTermRemark || "Not Offered"
+                        ? currentTermRemark ||
+                          secondTermRemark ||
+                          firstTermRemark ||
+                          "Not Offered"
                         : currentTermRemark || "—";
 
                       const currentGrade =
