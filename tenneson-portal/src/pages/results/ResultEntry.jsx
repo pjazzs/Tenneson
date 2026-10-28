@@ -570,22 +570,18 @@ const ResultEntry = () => {
             subjectId: subject._id,
             subjectName: subject.name,
             subjectCode: subject.code || "",
-            offered,
-            ca1,
-            ca2,
-            exam,
-            total: currentTotal,
-
-            // Restore the previous-term scores saved in the third-term draft.
-            firstTerm: savedEntry.firstTerm ?? null,
-            secondTerm: savedEntry.secondTerm ?? null,
-
-            cumulativeScore: savedEntry.cumulativeScore ?? "",
-            weightedAverage: savedEntry.weightedAverage ?? "",
-
-            grade: calculatedGrade.grade || "",
-            remark: calculatedGrade.remark || "",
-            teacherComment: savedEntry.teacherComment || "",
+            offered: true,
+            ca1: "",
+            ca2: "",
+            exam: "",
+            total: "",
+            firstTerm: null,
+            secondTerm: null,
+            cumulativeScore: "",
+            weightedAverage: "",
+            grade: "",
+            remark: "",
+            teacherComment: "",
           };
         }
 
@@ -627,6 +623,10 @@ const ResultEntry = () => {
           ca2,
           exam,
           total: currentTotal,
+
+          firstTerm: savedEntry.firstTerm ?? null,
+          secondTerm: savedEntry.secondTerm ?? null,
+
           cumulativeScore: savedEntry.cumulativeScore ?? "",
           weightedAverage: savedEntry.weightedAverage ?? "",
           grade: calculatedGrade.grade || "",
@@ -840,31 +840,28 @@ const ResultEntry = () => {
       }
 
       // Third term: calculate cumulative score and weighted average.
-      const getPreviousTotal = (previousTerm) => {
-        const result = previousTermResults[previousTerm];
+      const getPreviousTotal = (termKey) => {
+        const result = previousTermResults?.[termKey];
 
-        if (!Array.isArray(result?.subjectResults)) return null;
+        const previousSubject = Array.isArray(result?.subjectResults)
+          ? result.subjectResults.find(
+              (item) => getSubjectResultId(item) === String(entry.subjectId),
+            )
+          : null;
 
-        const previousSubject = result.subjectResults.find((item) => {
-          const subjectId =
-            typeof item.subject === "object"
-              ? item.subject?._id
-              : item.subject || item.subjectId;
-
-          return String(subjectId || "") === String(entry.subjectId);
-        });
+        const previous = previousSubject ?? entry?.[`${termKey}Term`];
 
         if (
-          !previousSubject ||
-          previousSubject.offered !== true ||
-          previousSubject.total === null ||
-          previousSubject.total === undefined ||
-          previousSubject.total === ""
+          previous?.offered !== true ||
+          previous.total === null ||
+          previous.total === undefined ||
+          previous.total === ""
         ) {
           return null;
         }
 
-        const total = Number(previousSubject.total);
+        const total = Number(previous.total);
+
         return Number.isFinite(total) && total >= 0 && total <= 100
           ? total
           : null;
