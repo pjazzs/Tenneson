@@ -139,10 +139,10 @@ const Results = () => {
       const response = await getResult(resultId);
 
       console.log("Single result retrieved:", response);
-      console.log(
-        "THIRD TERM SUBJECT DETAILS:",
-        JSON.stringify(response.result.subjectResults, null, 2),
-      );
+      // console.log(
+      //   "THIRD TERM SUBJECT DETAILS:",
+      //   JSON.stringify(response.result.subjectResults, null, 2),
+      // );
 
       setSelectedResult(response?.result || response);
     } catch (err) {

@@ -223,21 +223,38 @@ const ResultScoreEntry = ({
   const getPreviousSubjectInfo = (previousTerm, entry) => {
     const subjectResult = getPreviousSubjectResult(previousTerm, entry);
 
-    if (!subjectResult || subjectResult.offered !== true) {
+    // Prefer the separately retrieved previous-term result.
+    // Fall back to the values saved in the third-term draft.
+    const savedPreviousTerm = entry?.[`${previousTerm}Term`];
+
+    const previous = subjectResult
+      ? {
+          offered: subjectResult.offered,
+          total: subjectResult.total,
+        }
+      : savedPreviousTerm;
+
+    if (!previous || previous.offered !== true) {
       return {
         offered: false,
         total: null,
       };
     }
 
-    const total = Number(subjectResult.total);
-
     if (
-      subjectResult.total === null ||
-      subjectResult.total === undefined ||
-      subjectResult.total === "" ||
-      !Number.isFinite(total)
+      previous.total === null ||
+      previous.total === undefined ||
+      previous.total === ""
     ) {
+      return {
+        offered: false,
+        total: null,
+      };
+    }
+
+    const total = Number(previous.total);
+
+    if (!Number.isFinite(total) || total < 0 || total > 100) {
       return {
         offered: false,
         total: null,

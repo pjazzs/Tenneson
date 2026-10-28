@@ -128,26 +128,29 @@ const getEmptyComments = () => ({
 const calculateThirdTermEntry = (entry, previousTermResults) => {
   const getPreviousTotal = (termKey) => {
     const result = previousTermResults?.[termKey];
-
-    if (!Array.isArray(result?.subjectResults)) return null;
-
     const subjectId = String(entry.subjectId ?? "");
 
-    const previousSubject = result.subjectResults.find(
-      (item) => getSubjectResultId(item) === subjectId,
-    );
+    // First, look for the subject in the separately retrieved result.
+    const previousSubject = Array.isArray(result?.subjectResults)
+      ? result.subjectResults.find(
+          (item) => getSubjectResultId(item) === subjectId,
+        )
+      : null;
+
+    // If it isn't found, fall back to the saved third-term draft.
+    const previous = previousSubject ?? entry?.[`${termKey}Term`];
 
     if (
-      !previousSubject ||
-      previousSubject.offered !== true ||
-      previousSubject.total === "" ||
-      previousSubject.total === null ||
-      previousSubject.total === undefined
+      !previous ||
+      previous.offered !== true ||
+      previous.total === null ||
+      previous.total === undefined ||
+      previous.total === ""
     ) {
       return null;
     }
 
-    const total = Number(previousSubject.total);
+    const total = Number(previous.total);
 
     return Number.isFinite(total) && total >= 0 && total <= 100 ? total : null;
   };
@@ -567,14 +570,22 @@ const ResultEntry = () => {
             subjectId: subject._id,
             subjectName: subject.name,
             subjectCode: subject.code || "",
-            offered: true,
-            ca1: "",
-            ca2: "",
-            exam: "",
-            total: 0,
-            grade: "",
-            remark: "",
-            teacherComment: "",
+            offered,
+            ca1,
+            ca2,
+            exam,
+            total: currentTotal,
+
+            // Restore the previous-term scores saved in the third-term draft.
+            firstTerm: savedEntry.firstTerm ?? null,
+            secondTerm: savedEntry.secondTerm ?? null,
+
+            cumulativeScore: savedEntry.cumulativeScore ?? "",
+            weightedAverage: savedEntry.weightedAverage ?? "",
+
+            grade: calculatedGrade.grade || "",
+            remark: calculatedGrade.remark || "",
+            teacherComment: savedEntry.teacherComment || "",
           };
         }
 
