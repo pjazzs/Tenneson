@@ -125,6 +125,79 @@ const getEmptyComments = () => ({
   performance: "",
 });
 
+const calculateThirdTermEntry = (entry, previousTermResults) => {
+  const getPreviousTotal = (termKey) => {
+    const result = previousTermResults?.[termKey];
+
+    if (!Array.isArray(result?.subjectResults)) return null;
+
+    const subjectId = String(entry.subjectId ?? "");
+
+    const previousSubject = result.subjectResults.find(
+      (item) => getSubjectResultId(item) === subjectId,
+    );
+
+    if (
+      !previousSubject ||
+      previousSubject.offered !== true ||
+      previousSubject.total === "" ||
+      previousSubject.total === null ||
+      previousSubject.total === undefined
+    ) {
+      return null;
+    }
+
+    const total = Number(previousSubject.total);
+
+    return Number.isFinite(total) && total >= 0 && total <= 100 ? total : null;
+  };
+
+  const firstTotal = getPreviousTotal("first");
+  const secondTotal = getPreviousTotal("second");
+
+  const scoresComplete = [entry.ca1, entry.ca2, entry.exam].every(
+    (value) =>
+      value !== "" &&
+      value !== null &&
+      value !== undefined &&
+      Number.isFinite(Number(value)),
+  );
+
+  const currentTotal =
+    entry.offered && scoresComplete
+      ? Number(entry.ca1) + Number(entry.ca2) + Number(entry.exam)
+      : null;
+
+  const eligibleTotals = [firstTotal, secondTotal, currentTotal].filter(
+    (value) => value !== null,
+  );
+
+  const cumulativeScore = eligibleTotals.reduce((sum, value) => sum + value, 0);
+
+  const weightedAverage =
+    eligibleTotals.length > 0 ? cumulativeTotalsAverage(eligibleTotals) : null;
+
+  const gradeResult =
+    weightedAverage === null
+      ? { grade: "", remark: "" }
+      : calculateResultGrade(weightedAverage);
+
+  return {
+    ...entry,
+    total: entry.offered ? (currentTotal ?? "") : "",
+    cumulativeScore:
+      weightedAverage === null ? "" : Math.round(cumulativeScore * 100) / 100,
+    weightedAverage: weightedAverage ?? "",
+    grade: gradeResult.grade ?? "",
+    remark: gradeResult.remark ?? "",
+  };
+};
+
+const cumulativeTotalsAverage = (totals) =>
+  Math.round(
+    (totals.reduce((sum, value) => sum + value, 0) / totals.length) * 100,
+  ) / 100;
+
 const ResultEntry = () => {
   const [academicSessions, setAcademicSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -339,6 +412,15 @@ const ResultEntry = () => {
     );
   }, [subjects, selectedSubjectIds]);
 
+  const displayScoreEntries = useMemo(() => {
+    if (term !== "third") {
+      return scoreEntries;
+    }
+
+    return scoreEntries.map((entry) =>
+      calculateThirdTermEntry(entry, previousTermResults),
+    );
+  }, [scoreEntries, previousTermResults, term]);
   /*
   |--------------------------------------------------------------------------
   | Reset Retrieved Result Data
@@ -1746,7 +1828,7 @@ const ResultEntry = () => {
         academicSession={selectedSession}
         onPreviousTermResultsChange={handlePreviousTermResultsChange}
         term={term}
-        scoreEntries={scoreEntries}
+        scoreEntries={displayScoreEntries}
         onScoreEntriesChange={handleScoreEntriesChange}
         onBack={handleBackToSelection}
         onContinue={handleContinueFromScores}
@@ -1878,7 +1960,7 @@ const ResultEntry = () => {
         selectedStudent={selectedStudent}
         academicSession={selectedSession}
         term={term}
-        scoreEntries={scoreEntries}
+        scoreEntries={displayScoreEntries}
         previousTermResults={previousTermResults}
         attendance={attendance}
         affectiveDomain={affectiveDomain}
