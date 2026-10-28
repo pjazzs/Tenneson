@@ -2447,40 +2447,56 @@ exports.getMyPublishedResults = asyncHandler(async (req, res) => {
 
     const results = await Result.find({
       student: studentAuthId,
-
       status: "published",
     })
       .populate({
         path: "academicSession",
         select: "name terms",
       })
-
       .populate({
         path: "student",
         select:
           "studentId firstName lastName otherName currentClass session photo",
       })
-
       .sort({
         academicSession: -1,
-
         term: 1,
       })
-
       .lean();
 
-    const promotion = await Promotion.findOne({
-      sourceResult: result._id,
+    // Return early if the student has no published results.
+    if (results.length === 0) {
+      return res.status(200).json({
+        success: true,
+        results: [],
+      });
+    }
+
+    // Find promotion records linked to these specific results.
+    const resultIds = results.map((item) => item._id);
+
+    const promotions = await Promotion.find({
+      sourceResult: { $in: resultIds },
     })
-      .select("decision fromClass toClass appliedAt")
+      .select("sourceResult decision fromClass toClass appliedAt")
       .lean();
+
+    // Match each applied promotion to its source result.
+    const promotionMap = new Map(
+      promotions.map((promotion) => [
+        promotion.sourceResult.toString(),
+        promotion,
+      ]),
+    );
+
+    const resultsWithPromotion = results.map((item) => ({
+      ...item,
+      promotion: promotionMap.get(item._id.toString()) || null,
+    }));
 
     return res.status(200).json({
       success: true,
-      result: {
-        ...result,
-        promotion: promotion || null,
-      },
+      results: resultsWithPromotion,
     });
   } catch (error) {
     return sendError(
@@ -2566,11 +2582,18 @@ exports.getMyPublishedResult = asyncHandler(async (req, res) => {
     if (!result) {
       return sendError(res, 404, "Published result not found.");
     }
+    const promotion = await Promotion.findOne({
+      sourceResult: result._id,
+    })
+      .select("decision fromClass toClass appliedAt")
+      .lean();
 
     return res.status(200).json({
       success: true,
-
-      result,
+      result: {
+        ...result,
+        promotion: promotion || null,
+      },
     });
   } catch (error) {
     return sendError(
