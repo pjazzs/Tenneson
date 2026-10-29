@@ -1,20 +1,23 @@
 const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
+const { MongoMemoryReplSet } = require("mongodb-memory-server");
 
 let mongoServer;
 
 jest.setTimeout(120000);
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create({
+  mongoServer = await MongoMemoryReplSet.create({
     binary: {
       version: "7.0.14",
+    },
+    replSet: {
+      count: 1,
     },
   });
 
   await mongoose.connect(mongoServer.getUri());
 
-  console.log("MongoDB Memory Server connected (test)...");
+  console.log("MongoDB Memory Replica Set connected (test)...");
 });
 
 afterEach(async () => {

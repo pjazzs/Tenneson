@@ -519,5 +519,55 @@ describe("Promotion Controller", () => {
 
       expect(promotion.appliedBy.toString()).toBe(admin._id.toString());
     });
+
+    test("should reject promotion when the student's current class differs from the result snapshot", async () => {
+      student.currentClass = "JSS2";
+      await student.save();
+
+      const token = await loginAdmin();
+
+      const response = await request(app)
+        .patch(`/api/v1/promotions/${result._id}/apply`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toMatch(/current class does not match/i);
+
+      const unchangedStudent = await Student.findById(student._id);
+
+      expect(unchangedStudent.currentClass).toBe("JSS2");
+      expect(unchangedStudent.session).toBe("2025/2026");
+
+      expect(await Promotion.countDocuments({ sourceResult: result._id })).toBe(
+        0,
+      );
+    });
+
+    test("should reject promotion when the student's current session differs from the result session", async () => {
+      student.session = "2026/2027";
+      await student.save();
+
+      const token = await loginAdmin();
+
+      const response = await request(app)
+        .patch(`/api/v1/promotions/${result._id}/apply`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toMatch(
+        /current academic session does not match/i,
+      );
+
+      const unchangedStudent = await Student.findById(student._id);
+
+      expect(unchangedStudent.currentClass).toBe("JSS1");
+      expect(unchangedStudent.session).toBe("2026/2027");
+
+      expect(await Promotion.countDocuments({ sourceResult: result._id })).toBe(
+        0,
+      );
+    });
   });
 });

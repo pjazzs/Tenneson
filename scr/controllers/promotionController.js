@@ -16,6 +16,15 @@ const createAuditLog = require("../utils/createAuditLog");
 */
 
 /**
+ * Create an error with an HTTP status code.
+ */
+const createHttpError = (message, statusCode) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+/**
  * Derive the next academic session.
  *
  * Example:
@@ -25,24 +34,17 @@ const getNextSessionName = (sessionName) => {
   const match = String(sessionName).match(/^(\d{4})\/(\d{4})$/);
 
   if (!match) {
-    const error = new Error(
+    throw createHttpError(
       "The academic session name must use the format YYYY/YYYY.",
+      400,
     );
-
-    error.statusCode = 400;
-
-    throw error;
   }
 
   const startYear = Number(match[1]);
   const endYear = Number(match[2]);
 
   if (endYear !== startYear + 1) {
-    const error = new Error("Invalid academic session name.");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createHttpError("Invalid academic session name.", 400);
   }
 
   return `${startYear + 1}/${endYear + 1}`;
@@ -77,294 +79,338 @@ const getNextClass = (currentClass) => {
  *
  * The Result remains historical and is never modified here.
  *
- * For promoted students:
+ * Promoted:
  *   Student moves to the next class and next session.
  *
- * For repeating students:
+ * Repeat:
  *   Student remains in the same class but moves to the next session.
  *
- * For SS3:
+ * SS3:
  *   Student remains in SS3.
  *   Promotion.decision becomes "graduated".
- *   The academic session still advances.
+ *   The academic session advances.
+ *
+ * IMPORTANT:
+ * Student update and Promotion creation happen inside one
+ * MongoDB transaction.
  */
 exports.applyPromotion = asyncHandler(async (req, res) => {
   const { resultId } = req.params;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Find Result
-  |--------------------------------------------------------------------------
-  */
-
-  const result = await Result.findById(resultId);
-
-  if (!result) {
-    return res.status(404).json({
-      success: false,
-      message: "Result not found.",
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Third-Term Requirement
-  |--------------------------------------------------------------------------
-  */
-
-  if (result.term !== "third") {
-    return res.status(400).json({
-      success: false,
-      message: "Only third-term results can be used for promotion.",
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Result Approval Requirement
-  |--------------------------------------------------------------------------
-  */
-
-  if (result.status !== "published") {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Only approved and published third-term results can be used for promotion.",
-    });
-  }
-  /*
-  |--------------------------------------------------------------------------
-  | Principal Decision Requirement
-  |--------------------------------------------------------------------------
-  */
-
-  if (!["promoted", "repeat"].includes(result.principalDecision)) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "A final Principal decision of promoted or repeat is required before promotion can be applied.",
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Prevent Duplicate Promotion
-  |--------------------------------------------------------------------------
-  */
-
-  const existingPromotion = await Promotion.findOne({
-    sourceResult: result._id,
-  });
-
-  if (existingPromotion) {
-    return res.status(409).json({
-      success: false,
-      message: "This result has already been used to apply a promotion.",
-      promotion: existingPromotion,
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Find Student
-  |--------------------------------------------------------------------------
-  */
-
-  const student = await Student.findById(result.student);
-
-  if (!student) {
-    return res.status(404).json({
-      success: false,
-      message: "Student associated with this result was not found.",
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Find Source Academic Session
-  |--------------------------------------------------------------------------
-  */
-
-  const sourceSession = await AcademicSession.findById(result.academicSession);
-
-  if (!sourceSession) {
-    return res.status(404).json({
-      success: false,
-      message: "Academic session associated with this result was not found.",
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Derive Next Academic Session
-  |--------------------------------------------------------------------------
-  */
-
-  const nextSessionName = getNextSessionName(sourceSession.name);
-
-  const nextSession = await AcademicSession.findOne({
-    name: nextSessionName,
-  });
-
-  if (!nextSession) {
-    return res.status(404).json({
-      success: false,
-      message: `Academic session ${nextSessionName} was not found.`,
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Determine Promotion Target
-  |--------------------------------------------------------------------------
-  */
-
-  const fromClass = result.currentClass;
-
-  if (!fromClass) {
-    return res.status(400).json({
-      success: false,
-      message: "The result does not contain a valid class snapshot.",
-    });
-  }
-
+  let student;
+  let sourceSession;
+  let nextSession;
+  let promotion;
+  let fromClass;
   let toClass;
   let decision;
 
   /*
   |--------------------------------------------------------------------------
-  | Repeat
+  | Start MongoDB Transaction
   |--------------------------------------------------------------------------
-  |
-  | A repeating student remains in the same class but moves
-  | into the next academic session.
-  |
   */
 
-  if (result.principalDecision === "repeat") {
-    toClass = fromClass;
-    decision = "repeat";
-  } else if (fromClass === "SS3") {
-    /*
-  |--------------------------------------------------------------------------
-  | Graduation
-  |--------------------------------------------------------------------------
-  |
-  | SS3 is the final class.
-  |
-  | We do NOT set Student.currentClass to "Graduated" because
-  | the Student schema only allows the academic classes.
-  |
-  | Instead:
-  |
-  |   toClass = "SS3"
-  |   decision = "graduated"
-  |
-  */
-    toClass = "SS3";
-    decision = "graduated";
-  } else {
-    /*
-  |--------------------------------------------------------------------------
-  | Normal Promotion
-  |--------------------------------------------------------------------------
-  */
-    toClass = getNextClass(fromClass);
+  const mongoSession = await mongoose.startSession();
 
-    if (!toClass) {
-      return res.status(400).json({
-        success: false,
-        message: `No promotion path is configured for class ${fromClass}.`,
+  try {
+    await mongoSession.withTransaction(async () => {
+      /*
+      |--------------------------------------------------------------------------
+      | Find Result Inside Transaction
+      |--------------------------------------------------------------------------
+      |
+      | Re-fetching the result inside the transaction ensures that
+      | the decision and result status are checked immediately before
+      | applying the promotion.
+      |
+      */
+
+      const result = await Result.findById(resultId).session(mongoSession);
+
+      if (!result) {
+        throw createHttpError("Result not found.", 404);
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Third-Term Requirement
+      |--------------------------------------------------------------------------
+      */
+
+      if (result.term !== "third") {
+        throw createHttpError(
+          "Only third-term results can be used for promotion.",
+          400,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Result Approval Requirement
+      |--------------------------------------------------------------------------
+      */
+
+      if (result.status !== "published") {
+        throw createHttpError(
+          "Only approved and published third-term results can be used for promotion.",
+          400,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Principal Decision Requirement
+      |--------------------------------------------------------------------------
+      */
+
+      if (!["promoted", "repeat"].includes(result.principalDecision)) {
+        throw createHttpError(
+          "A final Principal decision of promoted or repeat is required before promotion can be applied.",
+          400,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Prevent Duplicate Promotion
+      |--------------------------------------------------------------------------
+      */
+
+      const existingPromotion = await Promotion.findOne({
+        sourceResult: result._id,
+      }).session(mongoSession);
+
+      if (existingPromotion) {
+        throw createHttpError(
+          "This result has already been used to apply a promotion.",
+          409,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Validate Result Class Snapshot
+      |--------------------------------------------------------------------------
+      */
+
+      fromClass = result.currentClass;
+
+      if (!fromClass) {
+        throw createHttpError(
+          "The result does not contain a valid class snapshot.",
+          400,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Find Student
+      |--------------------------------------------------------------------------
+      */
+
+      student = await Student.findById(result.student).session(mongoSession);
+
+      if (!student) {
+        throw createHttpError(
+          "Student associated with this result was not found.",
+          404,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Find Source Academic Session
+      |--------------------------------------------------------------------------
+      */
+
+      sourceSession = await AcademicSession.findById(
+        result.academicSession,
+      ).session(mongoSession);
+
+      if (!sourceSession) {
+        throw createHttpError(
+          "Academic session associated with this result was not found.",
+          404,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Integrity Check: Student's Current Class
+      |--------------------------------------------------------------------------
+      |
+      | The student's current class must match the class snapshot
+      | stored in the result.
+      |
+      | This prevents an old result from moving a student who has
+      | already been promoted or manually reassigned.
+      |
+      */
+
+      if (student.currentClass !== fromClass) {
+        throw createHttpError(
+          "The student's current class does not match the class recorded in this result. Promotion cannot be applied using this outdated result.",
+          409,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Integrity Check: Student's Current Academic Session
+      |--------------------------------------------------------------------------
+      |
+      | The student's current session must match the session
+      | associated with the result.
+      |
+      */
+
+      if (student.session !== sourceSession.name) {
+        throw createHttpError(
+          "The student's current academic session does not match the academic session recorded in this result. Promotion cannot be applied using this outdated result.",
+          409,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Derive Next Academic Session
+      |--------------------------------------------------------------------------
+      */
+
+      const nextSessionName = getNextSessionName(sourceSession.name);
+
+      nextSession = await AcademicSession.findOne({
+        name: nextSessionName,
+      }).session(mongoSession);
+
+      if (!nextSession) {
+        throw createHttpError(
+          `Academic session ${nextSessionName} was not found.`,
+          404,
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Determine Promotion Target
+      |--------------------------------------------------------------------------
+      */
+
+      /*
+      |--------------------------------------------------------------------------
+      | Repeat
+      |--------------------------------------------------------------------------
+      |
+      | The student remains in the same class but moves into
+      | the next academic session.
+      |
+      */
+
+      if (result.principalDecision === "repeat") {
+        toClass = fromClass;
+        decision = "repeat";
+      } else if (fromClass === "SS3") {
+        /*
+        |--------------------------------------------------------------------------
+        | Graduation
+        |--------------------------------------------------------------------------
+        |
+        | SS3 is the final class.
+        |
+        | We do not set Student.currentClass to "Graduated"
+        | because the Student schema only allows academic classes.
+        |
+        | Instead:
+        |   toClass = "SS3"
+        |   decision = "graduated"
+        |
+        */
+
+        toClass = "SS3";
+        decision = "graduated";
+      } else {
+        /*
+        |--------------------------------------------------------------------------
+        | Normal Promotion
+        |--------------------------------------------------------------------------
+        */
+
+        toClass = getNextClass(fromClass);
+
+        if (!toClass) {
+          throw createHttpError(
+            `No promotion path is configured for class ${fromClass}.`,
+            400,
+          );
+        }
+
+        decision = "promoted";
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Update Student
+      |--------------------------------------------------------------------------
+      |
+      | This update is part of the transaction.
+      | It will be rolled back if Promotion creation fails.
+      |
+      */
+
+      student.currentClass = toClass;
+      student.session = nextSession.name;
+      student.updatedBy = req.admin._id;
+
+      await student.save({
+        session: mongoSession,
       });
-    }
 
-    decision = "promoted";
-  }
+      /*
+      |--------------------------------------------------------------------------
+      | Create Promotion Record
+      |--------------------------------------------------------------------------
+      |
+      | Promotion.create() receives an array when using a Mongoose
+      | session so that the document is created within the transaction.
+      |
+      */
 
-  /*
-  |--------------------------------------------------------------------------
-  | Preserve Student State
-  |--------------------------------------------------------------------------
-  |
-  | Keep the previous values so we can restore them if creating the
-  | Promotion record fails.
-  |
-  */
+      const createdPromotions = await Promotion.create(
+        [
+          {
+            student: student._id,
 
-  const previousStudentState = {
-    currentClass: student.currentClass,
-    session: student.session,
-    updatedBy: student.updatedBy,
-  };
+            sourceResult: result._id,
 
-  /*
-  |--------------------------------------------------------------------------
-  | Update Student
-  |--------------------------------------------------------------------------
-  */
+            fromSession: sourceSession._id,
 
-  student.currentClass = toClass;
-  student.session = nextSession.name;
-  student.updatedBy = req.admin._id;
+            toSession: nextSession._id,
 
-  try {
-    await student.save();
-  } catch (error) {
-    throw error;
-  }
+            fromClass,
 
-  /*
-  |--------------------------------------------------------------------------
-  | Create Promotion Record
-  |--------------------------------------------------------------------------
-  */
+            toClass,
 
-  let promotion;
+            decision,
 
-  try {
-    promotion = await Promotion.create({
-      student: student._id,
+            appliedBy: req.admin._id,
 
-      sourceResult: result._id,
+            appliedAt: new Date(),
+          },
+        ],
+        {
+          session: mongoSession,
+        },
+      );
 
-      fromSession: sourceSession._id,
-
-      toSession: nextSession._id,
-
-      fromClass,
-
-      toClass,
-
-      decision,
-
-      appliedBy: req.admin._id,
-
-      appliedAt: new Date(),
+      promotion = createdPromotions[0];
     });
   } catch (error) {
     /*
-     * Restore the Student if Promotion creation fails.
-     *
-     * This keeps the Student and Promotion records consistent.
-     */
-
-    student.currentClass = previousStudentState.currentClass;
-    student.session = previousStudentState.session;
-    student.updatedBy = previousStudentState.updatedBy;
-
-    try {
-      await student.save();
-    } catch (rollbackError) {
-      console.error(
-        "Promotion student rollback failed:",
-        rollbackError.message,
-      );
-    }
-
-    /*
-     * Another request may have successfully created the promotion
-     * at the same time.
-     */
+    |--------------------------------------------------------------------------
+    | Handle Transaction Errors
+    |--------------------------------------------------------------------------
+    */
 
     if (error.code === 11000) {
       return res.status(409).json({
@@ -373,13 +419,26 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
       });
     }
 
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     throw error;
+  } finally {
+    await mongoSession.endSession();
   }
 
   /*
   |--------------------------------------------------------------------------
   | Audit Log
   |--------------------------------------------------------------------------
+  |
+  | Logs are created after the transaction commits.
+  | A failure in logging will not undo a completed promotion.
+  |
   */
 
   await createAuditLog({
@@ -601,7 +660,7 @@ exports.getPromotions = asyncHandler(async (req, res) => {
       .lean();
 
     query.student = {
-      $in: matchingStudents.map((student) => student._id),
+      $in: matchingStudents.map((matchingStudent) => matchingStudent._id),
     };
   }
 
