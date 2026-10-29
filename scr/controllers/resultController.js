@@ -3330,207 +3330,194 @@ exports.rejectResultCorrection = asyncHandler(async (req, res) => {
 */
 
 exports.publishResultCorrection = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+
+  let revision;
+  let officialResult;
+  let student;
+
   try {
-    const revision = await findResultRevisionById(req.params.revisionId);
-
-    if (revision.status !== "approved") {
-      return sendError(res, 409, "Only approved corrections can be published.");
-    }
-
-    if (req.body?.confirm !== true) {
-      return sendError(
-        res,
-        400,
-        "Publishing the correction must be explicitly confirmed.",
+    await session.withTransaction(async () => {
+      revision = await ResultRevision.findById(req.params.revisionId).session(
+        session,
       );
-    }
 
-    if (!revision.principalComment?.trim()) {
-      return sendError(
-        res,
-        400,
-        "A Principal comment is required before publishing the correction.",
-      );
-    }
+      if (!revision) {
+        throw createControllerError("Result correction not found.", 404);
+      }
 
-    if (
-      revision.term === "third" &&
-      !["promoted", "repeat"].includes(revision.proposedData?.principalDecision)
-    ) {
-      return sendError(
-        res,
-        400,
-        "A final Principal decision of promoted or repeat is required before publishing this Third Term correction.",
-      );
-    }
+      if (revision.status !== "approved") {
+        throw createControllerError(
+          "Only approved corrections can be published.",
+          409,
+        );
+      }
 
-    const officialResult = await Result.findById(revision.result);
+      if (req.body?.confirm !== true) {
+        throw createControllerError(
+          "Publishing the correction must be explicitly confirmed.",
+          400,
+        );
+      }
 
-    if (!officialResult) {
-      return sendError(res, 404, "The original result could not be found.");
-    }
+      if (!revision.principalComment?.trim()) {
+        throw createControllerError(
+          "A Principal comment is required before publishing the correction.",
+          400,
+        );
+      }
 
-    if (officialResult.status !== "published") {
-      return sendError(
-        res,
-        409,
-        "The original result is no longer published. The correction cannot be applied.",
-      );
-    }
-
-    /*
-     * Optimistic concurrency check.
-     *
-     * If the original result changed after the correction was
-     * initiated, do not overwrite those newer changes.
-     */
-    const originalUpdatedAt = revision.originalSnapshot?.updatedAt
-      ? new Date(revision.originalSnapshot.updatedAt).getTime()
-      : null;
-
-    const currentUpdatedAt = officialResult.updatedAt
-      ? new Date(officialResult.updatedAt).getTime()
-      : null;
-
-    if (originalUpdatedAt !== null && currentUpdatedAt !== originalUpdatedAt) {
-      return sendError(
-        res,
-        409,
-        "The official result has changed since this correction was initiated. Do not publish this outdated correction. Start a new correction using the latest result.",
-      );
-    }
-
-    const student = await Student.findById(revision.student);
-
-    if (!student) {
-      return sendError(res, 404, "Student not found.");
-    }
-
-    const academicSession = await AcademicSession.findById(
-      revision.academicSession,
-    );
-
-    if (!academicSession) {
-      return sendError(res, 404, "Academic session not found.");
-    }
-
-    let payload;
-
-    try {
-      payload = await buildValidatedCorrection(
-        revision,
-        student,
-        academicSession,
-        {
-          requireComplete: true,
-        },
-      );
-    } catch (error) {
-      return sendError(res, error.statusCode || 400, error.message);
-    }
-
-    /*
-     * Third Term calculations are rebuilt from the latest
-     * approved/published First and Second Term results.
-     */
-    if (revision.term === "third") {
       if (
+        revision.term === "third" &&
         !["promoted", "repeat"].includes(
           revision.proposedData?.principalDecision,
         )
       ) {
-        return sendError(
-          res,
+        throw createControllerError(
+          "A final Principal decision of promoted or repeat is required before publishing this Third Term correction.",
           400,
-          "A valid Principal promotion decision is required.",
         );
       }
-    }
 
-    /*
-     * Preserve the original result identity and class snapshot.
-     * Replace only the assessment data.
-     */
-    officialResult.subjectResults = payload.subjectResults;
+      officialResult = await Result.findById(revision.result).session(session);
 
-    officialResult.attendance = payload.attendance;
+      if (!officialResult) {
+        throw createControllerError(
+          "The original result could not be found.",
+          404,
+        );
+      }
 
-    officialResult.affectiveDomain = payload.affectiveDomain;
+      if (officialResult.status !== "published") {
+        throw createControllerError(
+          "The original result is no longer published. The correction cannot be applied.",
+          409,
+        );
+      }
 
-    officialResult.psychomotorDomain = payload.psychomotorDomain;
+      // Reject a correction based on an outdated official result.
+      const originalUpdatedAt = revision.originalSnapshot?.updatedAt
+        ? new Date(revision.originalSnapshot.updatedAt).getTime()
+        : null;
 
-    officialResult.conduct = payload.conduct;
+      const currentUpdatedAt = officialResult.updatedAt
+        ? new Date(officialResult.updatedAt).getTime()
+        : null;
 
-    officialResult.specialReport = payload.specialReport;
+      if (
+        originalUpdatedAt !== null &&
+        currentUpdatedAt !== originalUpdatedAt
+      ) {
+        throw createControllerError(
+          "The official result has changed since this correction was initiated. Do not publish this outdated correction. Start a new correction using the latest result.",
+          409,
+        );
+      }
 
-    officialResult.sports = payload.sports;
+      student = await Student.findById(revision.student).session(session);
 
-    officialResult.clubs = payload.clubs;
+      if (!student) {
+        throw createControllerError("Student not found.", 404);
+      }
 
-    officialResult.comments = {
-      classTeacher: payload.comments?.classTeacher || "",
-      principal: revision.principalComment,
-      performance: payload.performanceComment || "",
-    };
+      const academicSession = await AcademicSession.findById(
+        revision.academicSession,
+      ).session(session);
 
-    officialResult.termDates = payload.termDates;
+      if (!academicSession) {
+        throw createControllerError("Academic session not found.", 404);
+      }
 
-    officialResult.totalScore = payload.totalScore;
+      // Revalidate the complete correction at publication time.
+      // This also rebuilds Third Term calculations.
+      const payload = await buildValidatedCorrection(
+        revision,
+        student,
+        academicSession,
+        { requireComplete: true },
+      );
 
-    officialResult.totalObtainableMarks = payload.totalObtainableMarks;
+      if (
+        revision.term === "third" &&
+        !["promoted", "repeat"].includes(
+          revision.proposedData?.principalDecision,
+        )
+      ) {
+        throw createControllerError(
+          "A valid Principal promotion decision is required.",
+          400,
+        );
+      }
 
-    officialResult.overallPercentage = payload.overallPercentage;
+      // Update only the assessment data on the official result.
+      officialResult.subjectResults = payload.subjectResults;
+      officialResult.attendance = payload.attendance;
+      officialResult.affectiveDomain = payload.affectiveDomain;
+      officialResult.psychomotorDomain = payload.psychomotorDomain;
+      officialResult.conduct = payload.conduct;
+      officialResult.specialReport = payload.specialReport;
+      officialResult.sports = payload.sports;
+      officialResult.clubs = payload.clubs;
 
-    officialResult.performanceComment = payload.performanceComment;
+      officialResult.comments = {
+        classTeacher: payload.comments?.classTeacher || "",
+        principal: revision.principalComment,
+        performance: payload.performanceComment || "",
+      };
 
-    officialResult.promotionStatus = payload.promotionStatus;
+      officialResult.termDates = payload.termDates;
+      officialResult.totalScore = payload.totalScore;
+      officialResult.totalObtainableMarks = payload.totalObtainableMarks;
+      officialResult.overallPercentage = payload.overallPercentage;
+      officialResult.performanceComment = payload.performanceComment;
+      officialResult.promotionStatus = payload.promotionStatus;
 
-    officialResult.principalDecision =
-      revision.term === "third"
-        ? revision.proposedData.principalDecision
-        : "pending";
+      officialResult.principalDecision =
+        revision.term === "third"
+          ? revision.proposedData.principalDecision
+          : "pending";
 
-    /*
-     * The result remains published throughout this operation.
-     * Its published timestamp and actor are refreshed to record
-     * the corrected publication.
-     */
-    officialResult.status = "published";
-    officialResult.publishedBy = getAdminId(req);
-    officialResult.publishedAt = new Date();
-    officialResult.updatedBy = getAdminId(req);
+      // Keep the official result published.
+      officialResult.status = "published";
+      officialResult.publishedBy = getAdminId(req);
+      officialResult.publishedAt = new Date();
+      officialResult.updatedBy = getAdminId(req);
 
-    await officialResult.save();
+      // Both saves belong to the SAME transaction.
+      await officialResult.save({ session });
 
-    /*
-     * Mark the revision as published and close the active
-     * correction. originalSnapshot remains available as history.
-     */
-    revision.status = "published";
-    revision.isActive = false;
-    revision.publishedBy = getAdminId(req);
-    revision.publishedAt = new Date();
-    revision.updatedBy = getAdminId(req);
+      revision.status = "published";
+      revision.isActive = false;
+      revision.publishedBy = getAdminId(req);
+      revision.publishedAt = new Date();
+      revision.updatedBy = getAdminId(req);
 
-    revision.events.push({
-      action: "published",
-      performedBy: getAdminId(req),
-      note: "Approved correction published. Official result updated.",
+      revision.events.push({
+        action: "published",
+        performedBy: getAdminId(req),
+        note: "Approved correction published. Official result updated.",
+      });
+
+      await revision.save({ session });
     });
 
-    await revision.save();
-
+    // Only write audit/activity logs after the transaction commits.
     await createResultAuditLog({
       req,
       action: "PUBLISH_RESULT_CORRECTION",
-      description: `${req.admin.fullName} published correction revision ${revision.revisionNumber} for the ${revision.term} term result of student ${student.studentId}. The previous official result is retained in revision history.`,
+      description:
+        `${req.admin.fullName} published correction revision ` +
+        `${revision.revisionNumber} for the ${revision.term} term ` +
+        `result of student ${student.studentId}.`,
     });
 
     await createResultActivityLog({
       req,
       action: "PUBLISH_RESULT_CORRECTION",
       studentId: student.studentId,
-      details: `Published correction revision ${revision.revisionNumber}. The student's official published result has been updated.`,
+      details:
+        `Published correction revision ${revision.revisionNumber}. ` +
+        "The student's official published result has been updated.",
     });
 
     return res.status(200).json({
@@ -3546,6 +3533,8 @@ exports.publishResultCorrection = asyncHandler(async (req, res) => {
       error.statusCode || 500,
       error.message || "Unable to publish result correction.",
     );
+  } finally {
+    await session.endSession();
   }
 });
 

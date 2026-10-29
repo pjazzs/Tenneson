@@ -9,7 +9,7 @@ const AcademicSession = require("../models/AcademicSession");
 const Subject = require("../models/Subject");
 const Result = require("../models/Result");
 const generateToken = require("../utils/generateToken");
-
+const ResultRevision = require("../models/ResultRevision");
 const API = "/api/v1";
 
 jest.setTimeout(120000);
@@ -1879,6 +1879,234 @@ describe("RESULT API", () => {
         expect(finalResult.publishedBy).toBeDefined();
         expect(finalResult.publishedAt).toBeDefined();
       });
+    });
+  });
+
+  // ----------------------------------------------------------
+  // RESULT CORRECTION PUBLICATION — ATOMICITY AND CONSISTENCY
+  // ----------------------------------------------------------
+
+  const createApprovedCorrection = async (result) => {
+    const createResponse = await request(app)
+      .post(`${API}/results/${result._id}/corrections`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        reason: "Correct an incorrectly recorded examination score.",
+      });
+
+    expect(createResponse.status).toBe(201);
+
+    const revisionId = createResponse.body.revision._id;
+
+    // Change the proposed score while preserving the other
+    // assessment data copied from the published result.
+    const updateResponse = await request(app)
+      .put(`${API}/result-corrections/${revisionId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        subjectResults: [
+          {
+            subjectId: subject._id.toString(),
+            offered: true,
+            ca1: 18,
+            ca2: 9,
+            exam: 65,
+            teacherComment: "Corrected examination score.",
+          },
+        ],
+      });
+
+    expect(updateResponse.status).toBe(200);
+
+    const submitResponse = await request(app)
+      .patch(`${API}/result-corrections/${revisionId}/submit`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(submitResponse.status).toBe(200);
+
+    const approveResponse = await request(app)
+      .patch(`${API}/result-corrections/${revisionId}/approve`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        principalComment: "Correction reviewed and approved.",
+      });
+
+    expect(approveResponse.status).toBe(200);
+    expect(approveResponse.body.revision.status).toBe("approved");
+
+    return revisionId;
+  };
+
+  describe("PATCH /result-corrections/:revisionId/publish", () => {
+    test("publishes an approved correction and closes its revision", async () => {
+      const originalResult = await createStoredResult({
+        status: "published",
+        total: 83,
+      });
+
+      const revisionId = await createApprovedCorrection(originalResult);
+
+      // The official result must remain unchanged before publication.
+      const beforePublish = await Result.findById(originalResult._id);
+
+      expect(beforePublish.status).toBe("published");
+      expect(beforePublish.subjectResults[0].ca1).toBe(15);
+      expect(beforePublish.subjectResults[0].ca2).toBe(8);
+      expect(beforePublish.subjectResults[0].exam).toBe(60);
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revisionId}/publish`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ confirm: true });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.result.status).toBe("published");
+      expect(response.body.revision.status).toBe("published");
+      expect(response.body.revision.isActive).toBe(false);
+
+      const updatedResult = await Result.findById(originalResult._id);
+      const updatedRevision = await ResultRevision.findById(revisionId);
+
+      expect(updatedResult.status).toBe("published");
+      expect(updatedResult.subjectResults[0].ca1).toBe(18);
+      expect(updatedResult.subjectResults[0].ca2).toBe(9);
+      expect(updatedResult.subjectResults[0].exam).toBe(65);
+
+      expect(updatedRevision.status).toBe("published");
+      expect(updatedRevision.isActive).toBe(false);
+      expect(updatedRevision.originalSnapshot.subjectResults[0].ca1).toBe(15);
+    });
+
+    test("does not change the official result without explicit confirmation", async () => {
+      const originalResult = await createStoredResult({
+        status: "published",
+        total: 83,
+      });
+
+      const revisionId = await createApprovedCorrection(originalResult);
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revisionId}/publish`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ confirm: false });
+
+      expect(response.status).toBe(400);
+
+      const unchangedResult = await Result.findById(originalResult._id);
+      const unchangedRevision = await ResultRevision.findById(revisionId);
+
+      expect(unchangedResult.subjectResults[0].ca1).toBe(15);
+      expect(unchangedResult.subjectResults[0].exam).toBe(60);
+      expect(unchangedRevision.status).toBe("approved");
+      expect(unchangedRevision.isActive).toBe(true);
+    });
+
+    test("rejects a correction if the official result changed after initiation", async () => {
+      const originalResult = await createStoredResult({
+        status: "published",
+        total: 83,
+      });
+
+      const revisionId = await createApprovedCorrection(originalResult);
+
+      // Simulate a newer update to the official record.
+      await Result.updateOne(
+        { _id: originalResult._id },
+        {
+          $set: {
+            updatedAt: new Date(Date.now() + 10000),
+            "subjectResults.0.exam": 61,
+          },
+        },
+      );
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revisionId}/publish`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ confirm: true });
+
+      expect(response.status).toBe(409);
+
+      const currentResult = await Result.findById(originalResult._id);
+      const currentRevision = await ResultRevision.findById(revisionId);
+
+      // Preserve the newer official data rather than overwrite it.
+      expect(currentResult.subjectResults[0].exam).toBe(61);
+      expect(currentRevision.status).toBe("approved");
+      expect(currentRevision.isActive).toBe(true);
+    });
+
+    test("does not publish the same revision twice", async () => {
+      const originalResult = await createStoredResult({
+        status: "published",
+        total: 83,
+      });
+
+      const revisionId = await createApprovedCorrection(originalResult);
+
+      const firstResponse = await request(app)
+        .patch(`${API}/result-corrections/${revisionId}/publish`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ confirm: true });
+
+      expect(firstResponse.status).toBe(200);
+
+      const resultAfterFirstPublish = await Result.findById(originalResult._id);
+      const scoreAfterFirstPublish =
+        resultAfterFirstPublish.subjectResults[0].exam;
+
+      const secondResponse = await request(app)
+        .patch(`${API}/result-corrections/${revisionId}/publish`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ confirm: true });
+
+      expect(secondResponse.status).toBe(409);
+
+      const resultAfterSecondPublish = await Result.findById(
+        originalResult._id,
+      );
+
+      expect(resultAfterSecondPublish.subjectResults[0].exam).toBe(
+        scoreAfterFirstPublish,
+      );
+    });
+
+    test("rolls back the official result if saving the revision fails", async () => {
+      const originalResult = await createStoredResult({
+        status: "published",
+        total: 83,
+      });
+
+      const revisionId = await createApprovedCorrection(originalResult);
+
+      const saveSpy = jest
+        .spyOn(ResultRevision.prototype, "save")
+        .mockRejectedValueOnce(new Error("Simulated revision save failure"));
+
+      let response;
+
+      try {
+        response = await request(app)
+          .patch(`${API}/result-corrections/${revisionId}/publish`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({ confirm: true });
+      } finally {
+        saveSpy.mockRestore();
+      }
+
+      expect(response.status).toBe(500);
+
+      const unchangedResult = await Result.findById(originalResult._id);
+      const unchangedRevision = await ResultRevision.findById(revisionId);
+
+      // Both records must retain their pre-publication state.
+      expect(unchangedResult.status).toBe("published");
+      expect(unchangedResult.subjectResults[0].ca1).toBe(15);
+      expect(unchangedResult.subjectResults[0].exam).toBe(60);
+
+      expect(unchangedRevision.status).toBe("approved");
+      expect(unchangedRevision.isActive).toBe(true);
     });
   });
 });
