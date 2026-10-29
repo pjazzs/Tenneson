@@ -14,6 +14,7 @@ const {
 
 const createAuditLog = require("../utils/createAuditLog");
 const logActivity = require("../utils/logActivity");
+const ResultRevision = require("../models/ResultRevision");
 
 const VALID_TERMS = ["first", "second", "third"];
 
@@ -2432,6 +2433,1121 @@ exports.publishResult = asyncHandler(async (req, res) => {
 |
 |--------------------------------------------------------------------------
 */
+
+/*
+|--------------------------------------------------------------------------
+| RESULT CORRECTION WORKFLOW
+|--------------------------------------------------------------------------
+|
+| A correction is stored in ResultRevision, never directly in the
+| official Result document while it is being reviewed.
+|
+| Workflow:
+| draft -> submitted -> approved -> published
+|                    \-> rejected -> draft (after editing)
+|
+|--------------------------------------------------------------------------
+*/
+
+/*
+|--------------------------------------------------------------------------
+| BUILD CORRECTION INPUT FROM AN EXISTING RESULT
+|--------------------------------------------------------------------------
+*/
+
+const buildCorrectionInputFromResult = (result, student, academicSession) => {
+  return {
+    studentId: student.studentId,
+    academicSessionId: academicSession._id.toString(),
+    term: result.term,
+
+    subjectResults: result.subjectResults.map((item) => ({
+      subjectId: (
+        item.subject?._id ||
+        item.subject ||
+        item.subjectId
+      ).toString(),
+
+      offered: Boolean(item.offered),
+      ca1: item.ca1 ?? null,
+      ca2: item.ca2 ?? null,
+      exam: item.exam ?? null,
+      teacherComment: item.teacherComment || "",
+    })),
+
+    attendance: result.attendance?.toObject
+      ? result.attendance.toObject()
+      : result.attendance,
+
+    affectiveDomain: result.affectiveDomain?.toObject
+      ? result.affectiveDomain.toObject()
+      : result.affectiveDomain,
+
+    psychomotorDomain: result.psychomotorDomain?.toObject
+      ? result.psychomotorDomain.toObject()
+      : result.psychomotorDomain,
+
+    conduct: result.conduct,
+    specialReport: result.specialReport || "",
+
+    sports:
+      result.sports?.map((item) => (item.toObject ? item.toObject() : item)) ||
+      [],
+
+    clubs:
+      result.clubs?.map((item) => (item.toObject ? item.toObject() : item)) ||
+      [],
+
+    comments: {
+      classTeacher: result.comments?.classTeacher || "",
+    },
+
+    principalDecision: result.principalDecision || "pending",
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| MERGE CORRECTION INPUT
+|--------------------------------------------------------------------------
+|
+| Only assessment fields are editable.
+| Student, session and term identity cannot be changed.
+|
+|--------------------------------------------------------------------------
+*/
+
+const mergeCorrectionInput = (existing, incoming = {}) => {
+  const merged = {
+    ...existing,
+
+    subjectResults: incoming.subjectResults ?? existing.subjectResults,
+
+    attendance: {
+      ...(existing.attendance || {}),
+      ...(incoming.attendance || {}),
+    },
+
+    affectiveDomain: {
+      ...(existing.affectiveDomain || {}),
+      ...(incoming.affectiveDomain || {}),
+    },
+
+    psychomotorDomain: {
+      ...(existing.psychomotorDomain || {}),
+      ...(incoming.psychomotorDomain || {}),
+    },
+
+    comments: {
+      ...(existing.comments || {}),
+      ...(incoming.comments || {}),
+    },
+
+    conduct: incoming.conduct ?? existing.conduct,
+
+    specialReport: incoming.specialReport ?? existing.specialReport,
+
+    sports: incoming.sports ?? existing.sports,
+
+    clubs: incoming.clubs ?? existing.clubs,
+
+    principalDecision: incoming.principalDecision ?? existing.principalDecision,
+  };
+
+  // These values are always retained from the original result.
+  merged.studentId = existing.studentId;
+  merged.academicSessionId = existing.academicSessionId;
+  merged.term = existing.term;
+
+  return merged;
+};
+
+/*
+|--------------------------------------------------------------------------
+| BUILD AND VALIDATE A CORRECTION
+|--------------------------------------------------------------------------
+*/
+
+const buildValidatedCorrection = async (
+  revision,
+  student,
+  academicSession,
+  { requireComplete = false } = {},
+) => {
+  const termConfiguration = resolveTermConfiguration(
+    academicSession,
+    revision.term,
+  );
+
+  const payload = await buildResultPayload({
+    body: revision.proposedData,
+
+    student,
+
+    academicSession,
+
+    termConfiguration,
+
+    requireCompleteCalculation: requireComplete,
+
+    requirePreviousTerms: requireComplete && revision.term === "third",
+  });
+
+  if (requireComplete) {
+    validateCompleteAssessment(payload);
+
+    if (!hasCompleteSubjectScores(payload.subjectResults)) {
+      throw createControllerError(
+        "All offered subject scores must be completed before this correction can proceed.",
+        400,
+      );
+    }
+  }
+
+  return payload;
+};
+
+/*
+|--------------------------------------------------------------------------
+| FIND RESULT REVISION
+|--------------------------------------------------------------------------
+*/
+
+const findResultRevisionById = async (revisionId) => {
+  if (!revisionId || !isValidObjectId(revisionId)) {
+    throw createControllerError("Invalid correction ID.", 400);
+  }
+
+  const revision = await ResultRevision.findById(revisionId);
+
+  if (!revision) {
+    throw createControllerError("Result correction not found.", 404);
+  }
+
+  return revision;
+};
+
+/*
+|--------------------------------------------------------------------------
+| CREATE RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| POST /results/:id/corrections
+|
+| Only an already-published result can be corrected.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.createResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const result = await findResultById(req.params.id);
+
+    if (result.status !== "published") {
+      return sendError(
+        res,
+        409,
+        "Only published results can be corrected through this workflow.",
+      );
+    }
+
+    const reason =
+      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+    if (reason.length < 5) {
+      return sendError(
+        res,
+        400,
+        "Please provide a correction reason of at least 5 characters.",
+      );
+    }
+
+    if (reason.length > 1000) {
+      return sendError(
+        res,
+        400,
+        "The correction reason cannot exceed 1000 characters.",
+      );
+    }
+
+    const existingActiveRevision = await ResultRevision.findOne({
+      result: result._id,
+      isActive: true,
+    });
+
+    if (existingActiveRevision) {
+      return sendError(
+        res,
+        409,
+        "An active correction already exists for this result. Complete or cancel that correction before starting another.",
+      );
+    }
+
+    const student = await Student.findById(result.student);
+
+    if (!student) {
+      return sendError(
+        res,
+        404,
+        "The student associated with this result no longer exists.",
+      );
+    }
+
+    const academicSession = await AcademicSession.findById(
+      result.academicSession,
+    );
+
+    if (!academicSession) {
+      return sendError(
+        res,
+        404,
+        "The academic session associated with this result no longer exists.",
+      );
+    }
+
+    const revisionNumber =
+      (await ResultRevision.countDocuments({
+        result: result._id,
+      })) + 1;
+
+    const proposedData = buildCorrectionInputFromResult(
+      result,
+      student,
+      academicSession,
+    );
+
+    const revision = await ResultRevision.create({
+      result: result._id,
+      student: result.student,
+      academicSession: result.academicSession,
+      term: result.term,
+      revisionNumber,
+
+      originalSnapshot: result.toObject({
+        depopulate: true,
+      }),
+
+      proposedData,
+
+      reason,
+
+      status: "draft",
+      isActive: true,
+
+      createdBy: getAdminId(req),
+      updatedBy: getAdminId(req),
+
+      events: [
+        {
+          action: "created",
+          performedBy: getAdminId(req),
+          note: reason,
+        },
+      ],
+    });
+
+    await createResultAuditLog({
+      req,
+      action: "CREATE_RESULT_CORRECTION",
+      description: `${req.admin.fullName} initiated correction revision ${revisionNumber} for the published ${result.term} term result of student ${student.studentId}. Reason: ${reason}`,
+    });
+
+    await createResultActivityLog({
+      req,
+      action: "CREATE_RESULT_CORRECTION",
+      studentId: student.studentId,
+      details: `Initiated correction revision ${revisionNumber} for the published ${result.term} term result.`,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Result correction draft created successfully.",
+      revision,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return sendError(
+        res,
+        409,
+        "An active correction already exists for this result.",
+      );
+    }
+
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to create result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET ACTIVE RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| GET /results/:id/corrections/active
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.getActiveResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const result = await findResultById(req.params.id);
+
+    const revision = await ResultRevision.findOne({
+      result: result._id,
+      isActive: true,
+    })
+      .populate({
+        path: "createdBy",
+        select: "fullName email",
+      })
+      .populate({
+        path: "updatedBy",
+        select: "fullName email",
+      })
+      .populate({
+        path: "submittedBy",
+        select: "fullName email",
+      })
+      .populate({
+        path: "approvedBy",
+        select: "fullName email",
+      });
+
+    if (!revision) {
+      return sendError(
+        res,
+        404,
+        "There is no active correction for this result.",
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to fetch result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET RESULT CORRECTION BY ID
+|--------------------------------------------------------------------------
+|
+| GET /result-corrections/:revisionId
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.getResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    await revision.populate([
+      {
+        path: "result",
+      },
+      {
+        path: "student",
+        select: "studentId firstName lastName currentClass",
+      },
+      {
+        path: "academicSession",
+        select: "name terms",
+      },
+      {
+        path: "createdBy",
+        select: "fullName email",
+      },
+      {
+        path: "updatedBy",
+        select: "fullName email",
+      },
+      {
+        path: "submittedBy",
+        select: "fullName email",
+      },
+      {
+        path: "approvedBy",
+        select: "fullName email",
+      },
+      {
+        path: "rejectedBy",
+        select: "fullName email",
+      },
+      {
+        path: "publishedBy",
+        select: "fullName email",
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to fetch result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PUT /result-corrections/:revisionId
+|
+| Draft and rejected corrections can be edited.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.updateResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    if (!["draft", "rejected"].includes(revision.status)) {
+      return sendError(
+        res,
+        409,
+        "Only draft or rejected corrections can be edited.",
+      );
+    }
+
+    const student = await Student.findById(revision.student);
+
+    if (!student) {
+      return sendError(
+        res,
+        404,
+        "The student associated with this correction no longer exists.",
+      );
+    }
+
+    const academicSession = await AcademicSession.findById(
+      revision.academicSession,
+    );
+
+    if (!academicSession) {
+      return sendError(
+        res,
+        404,
+        "The academic session associated with this correction no longer exists.",
+      );
+    }
+
+    const mergedBody = mergeCorrectionInput(revision.proposedData, req.body);
+
+    const reason =
+      typeof req.body?.reason === "string"
+        ? req.body.reason.trim()
+        : revision.reason;
+
+    if (reason.length < 5 || reason.length > 1000) {
+      return sendError(
+        res,
+        400,
+        "The correction reason must be between 5 and 1000 characters.",
+      );
+    }
+
+    /*
+     * Validate the editable data structure and resolve subjects
+     * against the authoritative Subject collection.
+     *
+     * Incomplete scores are allowed while saving a draft.
+     */
+    await buildValidatedCorrection(
+      {
+        ...revision.toObject(),
+        proposedData: mergedBody,
+      },
+      student,
+      academicSession,
+      {
+        requireComplete: false,
+      },
+    );
+
+    revision.proposedData = mergedBody;
+    revision.reason = reason;
+
+    revision.status = "draft";
+    revision.rejectionReason = "";
+    revision.rejectedBy = null;
+    revision.rejectedAt = null;
+
+    revision.principalComment = "";
+    revision.approvedBy = null;
+    revision.approvedAt = null;
+
+    revision.submittedBy = null;
+    revision.submittedAt = null;
+
+    revision.updatedBy = getAdminId(req);
+
+    revision.events.push({
+      action: "updated",
+      performedBy: getAdminId(req),
+      note: "Correction draft updated.",
+    });
+
+    await revision.save();
+
+    await createResultAuditLog({
+      req,
+      action: "UPDATE_RESULT_CORRECTION",
+      description: `${req.admin.fullName} updated correction revision ${revision.revisionNumber} for result ${revision.result}.`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Result correction draft updated successfully.",
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to update result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| SUBMIT RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /result-corrections/:revisionId/submit
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.submitResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    if (revision.status !== "draft") {
+      return sendError(res, 409, "Only a draft correction can be submitted.");
+    }
+
+    const student = await Student.findById(revision.student);
+
+    if (!student) {
+      return sendError(res, 404, "Student not found.");
+    }
+
+    const academicSession = await AcademicSession.findById(
+      revision.academicSession,
+    );
+
+    if (!academicSession) {
+      return sendError(res, 404, "Academic session not found.");
+    }
+
+    /*
+     * Ensure the official result has not changed since
+     * this correction was initiated.
+     */
+    const officialResult = await Result.findById(revision.result);
+
+    if (!officialResult || officialResult.status !== "published") {
+      return sendError(
+        res,
+        409,
+        "The original published result is no longer available for correction.",
+      );
+    }
+
+    const originalUpdatedAt = revision.originalSnapshot?.updatedAt
+      ? new Date(revision.originalSnapshot.updatedAt).getTime()
+      : null;
+
+    const currentUpdatedAt = officialResult.updatedAt
+      ? new Date(officialResult.updatedAt).getTime()
+      : null;
+
+    if (originalUpdatedAt !== null && currentUpdatedAt !== originalUpdatedAt) {
+      return sendError(
+        res,
+        409,
+        "The official result has changed since this correction was opened. Please review the latest result before continuing.",
+      );
+    }
+
+    try {
+      await buildValidatedCorrection(revision, student, academicSession, {
+        requireComplete: true,
+      });
+    } catch (error) {
+      return sendError(res, error.statusCode || 400, error.message);
+    }
+
+    revision.status = "submitted";
+    revision.submittedBy = getAdminId(req);
+    revision.submittedAt = new Date();
+    revision.updatedBy = getAdminId(req);
+
+    revision.events.push({
+      action: "submitted",
+      performedBy: getAdminId(req),
+      note: "Correction submitted for Principal review.",
+    });
+
+    await revision.save();
+
+    await createResultAuditLog({
+      req,
+      action: "SUBMIT_RESULT_CORRECTION",
+      description: `${req.admin.fullName} submitted correction revision ${revision.revisionNumber} for result ${revision.result}.`,
+    });
+
+    await createResultActivityLog({
+      req,
+      action: "SUBMIT_RESULT_CORRECTION",
+      studentId: student.studentId,
+      details: `Submitted correction revision ${revision.revisionNumber} for Principal review.`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Result correction submitted successfully for Principal review.",
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to submit result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| APPROVE RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /result-corrections/:revisionId/approve
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.approveResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    if (revision.status !== "submitted") {
+      return sendError(res, 409, "Only submitted corrections can be approved.");
+    }
+
+    const principalComment =
+      typeof req.body?.principalComment === "string"
+        ? req.body.principalComment.trim()
+        : "";
+
+    if (!principalComment) {
+      return sendError(
+        res,
+        400,
+        "Principal comment is required before approving this correction.",
+      );
+    }
+
+    const student = await Student.findById(revision.student);
+
+    if (!student) {
+      return sendError(res, 404, "Student not found.");
+    }
+
+    const academicSession = await AcademicSession.findById(
+      revision.academicSession,
+    );
+
+    if (!academicSession) {
+      return sendError(res, 404, "Academic session not found.");
+    }
+
+    try {
+      await buildValidatedCorrection(revision, student, academicSession, {
+        requireComplete: true,
+      });
+    } catch (error) {
+      return sendError(res, error.statusCode || 400, error.message);
+    }
+
+    /*
+     * Third Term requires a fresh Principal decision.
+     * It is stored with the proposed correction, not the
+     * currently published result.
+     */
+    if (revision.term === "third") {
+      const decision = req.body?.principalDecision;
+
+      if (!["promoted", "repeat"].includes(decision)) {
+        return sendError(
+          res,
+          400,
+          "For Third Term, the Principal must choose promoted or repeat.",
+        );
+      }
+
+      revision.proposedData = {
+        ...revision.proposedData,
+        principalDecision: decision,
+      };
+    }
+
+    revision.principalComment = principalComment;
+
+    revision.status = "approved";
+    revision.approvedBy = getAdminId(req);
+    revision.approvedAt = new Date();
+    revision.updatedBy = getAdminId(req);
+
+    revision.events.push({
+      action: "approved",
+      performedBy: getAdminId(req),
+      note: principalComment,
+    });
+
+    await revision.save();
+
+    await createResultAuditLog({
+      req,
+      action: "APPROVE_RESULT_CORRECTION",
+      description: `${req.admin.fullName} approved correction revision ${revision.revisionNumber} for result ${revision.result}.`,
+    });
+
+    await createResultActivityLog({
+      req,
+      action: "APPROVE_RESULT_CORRECTION",
+      studentId: student.studentId,
+      details: `Approved correction revision ${revision.revisionNumber}.`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Result correction approved successfully. It is awaiting publication.",
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to approve result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| REJECT RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /result-corrections/:revisionId/reject
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.rejectResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    if (revision.status !== "submitted") {
+      return sendError(res, 409, "Only submitted corrections can be rejected.");
+    }
+
+    const rejectionReason =
+      typeof req.body?.rejectionReason === "string"
+        ? req.body.rejectionReason.trim()
+        : "";
+
+    if (!rejectionReason) {
+      return sendError(res, 400, "A rejection reason is required.");
+    }
+
+    revision.status = "rejected";
+    revision.rejectionReason = rejectionReason;
+
+    revision.rejectedBy = getAdminId(req);
+    revision.rejectedAt = new Date();
+    revision.updatedBy = getAdminId(req);
+
+    revision.events.push({
+      action: "rejected",
+      performedBy: getAdminId(req),
+      note: rejectionReason,
+    });
+
+    await revision.save();
+
+    await createResultAuditLog({
+      req,
+      action: "REJECT_RESULT_CORRECTION",
+      description: `${req.admin.fullName} rejected correction revision ${revision.revisionNumber}. Reason: ${rejectionReason}`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Result correction rejected. It can be edited and resubmitted.",
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to reject result correction.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| PUBLISH RESULT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /result-corrections/:revisionId/publish
+|
+| This is the ONLY operation that replaces the official published
+| result with the proposed correction.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.publishResultCorrection = asyncHandler(async (req, res) => {
+  try {
+    const revision = await findResultRevisionById(req.params.revisionId);
+
+    if (revision.status !== "approved") {
+      return sendError(res, 409, "Only approved corrections can be published.");
+    }
+
+    if (req.body?.confirm !== true) {
+      return sendError(
+        res,
+        400,
+        "Publishing the correction must be explicitly confirmed.",
+      );
+    }
+
+    if (!revision.principalComment?.trim()) {
+      return sendError(
+        res,
+        400,
+        "A Principal comment is required before publishing the correction.",
+      );
+    }
+
+    if (
+      revision.term === "third" &&
+      !["promoted", "repeat"].includes(revision.proposedData?.principalDecision)
+    ) {
+      return sendError(
+        res,
+        400,
+        "A final Principal decision of promoted or repeat is required before publishing this Third Term correction.",
+      );
+    }
+
+    const officialResult = await Result.findById(revision.result);
+
+    if (!officialResult) {
+      return sendError(res, 404, "The original result could not be found.");
+    }
+
+    if (officialResult.status !== "published") {
+      return sendError(
+        res,
+        409,
+        "The original result is no longer published. The correction cannot be applied.",
+      );
+    }
+
+    /*
+     * Optimistic concurrency check.
+     *
+     * If the original result changed after the correction was
+     * initiated, do not overwrite those newer changes.
+     */
+    const originalUpdatedAt = revision.originalSnapshot?.updatedAt
+      ? new Date(revision.originalSnapshot.updatedAt).getTime()
+      : null;
+
+    const currentUpdatedAt = officialResult.updatedAt
+      ? new Date(officialResult.updatedAt).getTime()
+      : null;
+
+    if (originalUpdatedAt !== null && currentUpdatedAt !== originalUpdatedAt) {
+      return sendError(
+        res,
+        409,
+        "The official result has changed since this correction was initiated. Do not publish this outdated correction. Start a new correction using the latest result.",
+      );
+    }
+
+    const student = await Student.findById(revision.student);
+
+    if (!student) {
+      return sendError(res, 404, "Student not found.");
+    }
+
+    const academicSession = await AcademicSession.findById(
+      revision.academicSession,
+    );
+
+    if (!academicSession) {
+      return sendError(res, 404, "Academic session not found.");
+    }
+
+    let payload;
+
+    try {
+      payload = await buildValidatedCorrection(
+        revision,
+        student,
+        academicSession,
+        {
+          requireComplete: true,
+        },
+      );
+    } catch (error) {
+      return sendError(res, error.statusCode || 400, error.message);
+    }
+
+    /*
+     * Third Term calculations are rebuilt from the latest
+     * approved/published First and Second Term results.
+     */
+    if (revision.term === "third") {
+      if (
+        !["promoted", "repeat"].includes(
+          revision.proposedData?.principalDecision,
+        )
+      ) {
+        return sendError(
+          res,
+          400,
+          "A valid Principal promotion decision is required.",
+        );
+      }
+    }
+
+    /*
+     * Preserve the original result identity and class snapshot.
+     * Replace only the assessment data.
+     */
+    officialResult.subjectResults = payload.subjectResults;
+
+    officialResult.attendance = payload.attendance;
+
+    officialResult.affectiveDomain = payload.affectiveDomain;
+
+    officialResult.psychomotorDomain = payload.psychomotorDomain;
+
+    officialResult.conduct = payload.conduct;
+
+    officialResult.specialReport = payload.specialReport;
+
+    officialResult.sports = payload.sports;
+
+    officialResult.clubs = payload.clubs;
+
+    officialResult.comments = {
+      classTeacher: payload.comments?.classTeacher || "",
+      principal: revision.principalComment,
+      performance: payload.performanceComment || "",
+    };
+
+    officialResult.termDates = payload.termDates;
+
+    officialResult.totalScore = payload.totalScore;
+
+    officialResult.totalObtainableMarks = payload.totalObtainableMarks;
+
+    officialResult.overallPercentage = payload.overallPercentage;
+
+    officialResult.performanceComment = payload.performanceComment;
+
+    officialResult.promotionStatus = payload.promotionStatus;
+
+    officialResult.principalDecision =
+      revision.term === "third"
+        ? revision.proposedData.principalDecision
+        : "pending";
+
+    /*
+     * The result remains published throughout this operation.
+     * Its published timestamp and actor are refreshed to record
+     * the corrected publication.
+     */
+    officialResult.status = "published";
+    officialResult.publishedBy = getAdminId(req);
+    officialResult.publishedAt = new Date();
+    officialResult.updatedBy = getAdminId(req);
+
+    await officialResult.save();
+
+    /*
+     * Mark the revision as published and close the active
+     * correction. originalSnapshot remains available as history.
+     */
+    revision.status = "published";
+    revision.isActive = false;
+    revision.publishedBy = getAdminId(req);
+    revision.publishedAt = new Date();
+    revision.updatedBy = getAdminId(req);
+
+    revision.events.push({
+      action: "published",
+      performedBy: getAdminId(req),
+      note: "Approved correction published. Official result updated.",
+    });
+
+    await revision.save();
+
+    await createResultAuditLog({
+      req,
+      action: "PUBLISH_RESULT_CORRECTION",
+      description: `${req.admin.fullName} published correction revision ${revision.revisionNumber} for the ${revision.term} term result of student ${student.studentId}. The previous official result is retained in revision history.`,
+    });
+
+    await createResultActivityLog({
+      req,
+      action: "PUBLISH_RESULT_CORRECTION",
+      studentId: student.studentId,
+      details: `Published correction revision ${revision.revisionNumber}. The student's official published result has been updated.`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Corrected result published successfully. The student can now see the updated result.",
+      result: officialResult,
+      revision,
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to publish result correction.",
+    );
+  }
+});
 
 exports.getMyPublishedResults = asyncHandler(async (req, res) => {
   try {

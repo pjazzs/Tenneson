@@ -104,7 +104,7 @@ const createResult = async ({
   resultStudent = student,
   resultSession = academicSession,
   term = "third",
-  status = "approved",
+  status = "published",
   principalDecision = "promoted",
   currentClass = resultStudent.currentClass,
 } = {}) => {

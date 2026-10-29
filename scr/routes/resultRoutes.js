@@ -13,6 +13,14 @@ const {
   getMyPublishedResult,
   getStudentResultHistory,
   getResultStatistics,
+  createResultCorrection,
+  getActiveResultCorrection,
+  getResultCorrection,
+  updateResultCorrection,
+  submitResultCorrection,
+  approveResultCorrection,
+  rejectResultCorrection,
+  publishResultCorrection,
 } = require("../controllers/resultController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -188,6 +196,92 @@ router.patch(
   protect,
   authorizePermission("results.publish"),
   publishResult,
+);
+
+/*
+|--------------------------------------------------------------------------
+| RESULT CORRECTION ROUTES
+|--------------------------------------------------------------------------
+*/
+
+/*
+ * Initiate a correction for a published result.
+ */
+router.post(
+  "/results/:id/corrections",
+  protect,
+  authorizePermission("results.update"),
+  createResultCorrection,
+);
+
+/*
+ * Retrieve the active correction for a result.
+ */
+router.get(
+  "/results/:id/corrections/active",
+  protect,
+  authorizePermission("results.view"),
+  getActiveResultCorrection,
+);
+
+/*
+ * Retrieve a correction by its revision ID.
+ */
+router.get(
+  "/result-corrections/:revisionId",
+  protect,
+  authorizePermission("results.view"),
+  getResultCorrection,
+);
+
+/*
+ * Update a draft or rejected correction.
+ */
+router.put(
+  "/result-corrections/:revisionId",
+  protect,
+  authorizePermission("results.update"),
+  updateResultCorrection,
+);
+
+/*
+ * Submit correction for Principal review.
+ */
+router.patch(
+  "/result-corrections/:revisionId/submit",
+  protect,
+  authorizePermission("results.submit"),
+  submitResultCorrection,
+);
+
+/*
+ * Approve correction.
+ */
+router.patch(
+  "/result-corrections/:revisionId/approve",
+  protect,
+  authorizePermission("results.approve"),
+  approveResultCorrection,
+);
+
+/*
+ * Reject correction.
+ */
+router.patch(
+  "/result-corrections/:revisionId/reject",
+  protect,
+  authorizePermission("results.approve"),
+  rejectResultCorrection,
+);
+
+/*
+ * Publish approved correction.
+ */
+router.patch(
+  "/result-corrections/:revisionId/publish",
+  protect,
+  authorizePermission("results.publish"),
+  publishResultCorrection,
 );
 
 module.exports = router;

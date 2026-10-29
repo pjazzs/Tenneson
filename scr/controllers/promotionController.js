@@ -128,10 +128,10 @@ exports.applyPromotion = asyncHandler(async (req, res) => {
   if (result.status !== "published") {
     return res.status(400).json({
       success: false,
-      message: "Only published third-term results can be used for promotion.",
+      message:
+        "Only approved and published third-term results can be used for promotion.",
     });
   }
-
   /*
   |--------------------------------------------------------------------------
   | Principal Decision Requirement
