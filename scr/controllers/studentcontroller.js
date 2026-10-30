@@ -613,17 +613,16 @@ exports.getStudent = asyncHandler(async (req, res) => {
   // Prevent Mongoose CastError for invalid student IDs
   if (!mongoose.isValidObjectId(id)) {
     res.status(404);
-
     throw new Error("Student not found.");
   }
 
   const student = await Student.findById(id)
     .populate("createdBy", "fullName email -_id")
-    .populate("updatedBy", "fullName email -_id");
+    .populate("updatedBy", "fullName email -_id")
+    .populate("department", "name code");
 
   if (!student || !student.isActive) {
     res.status(404);
-
     throw new Error("Student not found.");
   }
 

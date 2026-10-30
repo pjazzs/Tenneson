@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-
 import { useParams, useNavigate } from "react-router-dom";
 
 import {
@@ -13,36 +12,29 @@ import {
   FaCalendarAlt,
   FaSchool,
 } from "react-icons/fa";
+
 import useAuth from "../../hooks/useAuth";
 import api from "../../api/axios";
 
+const JUNIOR_CLASSES = ["JSS1", "JSS2", "JSS3"];
+
 function StudentDetails() {
   const { studentId } = useParams();
-
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
 
   const [student, setStudent] = useState(null);
-
   const [loading, setLoading] = useState(true);
-
   const [qrCode, setQrCode] = useState("");
-
   const [uploading, setUploading] = useState(false);
 
   const fileRef = useRef(null);
-
   const qrRef = useRef(null);
-
-  /*
-      FETCH STUDENT
-  */
 
   useEffect(() => {
     const fetchStudent = async () => {
       try {
         const response = await api.get(`/students/${studentId}`);
-
         setStudent(response.data.student);
       } catch (error) {
         console.log(
@@ -57,17 +49,11 @@ function StudentDetails() {
     fetchStudent();
   }, [studentId]);
 
-  /*
-      UPLOAD PHOTO
-  */
-
   const uploadPhoto = async (event) => {
     const file = event.target.files[0];
-
     if (!file) return;
 
     const formData = new FormData();
-
     formData.append("photo", file);
 
     try {
@@ -91,16 +77,9 @@ function StudentDetails() {
       console.log("Upload error:", error.response?.data || error.message);
     } finally {
       setUploading(false);
-
-      if (fileRef.current) {
-        fileRef.current.value = "";
-      }
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
-
-  /*
-      ARCHIVE STUDENT
-  */
 
   const handleDelete = async () => {
     const confirmDelete = window.confirm(
@@ -111,27 +90,20 @@ function StudentDetails() {
 
     try {
       await api.delete(`/students/${student._id}`);
-
       navigate("/students");
     } catch (error) {
       console.log("Archive error:", error.response?.data || error.message);
     }
   };
 
-  /*
-      GENERATE QR
-  */
-
   const generateQR = async () => {
     try {
       const response = await api.get(`/students/${student._id}/qrcode`);
-
       setQrCode(response.data.qrCode);
 
       setTimeout(() => {
         qrRef.current?.scrollIntoView({
           behavior: "smooth",
-
           block: "start",
         });
       }, 100);
@@ -140,40 +112,24 @@ function StudentDetails() {
     }
   };
 
-  /*
-      DOWNLOAD SLIP
-  */
-
   const downloadSlip = async () => {
     try {
-      const response = await api.get(
-        `/students/${student._id}/slip`,
+      const response = await api.get(`/students/${student._id}/slip`, {
+        responseType: "blob",
+      });
 
-        {
-          responseType: "blob",
-        },
-      );
-
-      const file = new Blob(
-        [response.data],
-
-        {
-          type: "application/pdf",
-        },
-      );
+      const file = new Blob([response.data], {
+        type: "application/pdf",
+      });
 
       const url = window.URL.createObjectURL(file);
-
       const link = document.createElement("a");
 
       link.href = url;
-
       link.download = `${student.studentId}-slip.pdf`;
 
       document.body.appendChild(link);
-
       link.click();
-
       link.remove();
 
       window.URL.revokeObjectURL(url);
@@ -182,21 +138,9 @@ function StudentDetails() {
     }
   };
 
-  /*
-      LOADING STATE
-  */
-
   if (loading) {
     return (
-      <div
-        className="
-          flex
-          justify-center
-          items-center
-          h-64
-          text-white
-        "
-      >
+      <div className="flex justify-center items-center h-64 text-white">
         Loading student details...
       </div>
     );
@@ -204,65 +148,42 @@ function StudentDetails() {
 
   if (!student) {
     return (
-      <div
-        className="
-          text-center
-          mt-10
-          text-white
-        "
-      >
-        Student not found
-      </div>
+      <div className="text-center mt-10 text-white">Student not found</div>
     );
   }
 
+  // Department can be either a populated object or an ObjectId.
+  const departmentName =
+    typeof student.department === "object" && student.department !== null
+      ? student.department.name
+      : null;
+
+  const isJunior = JUNIOR_CLASSES.includes(student.currentClass);
+
+  const departmentDisplay = isJunior
+    ? "Not Applicable"
+    : departmentName || "Not Assigned";
+
+  const departmentHistory = Array.isArray(student.departmentHistory)
+    ? student.departmentHistory
+    : [];
+
   return (
     <div className="text-white">
-      {/* ============================
-            PAGE HEADER
-      ============================= */}
+      {/* PAGE HEADER */}
 
-      <div
-        className="
-          flex
-          justify-between
-          items-center
-          flex-wrap
-          gap-5
-          mb-8
-        "
-      >
+      <div className="flex justify-between items-center flex-wrap gap-5 mb-8">
         <div>
-          <h1
-            className="
-              text-3xl
-              font-bold
-              tracking-tight
-              text-gray-900
-            "
-          >
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
             Student Profile
           </h1>
 
-          <p
-            className="
-              text-gray-600
-              mt-2
-            "
-          >
+          <p className="text-gray-600 mt-2">
             View and manage student information
           </p>
         </div>
 
-        {/* ACTION BUTTONS */}
-
-        <div
-          className="
-            flex
-            flex-wrap
-            gap-3
-          "
-        >
+        <div className="flex flex-wrap gap-3">
           <input
             type="file"
             accept="image/*"
@@ -328,152 +249,54 @@ function StudentDetails() {
         </div>
       </div>
 
-      {/* ============================
-          PROFILE SUMMARY CARD
-      ============================= */}
+      {/* PROFILE SUMMARY CARD */}
 
-      <div
-        className="
-          bg-slate-900
-          border
-          border-white/10
-          rounded-2xl
-          shadow-xl
-          p-6
-          mb-8
-        "
-      >
-        <div
-          className="
-            flex
-            flex-col
-            lg:flex-row
-            gap-8
-            items-center
-          "
-        >
-          {/* AVATAR */}
-
+      <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-xl p-6 mb-8">
+        <div className="flex flex-col lg:flex-row gap-8 items-center">
           <div>
             {student.photo?.url ? (
               <img
                 src={student.photo.url}
                 alt="Student"
-                className="
-                    w-40
-                    h-40
-                    rounded-full
-                    object-cover
-                    border-4
-                    border-green-500
-                    shadow-xl
-                  "
+                className="w-40 h-40 rounded-full object-cover border-4 border-green-500 shadow-xl"
               />
             ) : (
-              <div
-                className="
-                    w-40
-                    h-40
-                    rounded-full
-                    bg-green-600
-                    flex
-                    items-center
-                    justify-center
-                    text-5xl
-                    font-bold
-                    shadow-xl
-                  "
-              >
+              <div className="w-40 h-40 rounded-full bg-green-600 flex items-center justify-center text-5xl font-bold shadow-xl">
                 {student.firstName?.[0]}
-
                 {student.lastName?.[0]}
               </div>
             )}
           </div>
 
-          {/* STUDENT BASIC INFO */}
-
-          <div
-            className="
-              flex-1
-              text-center
-              lg:text-left
-            "
-          >
-            <h2
-              className="
-                text-3xl
-                font-bold
-              "
-            >
+          <div className="flex-1 text-center lg:text-left">
+            <h2 className="text-3xl font-bold">
               {student.firstName} {student.lastName}
             </h2>
 
-            <p
-              className="
-                text-gray-400
-                mt-2
-                text-lg
-              "
-            >
-              {student.studentId}
-            </p>
+            <p className="text-gray-400 mt-2 text-lg">{student.studentId}</p>
 
-            <div
-              className="
-                flex
-                flex-wrap
-                justify-center
-                lg:justify-start
-                gap-3
-                mt-5
-              "
-            >
+            <div className="flex flex-wrap justify-center lg:justify-start gap-3 mt-5">
               <Badge>
                 <FaSchool />
-
                 {student.currentClass}
               </Badge>
 
               <Badge>
                 <FaCalendarAlt />
-
                 {student.session}
               </Badge>
 
               <Badge>
                 <FaUserGraduate />
-
                 {student.gender}
               </Badge>
 
               <span
-                className={`
-
-                  inline-flex
-
-                  items-center
-
-                  gap-2
-
-                  px-4
-
-                  py-2
-
-                  rounded-full
-
-                  text-sm
-
-                  font-medium
-
-
-                  ${
-                    student.isActive
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-red-500/20 text-red-400"
-                  }
-
-                `}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+                  student.isActive
+                    ? "bg-green-500/20 text-green-400"
+                    : "bg-red-500/20 text-red-400"
+                }`}
               >
                 {student.isActive ? "Active Student" : "Archived Student"}
               </span>
@@ -482,27 +305,13 @@ function StudentDetails() {
         </div>
       </div>
 
-      {/* ============================
-            INFORMATION SECTIONS
-      ============================= */}
+      {/* INFORMATION SECTIONS */}
 
-      <div
-        className="
-          grid
-          grid-cols-1
-          lg:grid-cols-3
-          gap-6
-        "
-      >
-        {/* PERSONAL */}
-
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <InfoSection title="Personal Information">
           <Info label="First Name" value={student.firstName} />
-
           <Info label="Last Name" value={student.lastName} />
-
           <Info label="Other Name" value={student.otherName || "N/A"} />
-
           <Info label="Gender" value={student.gender} />
 
           <Info
@@ -515,118 +324,88 @@ function StudentDetails() {
           />
         </InfoSection>
 
-        {/* ACADEMIC */}
-
         <InfoSection title="Academic Information">
           <Info label="Student ID" value={student.studentId} />
-
           <Info label="Admission Year" value={student.admissionYear || "N/A"} />
-
           <Info label="Class" value={student.currentClass} />
-
+          <Info label="Department" value={departmentDisplay} />
           <Info label="Session" value={student.session} />
         </InfoSection>
 
-        {/* PARENT */}
-
         <InfoSection title="Parent Information">
           <Info label="Parent Name" value={student.parentName} />
-
           <Info label="Parent Phone" value={student.parentPhone} />
         </InfoSection>
       </div>
 
-      {/* ============================
-            QR VERIFICATION SECTION
-      ============================= */}
+      {/* DEPARTMENT HISTORY */}
+
+      {departmentHistory.length > 0 && (
+        <div className="mt-8">
+          <InfoSection title="Department History">
+            {departmentHistory.map((history, index) => (
+              <div
+                key={history._id || index}
+                className="bg-white/5 border border-white/10 rounded-xl p-4"
+              >
+                <div className="flex flex-wrap justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">
+                      {history.fromDepartmentName || "No Previous Department"}
+                      {" → "}
+                      {history.toDepartmentName || "No Department"}
+                    </p>
+
+                    <p className="text-gray-400 text-sm mt-1">
+                      {history.fromClass || "N/A"} → {history.toClass || "N/A"}
+                    </p>
+                  </div>
+
+                  <p className="text-gray-400 text-sm">
+                    {history.changedAt
+                      ? new Date(history.changedAt).toLocaleDateString()
+                      : "Date unavailable"}
+                  </p>
+                </div>
+
+                {history.reason && (
+                  <p className="text-gray-400 text-sm mt-3">
+                    Reason: {history.reason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </InfoSection>
+        </div>
+      )}
+
+      {/* QR VERIFICATION SECTION */}
 
       {qrCode && (
         <div
           ref={qrRef}
-          className="
-              mt-8
-              bg-slate-900
-              border
-              border-white/10
-              rounded-2xl
-              shadow-xl
-              p-8
-              text-center
-            "
+          className="mt-8 bg-slate-900 border border-white/10 rounded-2xl shadow-xl p-8 text-center"
         >
-          <h2
-            className="
-                text-2xl
-                font-bold
-                mb-3
-              "
-          >
-            Student Verification QR
-          </h2>
+          <h2 className="text-2xl font-bold mb-3">Student Verification QR</h2>
 
-          <p
-            className="
-                text-gray-400
-                mb-6
-              "
-          >
+          <p className="text-gray-400 mb-6">
             Scan this QR code to verify student information.
           </p>
 
-          <div
-            className="
-                inline-block
-                bg-white
-                p-5
-                rounded-2xl
-                shadow-lg
-              "
-          >
-            <img
-              src={qrCode}
-              alt="Student QR Code"
-              className="
-                  w-60
-                  h-60
-                "
-            />
+          <div className="inline-block bg-white p-5 rounded-2xl shadow-lg">
+            <img src={qrCode} alt="Student QR Code" className="w-60 h-60" />
           </div>
 
-          <div
-            className="
-                mt-6
-                text-gray-300
-              "
-          >
+          <div className="mt-6 text-gray-300">
             <p>Verification ID:</p>
 
-            <p
-              className="
-                  font-bold
-                  text-green-400
-                  mt-1
-                "
-            >
-              {student.studentId}
-            </p>
+            <p className="font-bold text-green-400 mt-1">{student.studentId}</p>
           </div>
 
           <a
             href={qrCode}
             download={`${student.studentId}-QRCode.png`}
-            className="
-                inline-flex
-                items-center
-                gap-2
-                mt-6
-                bg-green-600
-                hover:bg-green-700
-                px-6
-                py-3
-                rounded-xl
-                font-semibold
-                transition
-              "
+            className="inline-flex items-center gap-2 mt-6 bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl font-semibold transition"
           >
             <FaDownload />
             Download QR
@@ -636,10 +415,6 @@ function StudentDetails() {
     </div>
   );
 }
-
-/*
-    ACTION BUTTON COMPONENT
-*/
 
 function ActionButton({ onClick, color, icon, text, disabled = false }) {
   const colors = {
@@ -656,13 +431,7 @@ function ActionButton({ onClick, color, icon, text, disabled = false }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`
-        ${colors[color]}
-        flex items-center gap-2 px-4 py-2
-        rounded-xl text-sm transition shadow-lg
-        active:scale-95
-        disabled:opacity-50 disabled:cursor-not-allowed
-      `}
+      className={`${colors[color]} flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {icon}
       {text}
@@ -670,103 +439,30 @@ function ActionButton({ onClick, color, icon, text, disabled = false }) {
   );
 }
 
-/*
-    SMALL BADGE COMPONENT
-*/
-
 function Badge({ children }) {
   return (
-    <span
-      className="
-        inline-flex
-        items-center
-        gap-2
-        px-4
-        py-2
-        rounded-full
-        bg-white/5
-        border
-        border-white/10
-        text-sm
-        text-gray-300
-      "
-    >
+    <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
       {children}
     </span>
   );
 }
 
-/*
-    INFORMATION SECTION
-*/
-
 function InfoSection({ title, children }) {
   return (
-    <div
-      className="
-        bg-slate-900
-        border
-        border-white/10
-        rounded-2xl
-        p-5
-        shadow-xl
-      "
-    >
-      <h3
-        className="
-          text-lg
-          font-bold
-          mb-5
-        "
-      >
-        {title}
-      </h3>
+    <div className="bg-slate-900 border border-white/10 rounded-2xl p-5 shadow-xl">
+      <h3 className="text-lg font-bold mb-5">{title}</h3>
 
-      <div
-        className="
-          space-y-3
-        "
-      >
-        {children}
-      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
 
-/*
-    INFORMATION ITEM
-*/
-
 function Info({ label, value }) {
   return (
-    <div
-      className="
-        bg-white/5
-        border
-        border-white/10
-        rounded-xl
-        p-3
-      "
-    >
-      <p
-        className="
-          text-gray-400
-          text-xs
-        "
-      >
-        {label}
-      </p>
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+      <p className="text-gray-400 text-xs">{label}</p>
 
-      <p
-        className="
-          font-semibold
-          mt-1
-          text-sm
-          truncate
-        "
-      >
-        {value || "N/A"}
-      </p>
+      <p className="font-semibold mt-1 text-sm truncate">{value || "N/A"}</p>
     </div>
   );
 }
