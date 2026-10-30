@@ -4,18 +4,25 @@ import LandingPage from "../pages/LandingPage";
 import Layout from "../components/layout/Layout";
 
 import Login from "../pages/auth/Login";
+
 import StudentLogin from "../pages/students/StudentLogin";
 import StudentChangePassword from "../pages/students/StudentChangePassword";
 import StudentProfile from "../pages/students/StudentProfile";
 import StudentResults from "../pages/students/StudentResults";
 import StudentResultDetails from "../pages/students/StudentResultDetails";
 import AcademicRecords from "../pages/students/AcademicRecords";
+import StudentDashboard from "../pages/students/StudentDashboard";
+import StudentProtectedRoute from "../components/students/StudentProtectedRoute";
+
+import TeacherLogin from "../pages/teachers/TeacherLogin";
+import TeacherChangePassword from "../pages/teachers/TeacherChangePassword";
+import TeacherDashboard from "../pages/teachers/TeacherDashboard";
+import TeacherProtectedRoute from "../components/teachers/TeacherProtectedRoute";
+
 import Dashboard from "../pages/dashboard/Dashboard";
 import Promotions from "../pages/promotions/Promotions";
 import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
-import StudentDashboard from "../pages/students/StudentDashboard";
-import StudentProtectedRoute from "../components/students/StudentProtectedRoute";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 
 import ProtectedRoute from "../components/auth/ProtectedRoute";
@@ -46,20 +53,29 @@ function AppRoutes() {
 
       <Route path="/" element={<LandingPage />} />
 
+      {/* Admin login */}
       <Route path="/login" element={<Login />} />
 
+      {/* Student authentication */}
       <Route path="/student/login" element={<StudentLogin />} />
       <Route
         path="/student/change-password"
         element={<StudentChangePassword />}
       />
 
+      {/* Teacher authentication */}
+      <Route path="/teacher/login" element={<TeacherLogin />} />
+      <Route
+        path="/teacher/change-password"
+        element={<TeacherChangePassword />}
+      />
+
       {/* Public student verification */}
       <Route path="/verify/:identifier" element={<VerifyStudent />} />
 
       {/* =========================================
-    PROTECTED STUDENT PORTAL
-========================================= */}
+          PROTECTED STUDENT PORTAL
+      ========================================= */}
 
       <Route element={<StudentProtectedRoute />}>
         <Route path="/student/dashboard" element={<StudentDashboard />} />
@@ -77,14 +93,20 @@ function AppRoutes() {
       <Route path="/student/academic-records" element={<AcademicRecords />} />
 
       {/* =========================================
+          PROTECTED TEACHER PORTAL
+          Separate from admin authentication/layout
+      ========================================= */}
+
+      <Route element={<TeacherProtectedRoute />}>
+        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+      </Route>
+
+      {/* =========================================
           PROTECTED ADMIN PORTAL
       ========================================= */}
 
       <Route element={<ProtectedRoute />}>
-        {/* =====================================
-              TEACHER MANAGEMENT
-            ===================================== */}
-
+        {/* Teacher management */}
         <Route
           path="/teachers"
           element={
@@ -93,9 +115,11 @@ function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        {/* Admin layout */}
         <Route element={<Layout />}>
           {/* =====================================
-              DASHBOARD
+              ACADEMIC CONFIGURATION
           ===================================== */}
 
           <Route
@@ -106,6 +130,7 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
+
           <Route
             path="/teacher-assignments"
             element={
@@ -114,6 +139,12 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
+
+          <Route path="/academic-sessions" element={<AcademicSessions />} />
+
+          {/* =====================================
+              DASHBOARD
+          ===================================== */}
 
           <Route
             path="/dashboard"
@@ -128,7 +159,6 @@ function AppRoutes() {
               STUDENTS
           ===================================== */}
 
-          {/* View students */}
           <Route
             path="/students"
             element={
@@ -137,6 +167,46 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
+
+          <Route
+            path="/students/add"
+            element={
+              <PermissionRoute permission="students.create">
+                <AddStudent />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/students/archived"
+            element={
+              <PermissionRoute permission="students.view">
+                <ArchivedStudents />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/students/:studentId"
+            element={
+              <PermissionRoute permission="students.view">
+                <StudentDetails />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/students/:studentId/edit"
+            element={
+              <PermissionRoute permission="students.update">
+                <EditStudent />
+              </PermissionRoute>
+            }
+          />
+
+          {/* =====================================
+              RESULTS
+          ===================================== */}
 
           <Route
             path="/results"
@@ -156,47 +226,9 @@ function AppRoutes() {
             }
           />
 
-          <Route path="/academic-sessions" element={<AcademicSessions />} />
-
-          {/* Add student */}
-          <Route
-            path="/students/add"
-            element={
-              <PermissionRoute permission="students.create">
-                <AddStudent />
-              </PermissionRoute>
-            }
-          />
-
-          {/* Archived students */}
-          <Route
-            path="/students/archived"
-            element={
-              <PermissionRoute permission="students.view">
-                <ArchivedStudents />
-              </PermissionRoute>
-            }
-          />
-
-          {/* Student details */}
-          <Route
-            path="/students/:studentId"
-            element={
-              <PermissionRoute permission="students.view">
-                <StudentDetails />
-              </PermissionRoute>
-            }
-          />
-
-          {/* Edit student */}
-          <Route
-            path="/students/:studentId/edit"
-            element={
-              <PermissionRoute permission="students.update">
-                <EditStudent />
-              </PermissionRoute>
-            }
-          />
+          {/* =====================================
+              PROMOTIONS
+          ===================================== */}
 
           <Route path="/promotions" element={<Promotions />} />
 

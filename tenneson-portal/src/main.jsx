@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthProvider";
 import { StudentAuthProvider } from "./context/StudentAuthContext";
+import { TeacherAuthProvider } from "./context/TeacherAuthContext";
 
 import App from "./App.jsx";
 
@@ -14,7 +15,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <AuthProvider>
         <StudentAuthProvider>
-          <App />
+          <TeacherAuthProvider>
+            <App />
+          </TeacherAuthProvider>
         </StudentAuthProvider>
       </AuthProvider>
     </BrowserRouter>
