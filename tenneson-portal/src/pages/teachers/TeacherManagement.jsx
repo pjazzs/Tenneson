@@ -292,20 +292,14 @@ const TeacherManagement = () => {
   };
 
   const copyCredentials = async () => {
-    if (!credentials) return;
-
-    const text = [
-      `Email: ${credentials.email}`,
-      `Temporary Password: ${credentials.temporaryPassword}`,
-      "You must change your password after your first login.",
-    ].join("\n");
+    if (!credentials?.temporaryPassword) return;
 
     try {
-      await navigator.clipboard.writeText(text);
-      setCopyMessage("Credentials copied.");
+      await navigator.clipboard.writeText(credentials.temporaryPassword);
+      setCopyMessage("Temporary password copied successfully.");
     } catch {
       setCopyMessage(
-        "Unable to copy automatically. Copy the details manually.",
+        "Unable to copy automatically. Copy the password manually.",
       );
     }
   };
@@ -802,7 +796,7 @@ const TeacherManagement = () => {
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 font-semibold hover:bg-indigo-700"
             >
               <FaCopy />
-              Copy Credentials
+              Copy Password
             </button>
 
             {copyMessage && (
