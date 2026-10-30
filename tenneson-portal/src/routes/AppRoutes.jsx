@@ -35,6 +35,7 @@ import AcademicSessions from "../pages/academicSessions/AcademicSessions";
 
 import TeacherManagement from "../pages/teachers/TeacherManagement";
 import SubjectAllocation from "../pages/academic/SubjectAllocation";
+import TeacherAssignment from "../pages/teachers/TeacherAssignment";
 
 function AppRoutes() {
   return (
@@ -96,11 +97,20 @@ function AppRoutes() {
           {/* =====================================
               DASHBOARD
           ===================================== */}
+
           <Route
             path="/subject-allocations"
             element={
               <PermissionRoute permission="class-subject-allocations.view">
                 <SubjectAllocation />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/teacher-assignments"
+            element={
+              <PermissionRoute permission="teacher-assignments.view">
+                <TeacherAssignment />
               </PermissionRoute>
             }
           />

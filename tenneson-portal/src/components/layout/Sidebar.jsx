@@ -53,6 +53,13 @@ function Sidebar({ isMobileOpen, onClose }) {
       end: true,
     },
     {
+      name: "Teacher Assignments",
+      path: "/teacher-assignments",
+      icon: <FaChalkboardTeacher />,
+      visible: hasPermission("teacher-assignments.view"),
+      end: true,
+    },
+    {
       name: "Results",
       path: "/results",
       icon: <FaFileAlt />,
