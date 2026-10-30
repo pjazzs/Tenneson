@@ -84,10 +84,19 @@ export const publishResult = async (id) => {
 */
 
 /**
- * Create a correction draft for an existing published result.
+ * Get all correction revisions.
  *
- * @param {string} resultId - ID of the published result
- * @param {string} reason - Explanation for the correction
+ * Supports filters such as:
+ * status, term, currentClass, academicSessionId,
+ * studentId, search, page and limit.
+ */
+export const getResultCorrections = async (params = {}) => {
+  const response = await api.get("/result-corrections", { params });
+  return response.data;
+};
+
+/**
+ * Create a correction draft for an existing published result.
  */
 export const createResultCorrection = async (resultId, reason) => {
   const response = await api.post(`/results/${resultId}/corrections`, {
@@ -117,9 +126,6 @@ export const getResultCorrection = async (revisionId) => {
 
 /**
  * Update a correction draft.
- *
- * @param {string} revisionId - Correction revision ID
- * @param {object} payload - Proposed result changes
  */
 export const updateResultCorrection = async (revisionId, payload) => {
   const response = await api.put(`/result-corrections/${revisionId}`, payload);
@@ -138,10 +144,6 @@ export const submitResultCorrection = async (revisionId) => {
 
 /**
  * Approve a submitted correction.
- *
- * @param {string} revisionId - Correction revision ID
- * @param {object} payload - Includes principalComment and, for third term,
- *                           principalDecision when required
  */
 export const approveResultCorrection = async (revisionId, payload) => {
   const response = await api.patch(
@@ -154,9 +156,6 @@ export const approveResultCorrection = async (revisionId, payload) => {
 
 /**
  * Reject a submitted correction.
- *
- * @param {string} revisionId - Correction revision ID
- * @param {string} rejectionReason - Explanation for rejection
  */
 export const rejectResultCorrection = async (revisionId, rejectionReason) => {
   const response = await api.patch(`/result-corrections/${revisionId}/reject`, {
@@ -168,11 +167,6 @@ export const rejectResultCorrection = async (revisionId, rejectionReason) => {
 
 /**
  * Publish an approved correction.
- *
- * Publication is explicit. The backend is responsible for updating the
- * official result and revision atomically.
- *
- * @param {string} revisionId - Correction revision ID
  */
 export const publishResultCorrection = async (revisionId) => {
   const response = await api.patch(

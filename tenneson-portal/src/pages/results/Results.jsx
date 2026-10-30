@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ResultCorrections from "./ResultCorrections";
 
 import {
   approveResult,
@@ -42,6 +43,8 @@ const Results = () => {
   const [activeCorrection, setActiveCorrection] = useState(null);
   const [correctionLoading, setCorrectionLoading] = useState(false);
   const [correctionActionLoading, setCorrectionActionLoading] = useState(false);
+
+  const [correctionsRefreshKey, setCorrectionsRefreshKey] = useState(0);
 
   const navigate = useNavigate();
 
@@ -302,6 +305,7 @@ const Results = () => {
       }
 
       setActiveCorrection(revision);
+      setCorrectionsRefreshKey((current) => current + 1);
       window.alert(
         "Correction draft created. The published result is unchanged.",
       );
@@ -1919,156 +1923,160 @@ const Results = () => {
 
       {/* Results Table */}
       {!selectedResult && (
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-slate-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Student
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Class
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Session
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Term
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Decision
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Created
-                  </th>
-                </tr>
-              </thead>
+        <>
+          <ResultCorrections refreshKey={correctionsRefreshKey} />
 
-              <tbody className="divide-y divide-white/10 bg-slate-950/30">
-                {loading ? (
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-white/10">
+                <thead className="bg-slate-900">
                   <tr>
-                    <td
-                      colSpan="7"
-                      className="px-6 py-12 text-center text-sm text-slate-400"
-                    >
-                      Loading results...
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Student
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Class
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Session
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Term
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Decision
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Created
+                    </th>
                   </tr>
-                ) : results.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center">
-                      <div className="text-sm font-medium text-slate-300">
-                        No results found.
-                      </div>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {hasFilters
-                          ? "Try adjusting your search or filters."
-                          : "Student results will appear here once they are created."}
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  results.map((result) => {
-                    const student = result.student || {};
-                    const academicSession = result.academicSession || {};
-                    const fullName = getFullName(student);
+                </thead>
 
-                    return (
-                      <tr
-                        key={result._id}
-                        onClick={() => handleResultClick(result._id)}
-                        className="cursor-pointer transition hover:bg-indigo-500/10"
-                        title="Click to view complete result"
+                <tbody className="divide-y divide-white/10 bg-slate-950/30">
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan="7"
+                        className="px-6 py-12 text-center text-sm text-slate-400"
                       >
-                        <td className="whitespace-nowrap px-6 py-4">
-                          <div className="font-medium text-white">
-                            {fullName || "Unknown student"}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {student.studentId || "—"}
-                          </div>
-                        </td>
+                        Loading results...
+                      </td>
+                    </tr>
+                  ) : results.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-12 text-center">
+                        <div className="text-sm font-medium text-slate-300">
+                          No results found.
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {hasFilters
+                            ? "Try adjusting your search or filters."
+                            : "Student results will appear here once they are created."}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    results.map((result) => {
+                      const student = result.student || {};
+                      const academicSession = result.academicSession || {};
+                      const fullName = getFullName(student);
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
-                          {result.currentClass || student.currentClass || "—"}
-                        </td>
+                      return (
+                        <tr
+                          key={result._id}
+                          onClick={() => handleResultClick(result._id)}
+                          className="cursor-pointer transition hover:bg-indigo-500/10"
+                          title="Click to view complete result"
+                        >
+                          <td className="whitespace-nowrap px-6 py-4">
+                            <div className="font-medium text-white">
+                              {fullName || "Unknown student"}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {student.studentId || "—"}
+                            </div>
+                          </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
-                          {academicSession.name || "—"}
-                        </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
+                            {result.currentClass || student.currentClass || "—"}
+                          </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
-                          {result.term
-                            ? `${formatLabel(result.term)} Term`
-                            : "—"}
-                        </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
+                            {academicSession.name || "—"}
+                          </td>
 
-                        <td className="whitespace-nowrap px-6 py-4">
-                          {getStatusBadge(result.status)}
-                        </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-300">
+                            {result.term
+                              ? `${formatLabel(result.term)} Term`
+                              : "—"}
+                          </td>
 
-                        <td className="whitespace-nowrap px-6 py-4">
-                          {getDecisionBadge(result.principalDecision)}
-                        </td>
+                          <td className="whitespace-nowrap px-6 py-4">
+                            {getStatusBadge(result.status)}
+                          </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
-                          {formatDate(result.createdAt)}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          <td className="whitespace-nowrap px-6 py-4">
+                            {getDecisionBadge(result.principalDecision)}
+                          </td>
 
-          {/* Pagination */}
-          {!loading && results.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-white/10 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-slate-500">
-                Showing page{" "}
-                <span className="font-medium text-slate-300">
-                  {pagination.page}
-                </span>{" "}
-                of{" "}
-                <span className="font-medium text-slate-300">
-                  {pagination.totalPages}
-                </span>{" "}
-                —{" "}
-                <span className="font-medium text-slate-300">
-                  {pagination.total}
-                </span>{" "}
-                total result{pagination.total === 1 ? "" : "s"}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handlePreviousPage}
-                  disabled={page <= 1}
-                  className="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
-
-                <span className="px-2 text-sm text-slate-400">{page}</span>
-
-                <button
-                  type="button"
-                  onClick={handleNextPage}
-                  disabled={page >= pagination.totalPages}
-                  className="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-400">
+                            {formatDate(result.createdAt)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            {/* Pagination */}
+            {!loading && results.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-white/10 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-500">
+                  Showing page{" "}
+                  <span className="font-medium text-slate-300">
+                    {pagination.page}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-300">
+                    {pagination.totalPages}
+                  </span>{" "}
+                  —{" "}
+                  <span className="font-medium text-slate-300">
+                    {pagination.total}
+                  </span>{" "}
+                  total result{pagination.total === 1 ? "" : "s"}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePreviousPage}
+                    disabled={page <= 1}
+                    className="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="px-2 text-sm text-slate-400">{page}</span>
+
+                  <button
+                    type="button"
+                    onClick={handleNextPage}
+                    disabled={page >= pagination.totalPages}
+                    className="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
