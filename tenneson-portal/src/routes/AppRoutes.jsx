@@ -34,6 +34,7 @@ import AuditLog from "../pages/admin/AuditLog";
 import AcademicSessions from "../pages/academicSessions/AcademicSessions";
 
 import TeacherManagement from "../pages/teachers/TeacherManagement";
+import SubjectAllocation from "../pages/academic/SubjectAllocation";
 
 function AppRoutes() {
   return (
@@ -95,6 +96,14 @@ function AppRoutes() {
           {/* =====================================
               DASHBOARD
           ===================================== */}
+          <Route
+            path="/subject-allocations"
+            element={
+              <PermissionRoute permission="class-subject-allocations.view">
+                <SubjectAllocation />
+              </PermissionRoute>
+            }
+          />
 
           <Route
             path="/dashboard"

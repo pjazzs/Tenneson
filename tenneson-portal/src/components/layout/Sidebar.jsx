@@ -13,6 +13,7 @@ import {
   FaFileAlt,
   FaCalendarAlt,
   FaChalkboardTeacher,
+  FaBook,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
@@ -44,6 +45,13 @@ function Sidebar({ isMobileOpen, onClose }) {
       end: true,
     },
 
+    {
+      name: "Subject Allocation",
+      path: "/subject-allocations",
+      icon: <FaBook />,
+      visible: hasPermission("class-subject-allocations.view"),
+      end: true,
+    },
     {
       name: "Results",
       path: "/results",
