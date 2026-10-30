@@ -12,6 +12,7 @@ import {
   FaExchangeAlt,
   FaFileAlt,
   FaCalendarAlt,
+  FaChalkboardTeacher,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
@@ -32,6 +33,14 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/students",
       icon: <FaUserGraduate />,
       visible: hasPermission("students.view"),
+      end: true,
+    },
+
+    {
+      name: "Teachers",
+      path: "/teachers",
+      icon: <FaChalkboardTeacher />,
+      visible: hasPermission("teachers.view"),
       end: true,
     },
 

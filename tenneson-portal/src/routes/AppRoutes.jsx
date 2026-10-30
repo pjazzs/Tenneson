@@ -32,6 +32,9 @@ import ActivityLogs from "../pages/activity/ActivityLogs";
 import AdminManagement from "../pages/admin/AdminManagement";
 import AuditLog from "../pages/admin/AuditLog";
 import AcademicSessions from "../pages/academicSessions/AcademicSessions";
+
+import TeacherManagement from "../pages/teachers/TeacherManagement";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -76,6 +79,18 @@ function AppRoutes() {
       ========================================= */}
 
       <Route element={<ProtectedRoute />}>
+        {/* =====================================
+              TEACHER MANAGEMENT
+            ===================================== */}
+
+        <Route
+          path="/teachers"
+          element={
+            <PermissionRoute permission="teachers.view">
+              <TeacherManagement />
+            </PermissionRoute>
+          }
+        />
         <Route element={<Layout />}>
           {/* =====================================
               DASHBOARD

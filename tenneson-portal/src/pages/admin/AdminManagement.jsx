@@ -141,6 +141,25 @@ function AdminManagement() {
       },
     ],
 
+    Teachers: [
+      {
+        key: "teachers.view",
+        label: "View Teachers",
+      },
+      {
+        key: "teachers.create",
+        label: "Create Teacher",
+      },
+      {
+        key: "teachers.update",
+        label: "Update Teacher",
+      },
+      {
+        key: "teachers.password-reset",
+        label: "Reset Teacher Password",
+      },
+    ],
+
     Admins: [
       {
         key: "admins.manage",
