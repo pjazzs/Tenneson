@@ -337,6 +337,33 @@ function LandingPage() {
 
               <button
                 type="button"
+                onClick={() => navigate("/teacher/login")}
+                className="
+                group
+                inline-flex
+                items-center
+                justify-center
+                gap-3
+                bg-emerald-500
+                hover:bg-emerald-400
+                border
+                border-emerald-400
+                text-white
+                px-7
+                py-4
+                rounded-xl
+                font-bold
+                transition
+                duration-200
+              "
+              >
+                <FaBookOpen />
+                Teacher Portal
+                <FaArrowRight className="group-hover:translate-x-1 transition" />
+              </button>
+
+              <button
+                type="button"
                 onClick={() => navigate("/login")}
                 className="
                   group
@@ -712,7 +739,7 @@ function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Student */}
             <PortalCard
               icon={<FaGraduationCap />}
@@ -720,6 +747,15 @@ function LandingPage() {
               description="Students can access their academic profile, results, and other student services."
               buttonText="Student Login"
               onClick={() => navigate("/student/login")}
+            />
+
+            {/* Teacher */}
+            <PortalCard
+              icon={<FaBookOpen />}
+              title="Teacher Portal"
+              description="Teachers can access their assigned classes, subjects, and academic responsibilities."
+              buttonText="Teacher Login"
+              onClick={() => navigate("/teacher/login")}
             />
 
             {/* Admin */}
