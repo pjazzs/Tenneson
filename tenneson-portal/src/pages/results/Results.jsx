@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import {
   approveResult,
   getResult,
   getResults,
   publishResult,
   submitResult,
+  createResultCorrection,
+  getActiveResultCorrection,
+  getResultCorrection,
+  submitResultCorrection,
+  approveResultCorrection,
+  rejectResultCorrection,
+  publishResultCorrection,
 } from "../../api/resultApi";
 
 const Results = () => {
@@ -29,6 +38,12 @@ const Results = () => {
   const [selectedResultLoading, setSelectedResultLoading] = useState(false);
   const [selectedResultError, setSelectedResultError] = useState("");
   const [workflowActionLoading, setWorkflowActionLoading] = useState(false);
+
+  const [activeCorrection, setActiveCorrection] = useState(null);
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+  const [correctionActionLoading, setCorrectionActionLoading] = useState(false);
+
+  const navigate = useNavigate();
 
   /*
   |--------------------------------------------------------------------------
@@ -235,6 +250,206 @@ const Results = () => {
       );
     } finally {
       setWorkflowActionLoading(false);
+    }
+  };
+
+  const refreshResults = async (resultId) => {
+    const response = await getResult(resultId);
+    const result = response?.result || response;
+    setSelectedResult(result);
+
+    const params = { page, limit: 10 };
+
+    if (searchInput.trim()) params.search = searchInput.trim();
+    if (term) params.term = term;
+    if (status) params.status = status;
+    if (currentClass) params.currentClass = currentClass;
+
+    const listResponse = await getResults(params);
+    setResults(listResponse.results || []);
+
+    if (listResponse.pagination) {
+      setPagination(listResponse.pagination);
+    }
+  };
+
+  const handleStartCorrection = async () => {
+    const resultId = selectedResult?._id;
+
+    if (!resultId || correctionLoading) return;
+
+    const reason = window.prompt(
+      "Explain why this published result needs correction. Enter at least 5 characters:",
+    );
+
+    if (reason === null) return;
+
+    if (reason.trim().length < 5) {
+      window.alert("The correction reason must contain at least 5 characters.");
+      return;
+    }
+
+    try {
+      setCorrectionLoading(true);
+
+      const response = await createResultCorrection(resultId, reason.trim());
+      const revision = response?.revision;
+
+      if (!revision?._id) {
+        throw new Error(
+          "The correction was created, but its ID was not returned.",
+        );
+      }
+
+      setActiveCorrection(revision);
+      window.alert(
+        "Correction draft created. The published result is unchanged.",
+      );
+    } catch (error) {
+      window.alert(
+        error.response?.data?.message ||
+          error.message ||
+          "Could not start the result correction.",
+      );
+    } finally {
+      setCorrectionLoading(false);
+    }
+  };
+
+  const handleLoadActiveCorrection = async () => {
+    const resultId = selectedResult?._id;
+
+    if (!resultId || correctionLoading) return;
+
+    try {
+      setCorrectionLoading(true);
+
+      const response = await getActiveResultCorrection(resultId);
+      setActiveCorrection(response?.revision || null);
+    } catch (error) {
+      const statusCode = error.response?.status;
+
+      if (statusCode === 404) {
+        setActiveCorrection(null);
+        window.alert("There is no active correction for this result yet.");
+      } else {
+        window.alert(
+          error.response?.data?.message ||
+            "Could not load the active correction.",
+        );
+      }
+    } finally {
+      setCorrectionLoading(false);
+    }
+  };
+
+  const handleCorrectionAction = async (action) => {
+    const revisionId = activeCorrection?._id;
+
+    if (!revisionId || correctionActionLoading) return;
+
+    try {
+      setCorrectionActionLoading(true);
+
+      if (action === "open") {
+        navigate("/results/entry", {
+          state: {
+            correctionRevisionId: revisionId,
+          },
+        });
+
+        return;
+      }
+
+      if (action === "submit") {
+        if (
+          !window.confirm(
+            "Submit this correction for Principal review? The official published result will remain unchanged.",
+          )
+        ) {
+          return;
+        }
+
+        await submitResultCorrection(revisionId);
+      }
+
+      if (action === "approve") {
+        const principalComment = window.prompt(
+          "Enter the Principal's comment for this correction:",
+        );
+
+        if (principalComment === null) return;
+
+        if (!principalComment.trim()) {
+          window.alert("A Principal comment is required.");
+          return;
+        }
+
+        const payload = {
+          principalComment: principalComment.trim(),
+        };
+
+        if (selectedResult?.term === "third") {
+          const decision = window.prompt(
+            'Enter "promoted" or "repeat" for Third Term:',
+          );
+
+          if (decision === null) return;
+
+          const normalized = decision.trim().toLowerCase();
+
+          if (!["promoted", "repeat"].includes(normalized)) {
+            window.alert('Enter "promoted" or "repeat".');
+            return;
+          }
+
+          payload.principalDecision = normalized;
+        }
+
+        await approveResultCorrection(revisionId, payload);
+      }
+
+      if (action === "reject") {
+        const rejectionReason = window.prompt(
+          "Explain why this correction is being rejected:",
+        );
+
+        if (rejectionReason === null) return;
+
+        if (!rejectionReason.trim()) {
+          window.alert("A rejection reason is required.");
+          return;
+        }
+
+        await rejectResultCorrection(revisionId, rejectionReason.trim());
+      }
+
+      if (action === "publish") {
+        if (
+          !window.confirm(
+            "Publish this approved correction? This will replace the official published result visible to the student.",
+          )
+        ) {
+          return;
+        }
+
+        await publishResultCorrection(revisionId);
+      }
+
+      const refreshedCorrection = await getResultCorrection(revisionId);
+      setActiveCorrection(refreshedCorrection?.revision || null);
+
+      await refreshResults(selectedResult._id);
+
+      window.alert("Correction workflow action completed successfully.");
+    } catch (error) {
+      window.alert(
+        error.response?.data?.message ||
+          error.message ||
+          "The correction workflow action failed.",
+      );
+    } finally {
+      setCorrectionActionLoading(false);
     }
   };
 
@@ -1363,6 +1578,134 @@ const Results = () => {
             Current status: {selectedResult.status}
           </p>
         </section>
+
+        {/* Published Result Correction Workflow */}
+        {selectedResult.status === "published" && (
+          <section className="rounded-2xl border border-amber-500/20 bg-white/5 p-5">
+            <h3 className="text-lg font-semibold text-white">
+              Published Result Correction
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Corrections are reviewed separately. The student's official result
+              remains unchanged until an approved correction is published.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleStartCorrection}
+                disabled={correctionLoading}
+                className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+              >
+                {correctionLoading ? "Processing..." : "Start Correction"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLoadActiveCorrection}
+                disabled={correctionLoading}
+                className="rounded-lg border border-white/20 px-4 py-2 font-semibold text-white disabled:opacity-50"
+              >
+                Load Active Correction
+              </button>
+            </div>
+
+            {activeCorrection && (
+              <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h4 className="font-semibold text-white">
+                    Correction Revision #{activeCorrection.revisionNumber}
+                  </h4>
+
+                  {getStatusBadge(activeCorrection.status)}
+                </div>
+
+                <p className="mt-3 text-sm text-slate-300">
+                  <span className="font-semibold">Reason:</span>{" "}
+                  {activeCorrection.reason || "—"}
+                </p>
+
+                {activeCorrection.rejectionReason && (
+                  <p className="mt-2 text-sm text-rose-300">
+                    <span className="font-semibold">Rejection reason:</span>{" "}
+                    {activeCorrection.rejectionReason}
+                  </p>
+                )}
+
+                {activeCorrection.principalComment && (
+                  <p className="mt-2 text-sm text-slate-300">
+                    <span className="font-semibold">Principal comment:</span>{" "}
+                    {activeCorrection.principalComment}
+                  </p>
+                )}
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {["draft", "rejected"].includes(activeCorrection.status) && (
+                    <button
+                      type="button"
+                      onClick={() => handleCorrectionAction("open")}
+                      disabled={correctionActionLoading}
+                      className="rounded-lg border border-white/20 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                    >
+                      Open Correction
+                    </button>
+                  )}
+
+                  {activeCorrection.status === "draft" && (
+                    <button
+                      type="button"
+                      onClick={() => handleCorrectionAction("submit")}
+                      disabled={correctionActionLoading}
+                      className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                    >
+                      Submit Correction
+                    </button>
+                  )}
+
+                  {activeCorrection.status === "submitted" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleCorrectionAction("approve")}
+                        disabled={correctionActionLoading}
+                        className="rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                      >
+                        Approve Correction
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCorrectionAction("reject")}
+                        disabled={correctionActionLoading}
+                        className="rounded-lg bg-rose-500 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                      >
+                        Reject Correction
+                      </button>
+                    </>
+                  )}
+
+                  {activeCorrection.status === "approved" && (
+                    <button
+                      type="button"
+                      onClick={() => handleCorrectionAction("publish")}
+                      disabled={correctionActionLoading}
+                      className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                    >
+                      Publish Corrected Result
+                    </button>
+                  )}
+                </div>
+
+                {correctionActionLoading && (
+                  <p className="mt-3 text-sm text-slate-400">
+                    Processing correction...
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Audit Information */}
         <section className="rounded-2xl border border-white/10 bg-white/5 p-5">

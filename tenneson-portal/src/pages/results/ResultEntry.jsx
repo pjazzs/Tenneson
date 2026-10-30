@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useCallback, useState } from "react";
+
+import { useLocation } from "react-router-dom";
 import ResultAttendance from "./components/ResultAttendance";
 import ResultScoreEntry from "./components/ResultScoreEntry";
 import ResultAffectiveDomain from "./components/ResultAffectiveDomain";
@@ -15,7 +17,13 @@ import {
 } from "react-icons/fa";
 
 import api from "../../api/axios";
-import { createResult, getResult, getResults } from "../../api/resultApi";
+import {
+  createResult,
+  getResult,
+  getResults,
+  getResultCorrection,
+  updateResultCorrection,
+} from "../../api/resultApi";
 import calculateResultGrade from "../../utils/resultGrade";
 
 /*
@@ -250,6 +258,14 @@ const ResultEntry = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  const location = useLocation();
+
+  const correctionRevisionId = location.state?.correctionRevisionId || "";
+
+  const [correctionData, setCorrectionData] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+
   /*
   |--------------------------------------------------------------------------
   | Result Retrieval State
@@ -287,6 +303,78 @@ const ResultEntry = () => {
 
     loadAcademicSessions();
   }, []);
+
+  useEffect(() => {
+    if (!correctionRevisionId) return;
+
+    let cancelled = false;
+
+    const loadCorrection = async () => {
+      try {
+        setCorrectionLoading(true);
+        setError("");
+
+        const response = await getResultCorrection(correctionRevisionId);
+
+        const revision = response?.revision;
+
+        if (!revision?._id || !revision.proposedData) {
+          throw new Error("Correction details could not be retrieved.");
+        }
+
+        if (!["draft", "rejected"].includes(revision.status)) {
+          throw new Error("Only draft or rejected corrections can be edited.");
+        }
+
+        if (cancelled) return;
+
+        setCorrectionData(revision);
+        setCorrectionReason(revision.reason || "");
+
+        const proposedData = revision.proposedData;
+
+        const student = revision.student;
+
+        if (!student?._id) {
+          throw new Error(
+            "The student associated with this correction was not found.",
+          );
+        }
+
+        setSelectedStudent(student);
+        setStudentSearch(student.studentId || "");
+
+        setAcademicSessionId(
+          proposedData.academicSessionId ||
+            getReferenceId(revision.academicSession),
+        );
+
+        setTerm(proposedData.term || revision.term);
+
+        setCurrentStep("selection");
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("Failed to load correction:", error);
+
+        setError(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load correction.",
+        );
+      } finally {
+        if (!cancelled) {
+          setCorrectionLoading(false);
+        }
+      }
+    };
+
+    loadCorrection();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [correctionRevisionId]);
 
   /*
   |--------------------------------------------------------------------------
@@ -537,137 +625,139 @@ const ResultEntry = () => {
   | Fetch the complete result record and populate all relevant form fields.
   */
 
-  const restoreExistingResult = (result) => {
-    const savedSubjectResults = Array.isArray(result?.subjectResults)
-      ? result.subjectResults
-      : [];
+  const restoreExistingResult = useCallback(
+    (result) => {
+      const savedSubjectResults = Array.isArray(result?.subjectResults)
+        ? result.subjectResults
+        : [];
 
-    const savedSubjectIds = savedSubjectResults
-      .map(getSubjectResultId)
-      .filter(Boolean);
+      const savedSubjectIds = savedSubjectResults
+        .map(getSubjectResultId)
+        .filter(Boolean);
 
-    // Restore only subjects that are still available in the active subject list.
-    const availableSavedSubjectIds = subjects
-      .filter((subject) => savedSubjectIds.includes(String(subject._id)))
-      .map((subject) => subject._id);
+      // Restore only subjects that are still available in the active subject list.
+      const availableSavedSubjectIds = subjects
+        .filter((subject) => savedSubjectIds.includes(String(subject._id)))
+        .map((subject) => subject._id);
 
-    const subjectIdsToRestore =
-      availableSavedSubjectIds.length > 0
-        ? availableSavedSubjectIds
-        : selectedSubjectIds;
+      const subjectIdsToRestore =
+        availableSavedSubjectIds.length > 0
+          ? availableSavedSubjectIds
+          : selectedSubjectIds;
 
-    setSelectedSubjectIds(subjectIdsToRestore);
+      setSelectedSubjectIds(subjectIdsToRestore);
 
-    const restoredEntries = subjects
-      .filter((subject) => subjectIdsToRestore.includes(subject._id))
-      .map((subject) => {
-        const savedEntry = savedSubjectResults.find(
-          (item) => getSubjectResultId(item) === String(subject._id),
-        );
+      const restoredEntries = subjects
+        .filter((subject) => subjectIdsToRestore.includes(subject._id))
+        .map((subject) => {
+          const savedEntry = savedSubjectResults.find(
+            (item) => getSubjectResultId(item) === String(subject._id),
+          );
 
-        if (!savedEntry) {
+          if (!savedEntry) {
+            return {
+              subjectId: subject._id,
+              subjectName: subject.name,
+              subjectCode: subject.code || "",
+              offered: true,
+              ca1: "",
+              ca2: "",
+              exam: "",
+              total: "",
+              firstTerm: null,
+              secondTerm: null,
+              cumulativeScore: "",
+              weightedAverage: "",
+              grade: "",
+              remark: "",
+              teacherComment: "",
+            };
+          }
+
+          const ca1 = savedEntry.ca1 ?? "";
+          const ca2 = savedEntry.ca2 ?? "";
+          const exam = savedEntry.exam ?? "";
+
+          const allScoresPresent = ca1 !== "" && ca2 !== "" && exam !== "";
+
+          const offered = savedEntry.offered ?? true;
+
+          const currentTotal =
+            offered && allScoresPresent
+              ? Number(ca1) + Number(ca2) + Number(exam)
+              : "";
+
+          const isThirdTerm = term === "third";
+
+          const gradeScore = isThirdTerm
+            ? savedEntry.weightedAverage
+            : currentTotal;
+
+          const hasValidGradeScore =
+            gradeScore !== null &&
+            gradeScore !== undefined &&
+            gradeScore !== "" &&
+            Number.isFinite(Number(gradeScore));
+
+          const calculatedGrade = hasValidGradeScore
+            ? calculateResultGrade(Number(gradeScore))
+            : { grade: "", remark: "" };
+
           return {
             subjectId: subject._id,
             subjectName: subject.name,
             subjectCode: subject.code || "",
-            offered: true,
-            ca1: "",
-            ca2: "",
-            exam: "",
-            total: "",
-            firstTerm: null,
-            secondTerm: null,
-            cumulativeScore: "",
-            weightedAverage: "",
-            grade: "",
-            remark: "",
-            teacherComment: "",
+            offered,
+            ca1,
+            ca2,
+            exam,
+            total: currentTotal,
+
+            firstTerm: savedEntry.firstTerm ?? null,
+            secondTerm: savedEntry.secondTerm ?? null,
+
+            cumulativeScore: savedEntry.cumulativeScore ?? "",
+            weightedAverage: savedEntry.weightedAverage ?? "",
+            grade: calculatedGrade.grade || "",
+            remark: calculatedGrade.remark || "",
+            teacherComment: savedEntry.teacherComment || "",
           };
-        }
+        });
 
-        const ca1 = savedEntry.ca1 ?? "";
-        const ca2 = savedEntry.ca2 ?? "";
-        const exam = savedEntry.exam ?? "";
+      setScoreEntries(restoredEntries);
 
-        const allScoresPresent = ca1 !== "" && ca2 !== "" && exam !== "";
+      const savedAttendance = result?.attendance || {};
 
-        const offered = savedEntry.offered ?? true;
-
-        const currentTotal =
-          offered && allScoresPresent
-            ? Number(ca1) + Number(ca2) + Number(exam)
-            : "";
-
-        const isThirdTerm = term === "third";
-
-        const gradeScore = isThirdTerm
-          ? savedEntry.weightedAverage
-          : currentTotal;
-
-        const hasValidGradeScore =
-          gradeScore !== null &&
-          gradeScore !== undefined &&
-          gradeScore !== "" &&
-          Number.isFinite(Number(gradeScore));
-
-        const calculatedGrade = hasValidGradeScore
-          ? calculateResultGrade(Number(gradeScore))
-          : { grade: "", remark: "" };
-
-        return {
-          subjectId: subject._id,
-          subjectName: subject.name,
-          subjectCode: subject.code || "",
-          offered,
-          ca1,
-          ca2,
-          exam,
-          total: currentTotal,
-
-          firstTerm: savedEntry.firstTerm ?? null,
-          secondTerm: savedEntry.secondTerm ?? null,
-
-          cumulativeScore: savedEntry.cumulativeScore ?? "",
-          weightedAverage: savedEntry.weightedAverage ?? "",
-          grade: calculatedGrade.grade || "",
-          remark: calculatedGrade.remark || "",
-          teacherComment: savedEntry.teacherComment || "",
-        };
+      setAttendance({
+        daysSchoolOpened: savedAttendance.daysSchoolOpened ?? "",
+        daysPresent: savedAttendance.daysPresent ?? "",
+        daysAbsent: savedAttendance.daysAbsent ?? "",
       });
 
-    setScoreEntries(restoredEntries);
+      setAffectiveDomain({
+        ...getEmptyAffectiveDomain(),
+        ...(result?.affectiveDomain || {}),
+      });
 
-    const savedAttendance = result?.attendance || {};
+      setPsychomotorDomain({
+        ...getEmptyPsychomotorDomain(),
+        ...(result?.psychomotorDomain || {}),
+      });
 
-    setAttendance({
-      daysSchoolOpened: savedAttendance.daysSchoolOpened ?? "",
-      daysPresent: savedAttendance.daysPresent ?? "",
-      daysAbsent: savedAttendance.daysAbsent ?? "",
-    });
+      setConduct(result?.conduct ?? "");
+      setSports(Array.isArray(result?.sports) ? result.sports : []);
+      setClubs(Array.isArray(result?.clubs) ? result.clubs : []);
+      setSpecialReport(result?.specialReport ?? "");
 
-    setAffectiveDomain({
-      ...getEmptyAffectiveDomain(),
-      ...(result?.affectiveDomain || {}),
-    });
+      setComments({
+        ...getEmptyComments(),
+        ...(result?.comments || {}),
+      });
 
-    setPsychomotorDomain({
-      ...getEmptyPsychomotorDomain(),
-      ...(result?.psychomotorDomain || {}),
-    });
-
-    setConduct(result?.conduct ?? "");
-    setSports(Array.isArray(result?.sports) ? result.sports : []);
-    setClubs(Array.isArray(result?.clubs) ? result.clubs : []);
-    setSpecialReport(result?.specialReport ?? "");
-
-    setComments({
-      ...getEmptyComments(),
-      ...(result?.comments || {}),
-    });
-
-    setExistingResultId(result?._id || "");
-  };
-
+      setExistingResultId(result?._id || "");
+    },
+    [subjects, selectedSubjectIds, term],
+  );
   /*
   |--------------------------------------------------------------------------
   | Continue To Scores — Retrieve Existing Result First
@@ -695,7 +785,7 @@ const ResultEntry = () => {
       return;
     }
 
-    if (selectedSubjectIds.length === 0) {
+    if (!correctionRevisionId && selectedSubjectIds.length === 0) {
       setError("Please select at least one subject.");
       return;
     }
@@ -707,6 +797,46 @@ const ResultEntry = () => {
 
     try {
       setRetrievingResult(true);
+
+      // A correction must load its proposed data, never the published result.
+      if (correctionRevisionId) {
+        if (!correctionData?.proposedData) {
+          throw new Error("Correction details are not available yet.");
+        }
+
+        const proposedData = correctionData.proposedData;
+        const proposedSessionId = getReferenceId(
+          proposedData.academicSessionId ?? correctionData.academicSession,
+        );
+
+        if (proposedSessionId !== String(selectedSession._id)) {
+          throw new Error(
+            "The correction session does not match the selected academic session.",
+          );
+        }
+
+        if (
+          String(proposedData.term).toLowerCase() !== String(term).toLowerCase()
+        ) {
+          throw new Error(
+            "The correction term does not match the selected term.",
+          );
+        }
+
+        if (subjectsLoading) {
+          throw new Error(
+            "Subjects are still loading. Please try again shortly.",
+          );
+        }
+
+        restoreExistingResult({ ...proposedData, _id: "" });
+        setExistingResultId("");
+        setSuccessMessage(
+          `Correction revision #${correctionData.revisionNumber} loaded. You are editing a separate correction draft.`,
+        );
+        setCurrentStep("scores");
+        return;
+      }
 
       const existingSummary = await findExistingResult();
 
@@ -1335,6 +1465,21 @@ const ResultEntry = () => {
 
       const payload = buildPayload();
 
+      // Correction mode: save only to the ResultRevision record.
+      if (correctionRevisionId) {
+        const response = await updateResultCorrection(correctionRevisionId, {
+          ...payload,
+          reason: correctionReason,
+        });
+
+        setSuccessMessage(
+          response?.message ||
+            "Correction draft saved successfully. The official published result remains unchanged.",
+        );
+
+        return;
+      }
+
       if (existingResultId) {
         /*
          * Load the update function dynamically to avoid changing the other
@@ -1434,6 +1579,15 @@ const ResultEntry = () => {
     }
   };
 
+  if (correctionRevisionId && correctionLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <FaSpinner className="mr-3 animate-spin" />
+        Loading correction...
+      </div>
+    );
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Selection Step
@@ -1507,6 +1661,25 @@ const ResultEntry = () => {
           {successMessage && (
             <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
               {successMessage}
+            </div>
+          )}
+
+          {correctionRevisionId && (
+            <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <h3 className="font-semibold text-amber-300">
+                Result Correction Mode
+              </h3>
+
+              <p className="mt-1 text-sm text-amber-200/80">
+                You are editing correction revision #
+                {correctionData?.revisionNumber || "..."}. Changes are saved
+                separately and will not affect the student's published result
+                until the correction is approved and published.
+              </p>
+
+              <p className="mt-3 text-sm text-slate-300">
+                **Correction reason:** {correctionReason}
+              </p>
             </div>
           )}
 

@@ -13,9 +13,10 @@ const {
   getMyPublishedResult,
   getStudentResultHistory,
   getResultStatistics,
+  getResultCorrection,
+  getResultCorrections,
   createResultCorrection,
   getActiveResultCorrection,
-  getResultCorrection,
   updateResultCorrection,
   submitResultCorrection,
   approveResultCorrection,
@@ -222,6 +223,17 @@ router.get(
   protect,
   authorizePermission("results.view"),
   getActiveResultCorrection,
+);
+
+/*
+ * List result corrections.
+ * Register before /result-corrections/:revisionId.
+ */
+router.get(
+  "/result-corrections",
+  protect,
+  authorizePermission("results.view"),
+  getResultCorrections,
 );
 
 /*

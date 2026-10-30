@@ -1212,6 +1212,223 @@ exports.getResults = asyncHandler(async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
+| GET RESULT CORRECTIONS
+|--------------------------------------------------------------------------
+|
+| GET /result-corrections
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.getResultCorrections = asyncHandler(async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      term,
+      currentClass,
+      academicSessionId,
+      studentId,
+      search,
+    } = req.query;
+
+    const pageNumber = parsePositiveInteger(page, 1, 100000);
+    const limitNumber = parsePositiveInteger(limit, 20, 100);
+
+    const filter = {};
+
+    const validCorrectionStatuses = [
+      "draft",
+      "submitted",
+      "approved",
+      "rejected",
+      "published",
+      "cancelled",
+    ];
+
+    if (status) {
+      if (!validCorrectionStatuses.includes(status)) {
+        return sendError(res, 400, "Invalid correction status.");
+      }
+
+      filter.status = status;
+    }
+
+    if (term) {
+      if (!VALID_TERMS.includes(term)) {
+        return sendError(res, 400, "Invalid term.");
+      }
+
+      filter.term = term;
+    }
+
+    if (academicSessionId) {
+      if (!isValidObjectId(academicSessionId)) {
+        return sendError(res, 400, "Invalid academic session ID.");
+      }
+
+      filter.academicSession = new mongoose.Types.ObjectId(academicSessionId);
+    }
+
+    /*
+     * Resolve all student-related filters together.
+     * This ensures studentId, class and search filters
+     * are combined rather than overwriting one another.
+     */
+    let matchingStudentIds = null;
+
+    const intersectStudentIds = (ids) => {
+      const nextIds = new Set(ids.map(String));
+
+      matchingStudentIds =
+        matchingStudentIds === null
+          ? nextIds
+          : new Set([...matchingStudentIds].filter((id) => nextIds.has(id)));
+    };
+
+    if (studentId) {
+      const student = await resolveStudent(studentId);
+      intersectStudentIds([student._id]);
+    }
+
+    if (currentClass) {
+      const students = await Student.find({
+        currentClass: currentClass.trim(),
+      })
+        .select("_id")
+        .lean();
+
+      intersectStudentIds(students.map((student) => student._id));
+    }
+
+    if (typeof search === "string" && search.trim()) {
+      const searchValue = escapeRegex(search.trim());
+
+      const students = await Student.find({
+        $or: [
+          {
+            studentId: {
+              $regex: searchValue,
+              $options: "i",
+            },
+          },
+          {
+            firstName: {
+              $regex: searchValue,
+              $options: "i",
+            },
+          },
+          {
+            lastName: {
+              $regex: searchValue,
+              $options: "i",
+            },
+          },
+          {
+            otherName: {
+              $regex: searchValue,
+              $options: "i",
+            },
+          },
+        ],
+      })
+        .select("_id")
+        .lean();
+
+      intersectStudentIds(students.map((student) => student._id));
+    }
+
+    if (matchingStudentIds !== null) {
+      filter.student = {
+        $in: [...matchingStudentIds].map(
+          (id) => new mongoose.Types.ObjectId(id),
+        ),
+      };
+
+      if (matchingStudentIds.size === 0) {
+        return res.status(200).json({
+          success: true,
+          corrections: [],
+          pagination: {
+            page: pageNumber,
+            limit: limitNumber,
+            total: 0,
+            totalPages: 0,
+          },
+        });
+      }
+    }
+
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const [corrections, total] = await Promise.all([
+      ResultRevision.find(filter)
+        .populate({
+          path: "student",
+          select: "studentId firstName lastName otherName currentClass",
+        })
+        .populate({
+          path: "academicSession",
+          select: "name isActive terms",
+        })
+        .populate({
+          path: "result",
+          select: "status totalScore average remark principalDecision",
+        })
+        .populate({
+          path: "createdBy",
+          select: "fullName email role",
+        })
+        .populate({
+          path: "updatedBy",
+          select: "fullName email role",
+        })
+        .populate({
+          path: "submittedBy",
+          select: "fullName email role",
+        })
+        .populate({
+          path: "approvedBy",
+          select: "fullName email role",
+        })
+        .populate({
+          path: "rejectedBy",
+          select: "fullName email role",
+        })
+        .populate({
+          path: "publishedBy",
+          select: "fullName email role",
+        })
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limitNumber)
+        .lean(),
+
+      ResultRevision.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      corrections,
+      pagination: {
+        page: pageNumber,
+        limit: limitNumber,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limitNumber),
+      },
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to fetch result corrections.",
+    );
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
 | GET SINGLE RESULT
 |--------------------------------------------------------------------------
 |
