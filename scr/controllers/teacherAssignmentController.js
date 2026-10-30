@@ -7,6 +7,7 @@ const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const AcademicSession = require("../models/AcademicSession");
 
 const createAuditLog = require("../utils/createAuditLog");
+const SubjectResultResponsibility = require("../models/SubjectResultResponsibility");
 
 /*
 |--------------------------------------------------------------------------
@@ -402,5 +403,329 @@ exports.updateTeacherAssignmentStatus = asyncHandler(async (req, res) => {
     success: true,
     message: `Teacher assignment ${isActive ? "activated" : "deactivated"} successfully.`,
     assignment: populatedAssignment,
+  });
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET SUBJECT RESULT RESPONSIBILITIES
+|--------------------------------------------------------------------------
+|
+| Returns designated result teachers for one academic session and term.
+|
+| GET /teacher-assignments/result-responsibilities
+| Query: academicSessionId, term
+|
+*/
+
+exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
+  const { academicSessionId, term } = req.query;
+
+  if (
+    typeof academicSessionId !== "string" ||
+    !validateObjectId(academicSessionId)
+  ) {
+    return sendInvalidId(res, "academic session");
+  }
+
+  if (!["first", "second", "third"].includes(term)) {
+    return res.status(400).json({
+      success: false,
+      message: "Term must be first, second or third.",
+    });
+  }
+
+  const session = await AcademicSession.findById(academicSessionId);
+
+  if (!session) {
+    return res.status(404).json({
+      success: false,
+      message: "Academic session not found.",
+    });
+  }
+
+  const responsibilities = await SubjectResultResponsibility.find({
+    academicSession: academicSessionId,
+    term,
+  })
+    .populate("academicSession", "name")
+    .populate({
+      path: "allocation",
+      populate: [
+        {
+          path: "schoolClass",
+          select: "name level",
+        },
+        {
+          path: "department",
+          select: "name code",
+        },
+        {
+          path: "subject",
+          select: "name code",
+        },
+      ],
+    })
+    .populate({
+      path: "teacherAssignment",
+      populate: {
+        path: "teacher",
+        select: "fullName email employeeId isActive",
+      },
+    })
+    .populate("assignedBy", "fullName")
+    .populate("updatedBy", "fullName")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return res.status(200).json({
+    success: true,
+    academicSession: {
+      _id: session._id,
+      name: session.name,
+    },
+    term,
+    totalResponsibilities: responsibilities.length,
+    responsibilities,
+  });
+});
+
+/*
+|--------------------------------------------------------------------------
+| DESIGNATE / CHANGE SUBJECT RESULT TEACHER
+|--------------------------------------------------------------------------
+|
+| PUT /teacher-assignments/result-responsibilities/:allocationId
+|
+| Body:
+| {
+|   academicSession: "...",
+|   term: "first",
+|   teacherAssignment: "...",
+|   reason: "Optional reassignment reason"
+| }
+|
+*/
+
+exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
+  const { allocationId } = req.params;
+  const { academicSession, term, teacherAssignment, reason = "" } = req.body;
+
+  if (!validateObjectId(allocationId)) {
+    return sendInvalidId(res, "subject allocation");
+  }
+
+  if (
+    typeof academicSession !== "string" ||
+    !validateObjectId(academicSession)
+  ) {
+    return sendInvalidId(res, "academic session");
+  }
+
+  if (
+    typeof teacherAssignment !== "string" ||
+    !validateObjectId(teacherAssignment)
+  ) {
+    return sendInvalidId(res, "teacher assignment");
+  }
+
+  if (!["first", "second", "third"].includes(term)) {
+    return res.status(400).json({
+      success: false,
+      message: "Term must be first, second or third.",
+    });
+  }
+
+  if (typeof reason !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "Reassignment reason must be a string.",
+    });
+  }
+
+  const [allocation, session, assignment] = await Promise.all([
+    ClassSubjectAllocation.findById(allocationId)
+      .populate("schoolClass", "name isActive")
+      .populate("department", "name isActive")
+      .populate("subject", "name isActive"),
+
+    AcademicSession.findById(academicSession),
+
+    TeacherAssignment.findById(teacherAssignment).populate(
+      "teacher",
+      "fullName email isActive",
+    ),
+  ]);
+
+  if (!allocation) {
+    return res.status(404).json({
+      success: false,
+      message: "Subject allocation not found.",
+    });
+  }
+
+  if (!session) {
+    return res.status(404).json({
+      success: false,
+      message: "Academic session not found.",
+    });
+  }
+
+  if (!assignment) {
+    return res.status(404).json({
+      success: false,
+      message: "Teacher assignment not found.",
+    });
+  }
+
+  // Ensure the selected term exists in the academic session.
+  const termExists = session.terms?.some(
+    (sessionTerm) => sessionTerm.key === term,
+  );
+
+  if (!termExists) {
+    return res.status(400).json({
+      success: false,
+      message: "The selected term does not exist in this academic session.",
+    });
+  }
+
+  // Assignment must belong to the selected allocation and session.
+  if (
+    assignment.allocation.toString() !== allocationId ||
+    assignment.academicSession.toString() !== academicSession
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "The selected teacher assignment does not belong to this allocation and academic session.",
+    });
+  }
+
+  // Only active assignments and active teachers can own result entry.
+  if (!assignment.isActive) {
+    return res.status(400).json({
+      success: false,
+      message: "The selected teacher assignment is inactive.",
+    });
+  }
+
+  if (!assignment.teacher?.isActive) {
+    return res.status(400).json({
+      success: false,
+      message: "The selected teacher is inactive.",
+    });
+  }
+
+  if (
+    !allocation.isActive ||
+    !allocation.schoolClass?.isActive ||
+    !allocation.subject?.isActive ||
+    (allocation.department && !allocation.department.isActive)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "The allocation, class, subject or department is inactive.",
+    });
+  }
+
+  let responsibility;
+
+  try {
+    responsibility = await SubjectResultResponsibility.findOne({
+      allocation: allocationId,
+      academicSession,
+      term,
+    });
+
+    if (!responsibility) {
+      responsibility = new SubjectResultResponsibility({
+        allocation: allocationId,
+        academicSession,
+        term,
+        teacherAssignment: assignment._id,
+        assignedBy: req.admin._id,
+        updatedBy: req.admin._id,
+      });
+    } else {
+      const previousAssignment = responsibility.teacherAssignment.toString();
+
+      const newAssignment = assignment._id.toString();
+
+      // Avoid creating history when the same owner is selected again.
+      if (previousAssignment !== newAssignment) {
+        responsibility.assignmentHistory.push({
+          teacherAssignment: responsibility.teacherAssignment,
+          changedBy: req.admin._id,
+          changedAt: new Date(),
+          reason: reason.trim(),
+        });
+
+        responsibility.teacherAssignment = assignment._id;
+      }
+
+      responsibility.updatedBy = req.admin._id;
+    }
+
+    await responsibility.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A result responsibility already exists for this allocation, session and term. Please refresh and try again.",
+      });
+    }
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    throw error;
+  }
+
+  await createAuditLog({
+    user: req.admin._id,
+    action: "UPDATE",
+    module: "SUBJECT_RESULT_RESPONSIBILITY",
+    description:
+      `${req.admin.fullName} designated ${assignment.teacher.fullName} ` +
+      `to submit ${allocation.subject.name} results for ` +
+      `${allocation.schoolClass.name}` +
+      `${
+        allocation.department ? ` (${allocation.department.name})` : ""
+      }, ${session.name}, ${term} term.`,
+    req,
+  });
+
+  const populatedResponsibility = await SubjectResultResponsibility.findById(
+    responsibility._id,
+  )
+    .populate("academicSession", "name")
+    .populate({
+      path: "allocation",
+      populate: [
+        { path: "schoolClass", select: "name level" },
+        { path: "department", select: "name code" },
+        { path: "subject", select: "name code" },
+      ],
+    })
+    .populate({
+      path: "teacherAssignment",
+      populate: {
+        path: "teacher",
+        select: "fullName email employeeId isActive",
+      },
+    })
+    .populate("assignedBy", "fullName")
+    .populate("updatedBy", "fullName");
+
+  return res.status(200).json({
+    success: true,
+    message: "Subject result teacher designated successfully.",
+    responsibility: populatedResponsibility,
   });
 });

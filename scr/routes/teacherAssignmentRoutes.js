@@ -5,6 +5,8 @@ const {
   getTeacherAssignments,
   createTeacherAssignment,
   updateTeacherAssignmentStatus,
+  getSubjectResultResponsibilities,
+  setSubjectResultResponsibility,
 } = require("../controllers/teacherAssignmentController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -44,6 +46,22 @@ router.patch(
   protect,
   authorizePermission("teacher-assignments.update"),
   updateTeacherAssignmentStatus,
+);
+
+// Get designated result teachers for a session and term.
+router.get(
+  `${BASE_PATH}/result-responsibilities`,
+  protect,
+  authorizePermission("teacher-assignments.view"),
+  getSubjectResultResponsibilities,
+);
+
+// Designate or change the result-owning teacher.
+router.put(
+  `${BASE_PATH}/result-responsibilities/:allocationId`,
+  protect,
+  authorizePermission("teacher-assignments.update"),
+  setSubjectResultResponsibility,
 );
 
 module.exports = router;
