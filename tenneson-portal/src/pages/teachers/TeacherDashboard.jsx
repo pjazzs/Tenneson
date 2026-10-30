@@ -408,6 +408,7 @@ function TeacherDashboard() {
 
       <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-400">
         Tenneson Teacher Portal
+        <p className="text-gray-600 text-xs mt-1">Created by PjazzDev</p>
       </footer>
     </div>
   );
