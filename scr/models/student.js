@@ -1,5 +1,67 @@
 const mongoose = require("mongoose");
 
+const departmentHistorySchema = new mongoose.Schema(
+  {
+    fromDepartment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+    },
+
+    toDepartment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+    },
+
+    // Snapshots preserve the historical names even if
+    // a department is renamed or becomes inactive.
+    fromDepartmentName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    toDepartmentName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    fromClass: {
+      type: String,
+      enum: ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
+      default: null,
+    },
+
+    toClass: {
+      type: String,
+      enum: ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
+      required: true,
+    },
+
+    changedAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    changedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+
+    reason: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  {
+    _id: true,
+  },
+);
+
 const studentSchema = new mongoose.Schema(
   {
     studentId: {
@@ -49,6 +111,20 @@ const studentSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
+    },
+
+    // Current department.
+    // Optional to preserve compatibility with existing records.
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+    },
+
+    // Records department assignments and changes over time.
+    departmentHistory: {
+      type: [departmentHistorySchema],
+      default: [],
     },
 
     session: {

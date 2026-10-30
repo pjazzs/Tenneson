@@ -9,11 +9,23 @@ exports.studentSchema = Joi.object({
 
   gender: Joi.string().valid("Male", "Female").required(),
 
-  dateOfBirth: Joi.date().required(),
+  // Preserve the original date value for parseExcelDate().
+  dateOfBirth: Joi.alternatives()
+    .try(Joi.string().trim().required(), Joi.date().required())
+    .required(),
 
   currentClass: Joi.string().trim().required(),
 
   session: Joi.string().trim().required(),
+
+  // Controller validates the four-digit year and converts it.
+  admissionYear: Joi.alternatives()
+    .try(
+      Joi.string().pattern(/^\d{4}$/),
+      Joi.number().integer().min(1900).max(2100),
+    )
+    .allow(null)
+    .optional(),
 
   parentName: Joi.string().trim().allow("").optional(),
 
@@ -29,24 +41,12 @@ exports.studentSchema = Joi.object({
     .optional()
     .messages({
       "string.min": "Password must be at least 8 characters long.",
-
       "string.max": "Password cannot exceed 128 characters.",
-
       "string.pattern.base":
         "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
     }),
 });
 
-/*
- * Used when updating an existing student.
- *
- * All fields are optional because the endpoint supports
- * partial updates.
- *
- * Sensitive/system-controlled fields such as studentId,
- * password, isActive, photo, createdBy, etc. are intentionally
- * not included.
- */
 exports.studentUpdateSchema = Joi.object({
   firstName: Joi.string().trim().optional(),
 
@@ -56,11 +56,26 @@ exports.studentUpdateSchema = Joi.object({
 
   gender: Joi.string().valid("Male", "Female").optional(),
 
-  dateOfBirth: Joi.date().optional(),
+  dateOfBirth: Joi.alternatives()
+    .try(Joi.string().trim(), Joi.date())
+    .optional(),
 
   currentClass: Joi.string().trim().optional(),
 
   session: Joi.string().trim().optional(),
+
+  admissionYear: Joi.alternatives()
+    .try(
+      Joi.string().pattern(/^\d{4}$/),
+      Joi.number().integer().min(1900).max(2100),
+    )
+    .allow(null)
+    .optional(),
+
+  department: Joi.string()
+    .pattern(/^[a-fA-F0-9]{24}$/)
+    .allow(null, "")
+    .optional(),
 
   parentName: Joi.string().trim().allow("").optional(),
 

@@ -3,9 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FaSave, FaArrowLeft } from "react-icons/fa";
 import api from "../../api/axios";
 
+const JUNIOR_CLASSES = ["JSS1", "JSS2", "JSS3"];
+
+const SENIOR_CLASSES = ["SS1", "SS2", "SS3"];
+
+const ALL_CLASSES = [...JUNIOR_CLASSES, ...SENIOR_CLASSES];
+
 function EditStudent() {
   const { studentId } = useParams();
-
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -18,7 +23,14 @@ function EditStudent() {
     session: "",
     parentName: "",
     parentPhone: "",
+    department: "",
   });
+
+  const [departments, setDepartments] = useState([]);
+
+  const [originalDepartment, setOriginalDepartment] = useState("");
+
+  const [originalClass, setOriginalClass] = useState("");
 
   const [loading, setLoading] = useState(true);
 
@@ -26,73 +38,131 @@ function EditStudent() {
 
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const fetchStudent = async () => {
-      try {
-        const response = await api.get(`/students/${studentId}`);
+  const [messageType, setMessageType] = useState("success");
 
-        const student = response.data.student;
+  const isSeniorClass = SENIOR_CLASSES.includes(formData.currentClass);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [studentResponse, departmentResponse] = await Promise.all([
+          api.get(`/students/${studentId}`),
+          api.get("/departments"),
+        ]);
+
+        const student = studentResponse.data.student;
+
+        const studentDepartmentId = student.department?._id
+          ? String(student.department._id)
+          : student.department
+            ? String(student.department)
+            : "";
+
+        setDepartments(departmentResponse.data.departments || []);
+
+        setOriginalDepartment(studentDepartmentId);
+        setOriginalClass(student.currentClass || "");
 
         setFormData({
           firstName: student.firstName || "",
-
           lastName: student.lastName || "",
-
           otherName: student.otherName || "",
-
           gender: student.gender || "",
-
           dateOfBirth: student.dateOfBirth
             ? student.dateOfBirth.split("T")[0]
             : "",
-
           currentClass: student.currentClass || "",
-
           session: student.session || "",
-
           parentName: student.parentName || "",
-
           parentPhone: student.parentPhone || "",
+          department: studentDepartmentId,
         });
       } catch (error) {
-        console.log(error.response?.data || error.message);
+        console.error(error.response?.data || error.message);
+
+        setMessage(
+          error.response?.data?.message ||
+            "Failed to load student information.",
+        );
+
+        setMessageType("error");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStudent();
+    fetchData();
   }, [studentId]);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
+    const { name, value } = e.target;
 
-      [e.target.name]: e.target.value,
+    setFormData((previous) => {
+      const updated = {
+        ...previous,
+        [name]: value,
+      };
+
+      // Junior students cannot have departments.
+      if (name === "currentClass" && JUNIOR_CLASSES.includes(value)) {
+        updated.department = "";
+      }
+
+      return updated;
     });
+
+    setMessage("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setSaving(true);
-
     setMessage("");
 
     try {
-      await api.put(
-        `/students/${studentId}`,
+      const payload = {
+        ...formData,
+      };
 
-        formData,
-      );
+      /*
+       * Do not send an unchanged department value.
+       *
+       * This allows existing senior students without
+       * departments to have their other information edited.
+       */
+      delete payload.department;
 
-      setMessage("Student updated successfully");
+      const departmentActuallyChanged =
+        formData.department !== originalDepartment;
+
+      const classActuallyChanged = formData.currentClass !== originalClass;
+
+      if (departmentActuallyChanged) {
+        payload.department = formData.department || null;
+      }
+
+      /*
+       * A class change is sent separately.
+       * The backend will validate the resulting
+       * class/department combination.
+       */
+      if (classActuallyChanged) {
+        payload.currentClass = formData.currentClass;
+      }
+
+      await api.put(`/students/${studentId}`, payload);
+
+      setMessage("Student updated successfully.");
+      setMessageType("success");
 
       setTimeout(() => {
         navigate(`/students/${studentId}`);
       }, 1000);
     } catch (error) {
-      setMessage(error.response?.data?.message || "Failed to update student");
+      setMessage(error.response?.data?.message || "Failed to update student.");
+
+      setMessageType("error");
     } finally {
       setSaving(false);
     }
@@ -113,59 +183,25 @@ function EditStudent() {
 
   if (loading) {
     return (
-      <div
-        className="
-        text-white
-        text-center
-        mt-10
-      "
-      >
-        Loading student...
-      </div>
+      <div className="text-white text-center mt-10">Loading student...</div>
     );
   }
 
   return (
     <div className="text-white">
-      <div
-        className="
-        flex
-        justify-between
-        items-center
-        mb-8
-      "
-      >
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1
-            className="
-            text-3xl
-            font-bold
-             text-gray-900
-          "
-          >
-            Edit Student
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Student</h1>
 
-          <p
-            className="
-            text-gray-400
-            mt-2
-          "
-          >
-            Update student information
-          </p>
+          <p className="text-gray-400 mt-2">Update student information</p>
         </div>
 
         <button
+          type="button"
           onClick={() => navigate(-1)}
           className="
-            flex
-            items-center
-            gap-2
-            bg-slate-800
-            px-4
-            py-2
-            rounded-xl
+            flex items-center gap-2
+            bg-slate-800 px-4 py-2 rounded-xl
           "
         >
           <FaArrowLeft />
@@ -175,13 +211,11 @@ function EditStudent() {
 
       {message && (
         <div
-          className="
-            bg-green-600/20
-            text-green-400
-            p-4
-            rounded-xl
-            mb-6
-          "
+          className={`p-4 rounded-xl mb-6 ${
+            messageType === "success"
+              ? "bg-green-600/20 text-green-400"
+              : "bg-red-600/20 text-red-400"
+          }`}
         >
           {message}
         </div>
@@ -191,15 +225,9 @@ function EditStudent() {
         onSubmit={handleSubmit}
         className="
           bg-slate-900
-          border
-          border-white/10
-          shadow-xl
-          rounded-2xl
-          p-8
-          grid
-          grid-cols-1
-          md:grid-cols-2
-          gap-6
+          border border-white/10
+          shadow-xl rounded-2xl p-8
+          grid grid-cols-1 md:grid-cols-2 gap-6
         "
       >
         <input
@@ -235,9 +263,7 @@ function EditStudent() {
           className={inputStyle}
         >
           <option value="">Select Gender</option>
-
           <option value="Male">Male</option>
-
           <option value="Female">Female</option>
         </select>
 
@@ -249,13 +275,50 @@ function EditStudent() {
           className={inputStyle}
         />
 
-        <input
+        <select
           name="currentClass"
           value={formData.currentClass}
           onChange={handleChange}
-          placeholder="Current Class"
           className={inputStyle}
-        />
+          required
+        >
+          <option value="">Select Class</option>
+
+          {ALL_CLASSES.map((schoolClass) => (
+            <option key={schoolClass} value={schoolClass}>
+              {schoolClass}
+            </option>
+          ))}
+        </select>
+
+        {isSeniorClass && (
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Department
+            </label>
+
+            <select
+              name="department"
+              value={formData.department}
+              onChange={handleChange}
+              className={inputStyle}
+            >
+              <option value="">Select Department</option>
+
+              {departments.map((department) => (
+                <option key={department._id} value={department._id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+
+            {!formData.department && (
+              <p className="text-amber-400 text-xs mt-2">
+                This student has not yet been assigned a department.
+              </p>
+            )}
+          </div>
+        )}
 
         <input
           name="session"
@@ -282,23 +345,17 @@ function EditStudent() {
         />
 
         <button
+          type="submit"
           disabled={saving}
           className="
             md:col-span-2
-            flex
-            justify-center
-            items-center
-            gap-3
-            bg-green-600
-            hover:bg-green-700
-            py-3
-            rounded-xl
-            font-semibold
+            flex justify-center items-center gap-3
+            bg-green-600 hover:bg-green-700
+            py-3 rounded-xl font-semibold
             disabled:opacity-50
           "
         >
           <FaSave />
-
           {saving ? "Saving..." : "Update Student"}
         </button>
       </form>

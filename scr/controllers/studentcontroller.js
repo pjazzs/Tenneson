@@ -17,6 +17,9 @@ const cloudinary = require("../config/cloudinary");
 const parseExcelDate = require("../utils/parseExcelDate");
 const createAuditLog = require("../utils/createAuditLog");
 const jwt = require("jsonwebtoken");
+const Department = require("../models/Department");
+
+const validateStudentDepartment = require("../utils/validateStudentDepartment");
 
 /*
 |--------------------------------------------------------------------------
@@ -200,6 +203,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
     parentName,
     parentPhone,
     password,
+    department: departmentId,
   } = req.body;
 
   // ================================
@@ -230,6 +234,23 @@ exports.createStudent = asyncHandler(async (req, res) => {
         "Current class must be one of JSS1, JSS2, JSS3, SS1, SS2, or SS3.",
     });
   }
+
+  // ================================
+  // Validate department assignment
+  // ================================
+  const departmentValidation = await validateStudentDepartment({
+    currentClass,
+    departmentId,
+  });
+
+  if (!departmentValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: departmentValidation.error,
+    });
+  }
+
+  const department = departmentValidation.department;
 
   // ================================
   // Validate session
@@ -295,6 +316,30 @@ exports.createStudent = asyncHandler(async (req, res) => {
   const studentId = `${parsedAdmissionYear}/${baseStudentId}`;
 
   // ================================
+  // Prepare department history
+  // ================================
+  const departmentHistory = [];
+
+  // A senior student receives an initial department assignment.
+  if (department) {
+    departmentHistory.push({
+      fromDepartment: null,
+      toDepartment: department._id,
+
+      fromDepartmentName: "",
+      toDepartmentName: department.name,
+
+      fromClass: null,
+      toClass: currentClass,
+
+      changedAt: new Date(),
+      changedBy: req.admin._id,
+
+      reason: "Initial department assignment during student registration.",
+    });
+  }
+
+  // ================================
   // Create student
   // ================================
   let student;
@@ -309,6 +354,8 @@ exports.createStudent = asyncHandler(async (req, res) => {
       gender,
       dateOfBirth: parsedDateOfBirth,
       currentClass,
+      department: department ? department._id : null,
+      departmentHistory,
       session,
       admissionDate: new Date(),
       parentName,
@@ -339,7 +386,7 @@ exports.createStudent = asyncHandler(async (req, res) => {
       adminId: req.admin._id,
     });
   } catch (error) {
-    // Roll back student creation if credential creation fails
+    // Roll back student creation if credential creation fails.
     await Student.deleteOne({ _id: student._id });
 
     if (error.statusCode) {
@@ -372,7 +419,9 @@ exports.createStudent = asyncHandler(async (req, res) => {
     adminId: req.admin._id,
     action: "CREATE_STUDENT",
     studentId: student.studentId,
-    details: `Created student ${student.firstName} ${student.lastName}`,
+    details:
+      `Created student ${student.firstName} ${student.lastName}` +
+      (department ? ` and assigned ${department.name} department` : ""),
   });
 
   // ================================
@@ -607,16 +656,13 @@ exports.updateStudent = asyncHandler(async (req, res) => {
     "session",
     "parentName",
     "parentPhone",
+    "department",
   ];
 
   const updateData = {};
 
   /*
    * Build the update object from the whitelist.
-   *
-   * This prevents system-controlled fields such as:
-   * studentId, isActive, createdBy, photo, password,
-   * passwordHash, username, etc. from being modified here.
    */
   for (const field of allowedFields) {
     if (Object.prototype.hasOwnProperty.call(req.body, field)) {
@@ -624,55 +670,164 @@ exports.updateStudent = asyncHandler(async (req, res) => {
     }
   }
 
-  /*
-   * At least one editable field must be supplied.
-   */
   if (Object.keys(updateData).length === 0) {
     res.status(400);
-
     throw new Error("At least one student field must be provided for update.");
   }
 
-  const student = await Student.findOneAndUpdate(
-    {
-      _id: id,
-      isActive: true,
-    },
-    {
-      $set: {
-        ...updateData,
-        updatedBy: req.admin._id,
-      },
-    },
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
+  /*
+   * Find the existing student.
+   *
+   * We use findOne + save instead of findOneAndUpdate
+   * because department history must also be updated.
+   */
+  const student = await Student.findOne({
+    _id: id,
+    isActive: true,
+  });
 
   if (!student) {
     res.status(404);
-
     throw new Error("Student not found.");
   }
+
+  const originalClass = student.currentClass;
+  const originalDepartmentId = student.department
+    ? String(student.department)
+    : null;
+
+  const classIsBeingChanged =
+    Object.prototype.hasOwnProperty.call(updateData, "currentClass") &&
+    updateData.currentClass !== originalClass;
+
+  const departmentIsBeingChanged = Object.prototype.hasOwnProperty.call(
+    updateData,
+    "department",
+  );
+
+  /*
+   * Determine the effective class and department.
+   */
+  const effectiveClass = Object.prototype.hasOwnProperty.call(
+    updateData,
+    "currentClass",
+  )
+    ? updateData.currentClass
+    : student.currentClass;
+
+  let effectiveDepartmentId = departmentIsBeingChanged
+    ? updateData.department
+    : student.department;
+
+  /*
+   * If a student moves into a junior class,
+   * their department must be cleared.
+   */
+  const juniorClasses = ["JSS1", "JSS2", "JSS3"];
+
+  if (classIsBeingChanged && juniorClasses.includes(effectiveClass)) {
+    effectiveDepartmentId = null;
+  }
+
+  /*
+   * Validate department only when the academic
+   * assignment is being changed.
+   *
+   * This allows existing senior students with
+   * department: null to receive unrelated edits.
+   */
+  if (departmentIsBeingChanged || classIsBeingChanged) {
+    const departmentValidation = await validateStudentDepartment({
+      currentClass: effectiveClass,
+      departmentId: effectiveDepartmentId,
+    });
+
+    if (!departmentValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: departmentValidation.error,
+      });
+    }
+
+    effectiveDepartmentId = departmentValidation.department
+      ? departmentValidation.department._id
+      : null;
+  }
+
+  /*
+   * Determine whether the department actually changed.
+   */
+  const newDepartmentId = effectiveDepartmentId
+    ? String(effectiveDepartmentId)
+    : null;
+
+  const departmentActuallyChanged = originalDepartmentId !== newDepartmentId;
+
+  /*
+   * Record department history when the department
+   * changes, including assignment and removal.
+   */
+  if (departmentActuallyChanged) {
+    const previousDepartment = originalDepartmentId
+      ? await Department.findById(originalDepartmentId)
+      : null;
+
+    const nextDepartment = newDepartmentId
+      ? await Department.findById(newDepartmentId)
+      : null;
+
+    student.departmentHistory.push({
+      fromDepartment: originalDepartmentId,
+      toDepartment: newDepartmentId,
+
+      fromDepartmentName: previousDepartment ? previousDepartment.name : "",
+
+      toDepartmentName: nextDepartment ? nextDepartment.name : "",
+
+      fromClass: originalClass,
+      toClass: effectiveClass,
+
+      changedAt: new Date(),
+      changedBy: req.admin._id,
+
+      reason: departmentIsBeingChanged
+        ? "Department updated by administrator."
+        : "Department cleared following class change.",
+    });
+  }
+
+  /*
+   * Apply the permitted student updates.
+   */
+  for (const [field, value] of Object.entries(updateData)) {
+    if (field === "department") continue;
+
+    student[field] = value;
+  }
+
+  /*
+   * Apply the validated department assignment.
+   */
+  if (departmentIsBeingChanged || classIsBeingChanged) {
+    student.department = effectiveDepartmentId;
+  }
+
+  student.updatedBy = req.admin._id;
+
+  await student.save();
 
   /*
    * --------------------------------------------------------------------------
    * Audit Log
    * --------------------------------------------------------------------------
    */
-
   await createAuditLog({
     user: req.admin._id,
-
     action: "UPDATE",
-
     module: "STUDENT",
-
     description:
       `${req.admin.fullName} updated student ` +
       `${student.firstName} ${student.lastName}`,
-
     req,
   });
 
@@ -681,22 +836,22 @@ exports.updateStudent = asyncHandler(async (req, res) => {
    * Activity Log
    * --------------------------------------------------------------------------
    */
-
   await logActivity({
     adminId: req.admin._id,
-
     action: "UPDATE_STUDENT",
-
     studentId: student.studentId,
-
-    details: `${student.firstName} ${student.lastName}`,
+    details:
+      `${student.firstName} ${student.lastName}` +
+      (departmentActuallyChanged
+        ? `; department changed from ${
+            originalDepartmentId ? "previous department" : "unassigned"
+          } to ${newDepartmentId ? "new department" : "unassigned"}`
+        : ""),
   });
 
   return res.status(200).json({
     success: true,
-
     message: "Student updated successfully.",
-
     student,
   });
 });
