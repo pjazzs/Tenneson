@@ -7,6 +7,7 @@ const SubjectResultSubmission = require("../models/SubjectResultSubmission");
 const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const AcademicSession = require("../models/AcademicSession");
 const Student = require("../models/student");
+const createAuditLog = require("../utils/createAuditLog");
 
 const VALID_TERMS = ["first", "second", "third"];
 
@@ -702,6 +703,8 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     term,
   });
 
+  const isNewSubmission = !submission;
+
   // Submitted results can no longer be edited
   if (submission?.status === "submitted") {
     return res.status(409).json({
@@ -824,6 +827,24 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
 
     throw error;
   }
+
+  const allocationLabel = [
+    resultContext.allocation?.schoolClass?.name,
+    resultContext.allocation?.department?.name,
+    resultContext.allocation?.subject?.name,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  await createAuditLog({
+    teacher: req.teacher._id,
+    action: isNewSubmission ? "CREATE_DRAFT" : "UPDATE_DRAFT",
+    module: "SUBJECT_RESULTS",
+    description: `${req.teacher.fullName} ${
+      isNewSubmission ? "created" : "updated"
+    } a subject result draft for ${allocationLabel}, ${term} term (${context.session.name}).`,
+    req,
+  });
 
   // Count students with complete scores
   const completedStudents = rows.filter(
@@ -992,6 +1013,24 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     throw error;
   }
 
+  // AUDIT LOG — runs only after successful submission
+  const allocationLabel = [
+    resultContext.allocation?.schoolClass?.name,
+    resultContext.allocation?.department?.name,
+    resultContext.allocation?.subject?.name,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  await createAuditLog({
+    teacher: req.teacher._id,
+    action: "SUBMIT",
+    module: "SUBJECT_RESULTS",
+    description: `${req.teacher.fullName} submitted subject results for ${allocationLabel}, ${term} term (${context.session.name}).`,
+    req,
+  });
+
+  // SUCCESS RESPONSE
   return res.status(200).json({
     success: true,
     message: "Subject results submitted successfully.",

@@ -1,552 +1,209 @@
 import { useEffect, useState } from "react";
+
 import { useNavigate } from "react-router-dom";
-import {
-  FaArrowLeft,
-  FaHistory,
-} from "react-icons/fa";
+
 import api from "../../api/axios";
 
-
-function ActivityLogs() {
-
-
+function AuditLog() {
   const navigate = useNavigate();
 
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [logs,setLogs] = useState([]);
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const response = await api.get("/audit");
 
-  const [loading,setLoading] = useState(true);
-
-
-
-
-
-
-
-  useEffect(()=>{
-
-
-    const fetchLogs = async()=>{
-
-
-      try{
-
-
-        const response = await api.get(
-          "/students/activity-logs"
-        );
-
-
-        setLogs(
-          response.data.logs
-        );
-
-
-
-      }catch(error){
-
-
-        console.log(
-          "Activity logs error:",
-          error.response?.data || error.message
-        );
-
-
-
-      }finally{
-
-
+        setLogs(response.data.logs || []);
+      } catch (error) {
+        console.log(error.response?.data || error.message);
+      } finally {
         setLoading(false);
-
-
       }
-
-
     };
 
-
-
     fetchLogs();
-
-
-
-  },[]);
-
-
-
-
-
-
-
-
-
-  if(loading){
-
-
-    return (
-
-      <div className="
-        text-white
-        text-center
-        mt-10
-      ">
-
-        Loading activity logs...
-
-      </div>
-
-    );
-
-
-  }
-
-
-
-
-
-
-
-  const getActionStyle = (action)=>{
-
-
-    if(action.includes("DELETE")){
-
-      return "bg-red-600/20 text-red-400";
-
-    }
-
-
-    if(action.includes("CREATE")){
-
-      return "bg-green-600/20 text-green-400";
-
-    }
-
-
-    if(action.includes("UPLOAD")){
-
-      return "bg-purple-600/20 text-purple-400";
-
-    }
-
-
-    if(action.includes("UPDATE")){
-
-      return "bg-blue-600/20 text-blue-400";
-
-    }
-
-
-    return "bg-gray-600/20 text-gray-300";
-
-
-  };
-
-
-
-
-
-
-
-
+  }, []);
 
   return (
-
-
     <div className="text-white">
-
-
-
-
-
-
-      <div className="
-        flex
-        justify-between
-        items-center
-        mb-8
-      ">
-
-
-
+      {/* PAGE HEADER */}
+      <div
+        className="
+          flex
+          flex-col
+          sm:flex-row
+          sm:justify-between
+          sm:items-center
+          gap-4
+          mb-6
+        "
+      >
         <div>
-
-
-          <h1 className="
-            text-3xl
-            font-bold
-            flex
-            items-center
-            gap-3
-            text-gray-900
-            pl-6
-
-          ">
-
-            <FaHistory/>
-
-            Activity Logs
-
+          <h1
+            className="
+              text-3xl
+              font-bold
+              text-gray-900
+            "
+          >
+            Audit Logs
           </h1>
 
-
-
-          <p className="
-            text-gray-600
-            mt-2
-            pl-6
-          ">
-
-            Track all admin activities
-
+          <p className="text-gray-600 mt-2">
+            Track important activities performed by administrators and teachers.
           </p>
-
-
-
         </div>
 
-
-
-
-
-
         <button
-
-          onClick={()=>navigate(-1)}
-
+          type="button"
+          onClick={() => navigate("/dashboard")}
           className="
-            flex
-            items-center
-            gap-2
             bg-slate-800
-            px-5
-            py-3
-            rounded-xl
             hover:bg-slate-700
-            mr-5
+            text-white
+            px-5
+            py-2
+            rounded-xl
+            text-sm
+            transition
+            whitespace-nowrap
+            self-start
+            sm:self-auto
           "
-
         >
-
-          <FaArrowLeft/>
-
-          Back
-
-
+          ← Back to Dashboard
         </button>
-
-
-
-
       </div>
 
-
-
-
-
-
-
-
-
-      <div className="
-        bg-slate-900
-        border
-        border-white/10
-        rounded-2xl
-        shadow-xl
-        overflow-x-auto
-      ">
-
-
-
-        <table className="w-full">
-
-
-
-          <thead>
-
-
-            <tr className="
-              border-b
-              border-white/10
-              bg-slate-800
-            ">
-
-
-
-              <th className="
-                p-4
-                text-left
-              ">
-
-                Date
-
-              </th>
-
-
-
-
-              <th className="
-                p-4
-                text-left
-              ">
-
-                Admin
-
-              </th>
-
-
-
-
-              <th className="
-                p-4
-                text-left
-              ">
-
-                Action
-
-              </th>
-
-
-
-
-              <th className="
-                p-4
-                text-left
-              ">
-
-                Student ID
-
-              </th>
-
-
-
-
-              <th className="
-                p-4
-                text-left
-              ">
-
-                Details
-
-              </th>
-
-
-
-
-            </tr>
-
-
-
-          </thead>
-
-
-
-
-
-
-
-
-          <tbody>
-
-
-          {
-            logs.length === 0 ? (
-
-
-              <tr>
-
-
-                <td
-
-                  colSpan="5"
-
-                  className="
-                    text-center
-                    p-8
-                    text-gray-400
-                  "
-
-                >
-
-                  No activity found
-
-
-                </td>
-
-
+      {/* AUDIT LOG TABLE */}
+      <div
+        className="
+          bg-slate-900
+          rounded-2xl
+          border
+          border-white/10
+          overflow-hidden
+        "
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-225">
+            <thead>
+              <tr
+                className="
+                  border-b
+                  border-white/10
+                  text-gray-400
+                "
+              >
+                <th className="p-4 text-left whitespace-nowrap">
+                  Performed By
+                </th>
+
+                <th className="p-4 text-left whitespace-nowrap">Action</th>
+
+                <th className="p-4 text-left whitespace-nowrap">Module</th>
+
+                <th className="p-4 text-left whitespace-nowrap">Description</th>
+
+                <th className="p-4 text-left whitespace-nowrap">Date</th>
               </tr>
+            </thead>
 
-
-
-            ) : (
-
-
-
-              logs.map((log)=>(
-
-
-
-                <tr
-
-                  key={log._id}
-
-                  className="
-                    border-b
-                    border-white/10
-                    hover:bg-slate-800
-                  "
-
-                >
-
-
-
-
-
-                  <td className="p-4 text-gray-300">
-
-
-                    {
-                      new Date(
-                        log.createdAt
-                      ).toLocaleString()
-                    }
-
-
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="text-center p-10 text-gray-400">
+                    Loading logs...
                   </td>
-
-
-
-
-
-
-
-
-                  <td className="p-4">
-
-
-                    {
-                      log.admin?.fullName ||
-                      "Unknown"
-                    }
-
-
-                  </td>
-
-
-
-
-
-
-
-
-                  <td className="p-4">
-
-
-                    <span
-
-                      className={`
-                        px-3
-                        py-1
-                        rounded-full
-                        text-sm
-                        ${getActionStyle(log.action)}
-                      `}
-
-                    >
-
-                      {log.action}
-
-
-                    </span>
-
-
-
-                  </td>
-
-
-
-
-
-
-
-
-
-                  <td className="p-4">
-
-
-                    {
-                      log.studentId ||
-                      "N/A"
-                    }
-
-
-                  </td>
-
-
-
-
-
-
-
-
-                  <td className="
-                    p-4
-                    text-gray-300
-                  ">
-
-
-                    {
-                      log.details ||
-                      "No details"
-                    }
-
-
-                  </td>
-
-
-
-
-
-
                 </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center p-10 text-gray-400">
+                    No audit logs found.
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => {
+                  const actor = log.teacher || log.user;
 
+                  const actorType = log.teacher
+                    ? "Teacher"
+                    : log.user
+                      ? "Administrator"
+                      : "System";
 
+                  return (
+                    <tr
+                      key={log._id}
+                      className="
+                        border-b
+                        border-white/10
+                        hover:bg-white/5
+                      "
+                    >
+                      {/* ACTOR */}
+                      <td className="p-4 whitespace-nowrap">
+                        <div className="font-medium">
+                          {actor?.fullName || "System"}
+                        </div>
 
-              ))
+                        <span
+                          className={`
+                            text-xs
+                            ${
+                              actorType === "Teacher"
+                                ? "text-emerald-400"
+                                : actorType === "Administrator"
+                                  ? "text-blue-400"
+                                  : "text-gray-400"
+                            }
+                          `}
+                        >
+                          {actorType}
+                        </span>
+                      </td>
 
-            )
-          }
+                      {/* ACTION */}
+                      <td className="p-4">
+                        <span
+                          className="
+                            bg-blue-500/20
+                            text-blue-400
+                            px-3
+                            py-1
+                            rounded-full
+                            text-sm
+                            whitespace-nowrap
+                          "
+                        >
+                          {log.action}
+                        </span>
+                      </td>
 
+                      {/* MODULE */}
+                      <td className="p-4 whitespace-nowrap">{log.module}</td>
 
+                      {/* DESCRIPTION */}
+                      <td className="p-4 text-gray-300 max-w-md">
+                        {log.description}
+                      </td>
 
-
-          </tbody>
-
-
-
-
-
-        </table>
-
-
-
-
-
+                      {/* DATE */}
+                      <td className="p-4 text-gray-400 whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-
-
-
-
     </div>
-
-
   );
-
-
 }
 
-
-
-export default ActivityLogs;
+export default AuditLog;
