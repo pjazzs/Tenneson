@@ -11,6 +11,8 @@ const AcademicSession = require("../models/AcademicSession");
 const TeacherAssignment = require("../models/TeacherAssignment");
 
 const generateToken = require("../utils/generateToken");
+const SubjectResultResponsibility = require("../models/SubjectResultResponsibility");
+const SubjectResultSubmission = require("../models/SubjectResultSubmission");
 
 describe("TEACHER ASSIGNMENT API", () => {
   let admin;
@@ -29,6 +31,26 @@ describe("TEACHER ASSIGNMENT API", () => {
   const auth = () => ({
     Authorization: `Bearer ${token}`,
   });
+
+  const designateResultTeacher = async ({
+    allocationId = mathematicsAllocation._id,
+    academicSession = session._id,
+    term = "first",
+    teacherAssignment,
+    reason = "",
+  } = {}) => {
+    return request(app)
+      .put(
+        `/api/v1/teacher-assignments/result-responsibilities/${allocationId}`,
+      )
+      .set(auth())
+      .send({
+        academicSession,
+        term,
+        teacherAssignment,
+        reason,
+      });
+  };
 
   const createTeacher = async (overrides = {}) => {
     const count = await Teacher.countDocuments();
@@ -783,6 +805,295 @@ describe("TEACHER ASSIGNMENT API", () => {
         });
 
       expect(response.statusCode).toBe(403);
+    });
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | SUBJECT RESULT RESPONSIBILITY
+  |--------------------------------------------------------------------------
+  */
+
+  describe("PUT /api/v1/teacher-assignments/result-responsibilities/:allocationId", () => {
+    test("designates a teacher for a subject result for the first time", async () => {
+      const assignment = await createAssignment();
+
+      const response = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+      });
+
+      process.stdout.write(
+        `DESIGNATION ERROR: ${JSON.stringify(response.body, null, 2)}\n`,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      expect(response.body.responsibility.teacherAssignment._id).toBe(
+        assignment._id.toString(),
+      );
+
+      expect(response.body.responsibility.term).toBe("first");
+      expect(response.body.responsibility.writeVersion).toBe(0);
+
+      expect(await SubjectResultResponsibility.countDocuments()).toBe(1);
+    });
+
+    test("reassigns result ownership and preserves the previous owner in history", async () => {
+      const firstAssignment = await createAssignment();
+
+      const firstResponse = await designateResultTeacher({
+        teacherAssignment: firstAssignment._id,
+      });
+
+      expect(firstResponse.statusCode).toBe(200);
+
+      const secondAssignment = await createAssignment({
+        teacher: secondTeacher._id,
+      });
+
+      const response = await designateResultTeacher({
+        teacherAssignment: secondAssignment._id,
+        reason: "Teacher reassignment for this term",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      const responsibility = response.body.responsibility;
+
+      expect(responsibility.teacherAssignment._id).toBe(
+        secondAssignment._id.toString(),
+      );
+
+      expect(responsibility.writeVersion).toBe(1);
+
+      expect(responsibility.assignmentHistory).toHaveLength(1);
+
+      expect(responsibility.assignmentHistory[0].teacherAssignment).toBe(
+        firstAssignment._id.toString(),
+      );
+
+      expect(responsibility.assignmentHistory[0].changedBy).toBe(
+        admin._id.toString(),
+      );
+
+      expect(responsibility.assignmentHistory[0].reason).toBe(
+        "Teacher reassignment for this term",
+      );
+    });
+
+    test("does not create duplicate history or increment writeVersion when the same teacher is selected again", async () => {
+      const assignment = await createAssignment();
+
+      const firstResponse = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+      });
+
+      expect(firstResponse.statusCode).toBe(200);
+
+      const secondResponse = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+      });
+
+      expect(secondResponse.statusCode).toBe(200);
+
+      expect(secondResponse.body.message).toBe(
+        "This teacher is already designated for this subject result.",
+      );
+
+      expect(secondResponse.body.responsibility.writeVersion).toBe(0);
+
+      expect(secondResponse.body.responsibility.assignmentHistory).toHaveLength(
+        0,
+      );
+
+      expect(await SubjectResultResponsibility.countDocuments()).toBe(1);
+    });
+
+    test("preserves an existing draft when result ownership is reassigned", async () => {
+      const firstAssignment = await createAssignment();
+
+      const designationResponse = await designateResultTeacher({
+        teacherAssignment: firstAssignment._id,
+      });
+
+      expect(designationResponse.statusCode).toBe(200);
+
+      const responsibilityId = designationResponse.body.responsibility._id;
+
+      const draft = await SubjectResultSubmission.create({
+        allocation: mathematicsAllocation._id,
+        academicSession: session._id,
+        term: "first",
+        responsibility: responsibilityId,
+        studentResults: [],
+        status: "draft",
+        createdByTeacher: teacher._id,
+      });
+
+      const secondAssignment = await createAssignment({
+        teacher: secondTeacher._id,
+      });
+
+      const response = await designateResultTeacher({
+        teacherAssignment: secondAssignment._id,
+        reason: "Reassignment before submission",
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const savedDraft = await SubjectResultSubmission.findById(draft._id);
+
+      expect(savedDraft).toBeTruthy();
+      expect(savedDraft.status).toBe("draft");
+      expect(savedDraft._id.toString()).toBe(draft._id.toString());
+
+      const updatedResponsibility =
+        await SubjectResultResponsibility.findById(responsibilityId);
+
+      expect(updatedResponsibility.teacherAssignment.toString()).toBe(
+        secondAssignment._id.toString(),
+      );
+
+      expect(updatedResponsibility.writeVersion).toBe(1);
+    });
+
+    test("blocks reassignment after a subject result has been submitted", async () => {
+      const firstAssignment = await createAssignment();
+
+      const designationResponse = await designateResultTeacher({
+        teacherAssignment: firstAssignment._id,
+      });
+
+      expect(designationResponse.statusCode).toBe(200);
+
+      const responsibilityId = designationResponse.body.responsibility._id;
+
+      await SubjectResultSubmission.create({
+        allocation: mathematicsAllocation._id,
+        academicSession: session._id,
+        term: "first",
+        responsibility: responsibilityId,
+        studentResults: [],
+        status: "submitted",
+        createdByTeacher: teacher._id,
+        updatedByTeacher: teacher._id,
+        submittedByTeacher: teacher._id,
+        submittedAt: new Date(),
+      });
+
+      const secondAssignment = await createAssignment({
+        teacher: secondTeacher._id,
+      });
+
+      const response = await designateResultTeacher({
+        teacherAssignment: secondAssignment._id,
+        reason: "Attempted reassignment after submission",
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.body.success).toBe(false);
+
+      expect(response.body.message).toMatch(/already been submitted/i);
+
+      const responsibility =
+        await SubjectResultResponsibility.findById(responsibilityId);
+
+      expect(responsibility.teacherAssignment.toString()).toBe(
+        firstAssignment._id.toString(),
+      );
+
+      expect(responsibility.writeVersion).toBe(0);
+      expect(responsibility.assignmentHistory).toHaveLength(0);
+    });
+
+    test("allows separate responsibilities for different terms", async () => {
+      const assignment = await createAssignment();
+
+      const firstResponse = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+        term: "first",
+      });
+
+      const secondResponse = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+        term: "second",
+      });
+
+      expect(firstResponse.statusCode).toBe(200);
+      expect(secondResponse.statusCode).toBe(200);
+
+      expect(await SubjectResultResponsibility.countDocuments()).toBe(2);
+    });
+
+    test("rejects an invalid term", async () => {
+      const assignment = await createAssignment();
+
+      const response = await designateResultTeacher({
+        teacherAssignment: assignment._id,
+        term: "fourth",
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test("rejects an assignment belonging to a different allocation", async () => {
+      const assignment = await createAssignment({
+        allocation: englishAllocation._id,
+      });
+
+      const response = await designateResultTeacher({
+        allocationId: mathematicsAllocation._id,
+        teacherAssignment: assignment._id,
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test("rejects an admin without update permission", async () => {
+      const assignment = await createAssignment();
+
+      const restrictedAdmin = await Admin.create({
+        fullName: "Restricted Responsibility Admin",
+        email: "restricted-responsibility@test.com",
+        password: "Password123!",
+        role: "admin",
+        permissions: [],
+      });
+
+      const restrictedToken = generateToken(restrictedAdmin);
+
+      const response = await request(app)
+        .put(
+          `/api/v1/teacher-assignments/result-responsibilities/${mathematicsAllocation._id}`,
+        )
+        .set("Authorization", `Bearer ${restrictedToken}`)
+        .send({
+          academicSession: session._id.toString(),
+          term: "first",
+          teacherAssignment: assignment._id.toString(),
+        });
+
+      expect(response.statusCode).toBe(403);
+
+      expect(await SubjectResultResponsibility.countDocuments()).toBe(0);
+    });
+
+    test("rejects unauthenticated responsibility designation", async () => {
+      const assignment = await createAssignment();
+
+      const response = await request(app)
+        .put(
+          `/api/v1/teacher-assignments/result-responsibilities/${mathematicsAllocation._id}`,
+        )
+        .send({
+          academicSession: session._id.toString(),
+          term: "first",
+          teacherAssignment: assignment._id.toString(),
+        });
+
+      expect(response.statusCode).toBe(401);
     });
   });
 });

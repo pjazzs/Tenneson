@@ -742,6 +742,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
       responsibilityId = responsibility._id;
     });
   } catch (error) {
+    console.error("SET SUBJECT RESULT RESPONSIBILITY ERROR:", error);
     // -------------------------------------------------------
     // 8. HANDLE TRANSACTION ERRORS
     // -------------------------------------------------------

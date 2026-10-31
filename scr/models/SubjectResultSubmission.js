@@ -266,9 +266,15 @@ subjectResultSubmissionSchema.pre("validate", async function () {
     return;
   }
 
-  const responsibility = await SubjectResultResponsibility.findById(
+  let responsibilityQuery = SubjectResultResponsibility.findById(
     this.responsibility,
   ).select("allocation academicSession term");
+
+  if (this.$session()) {
+    responsibilityQuery = responsibilityQuery.session(this.$session());
+  }
+
+  const responsibility = await responsibilityQuery;
 
   if (!responsibility) {
     this.invalidate(
