@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import SubjectResultResponsibilityManager from "./SubjectResultResponsibilityManager";
+
 import {
   FaArrowLeft,
   FaChalkboardTeacher,
@@ -719,6 +721,8 @@ function TeacherAssignment() {
           </select>
         </div>
       </div>
+      {/* SUBJECT RESULT RESPONSIBILITY */}
+      {canUpdate && <SubjectResultResponsibilityManager />}
 
       {/* ASSIGNMENT TABLE */}
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
