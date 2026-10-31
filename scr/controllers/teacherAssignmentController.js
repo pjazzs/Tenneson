@@ -9,6 +9,9 @@ const AcademicSession = require("../models/AcademicSession");
 const createAuditLog = require("../utils/createAuditLog");
 const SubjectResultResponsibility = require("../models/SubjectResultResponsibility");
 const SubjectResultSubmission = require("../models/SubjectResultSubmission");
+const SchoolClass = require("../models/SchoolClass");
+const Department = require("../models/Department");
+const Subject = require("../models/Subject");
 
 /*
 |--------------------------------------------------------------------------
@@ -561,22 +564,24 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
   try {
     await dbSession.withTransaction(async () => {
       // -----------------------------------------------------
-      // 3. RE-FETCH AND VALIDATE RECORDS INSIDE TRANSACTION
+      // 3. FETCH RECORDS SEQUENTIALLY INSIDE TRANSACTION
       // -----------------------------------------------------
 
-      const [allocation, session, assignment] = await Promise.all([
-        ClassSubjectAllocation.findById(allocationId)
-          .populate("schoolClass", "name isActive")
-          .populate("department", "name isActive")
-          .populate("subject", "name isActive")
-          .session(dbSession),
+      // Do not use Promise.all() for operations sharing
+      // the same MongoDB transaction session.
 
-        AcademicSession.findById(academicSession).session(dbSession),
+      const allocation =
+        await ClassSubjectAllocation.findById(allocationId).session(dbSession);
 
-        TeacherAssignment.findById(teacherAssignment)
-          .populate("teacher", "fullName email isActive")
-          .session(dbSession),
-      ]);
+      const session =
+        await AcademicSession.findById(academicSession).session(dbSession);
+
+      const assignment =
+        await TeacherAssignment.findById(teacherAssignment).session(dbSession);
+
+      // -----------------------------------------------------
+      // 4. VALIDATE RECORD EXISTENCE
+      // -----------------------------------------------------
 
       if (!allocation) {
         const error = new Error("Subject allocation not found.");
@@ -596,7 +601,60 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
         throw error;
       }
 
-      // Ensure the selected term exists in the academic session.
+      // -----------------------------------------------------
+      // 5. FETCH REFERENCED RECORDS SEQUENTIALLY
+      // -----------------------------------------------------
+
+      const schoolClass = await SchoolClass.findById(allocation.schoolClass)
+        .select("name isActive")
+        .session(dbSession);
+
+      const subject = await Subject.findById(allocation.subject)
+        .select("name isActive")
+        .session(dbSession);
+
+      const department = allocation.department
+        ? await Department.findById(allocation.department)
+            .select("name isActive")
+            .session(dbSession)
+        : null;
+
+      const assignedTeacher = await Teacher.findById(assignment.teacher)
+        .select("fullName email isActive")
+        .session(dbSession);
+
+      // -----------------------------------------------------
+      // 6. VALIDATE REFERENCED RECORDS
+      // -----------------------------------------------------
+
+      if (!schoolClass) {
+        const error = new Error("The allocated class was not found.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (!subject) {
+        const error = new Error("The allocated subject was not found.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (allocation.department && !department) {
+        const error = new Error("The allocated department was not found.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (!assignedTeacher) {
+        const error = new Error("The assigned teacher was not found.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // -----------------------------------------------------
+      // 7. VALIDATE TERM
+      // -----------------------------------------------------
+
       const termExists = session.terms?.some(
         (sessionTerm) => sessionTerm.key === term,
       );
@@ -609,7 +667,10 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
         throw error;
       }
 
-      // Ensure the assignment belongs to this allocation and session.
+      // -----------------------------------------------------
+      // 8. VALIDATE TEACHER ASSIGNMENT OWNERSHIP
+      // -----------------------------------------------------
+
       if (
         assignment.allocation.toString() !== allocationId ||
         assignment.academicSession.toString() !== academicSession
@@ -621,14 +682,17 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
         throw error;
       }
 
-      // Only active assignments and teachers can own result entry.
+      // -----------------------------------------------------
+      // 9. VALIDATE ACTIVE STATUS
+      // -----------------------------------------------------
+
       if (!assignment.isActive) {
         const error = new Error("The selected teacher assignment is inactive.");
         error.statusCode = 400;
         throw error;
       }
 
-      if (!assignment.teacher?.isActive) {
+      if (!assignedTeacher.isActive) {
         const error = new Error("The selected teacher is inactive.");
         error.statusCode = 400;
         throw error;
@@ -636,9 +700,9 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
 
       if (
         !allocation.isActive ||
-        !allocation.schoolClass?.isActive ||
-        !allocation.subject?.isActive ||
-        (allocation.department && !allocation.department.isActive)
+        !schoolClass.isActive ||
+        !subject.isActive ||
+        (department && !department.isActive)
       ) {
         const error = new Error(
           "The allocation, class, subject or department is inactive.",
@@ -648,7 +712,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
       }
 
       // -----------------------------------------------------
-      // 4. LOAD CURRENT RESPONSIBILITY
+      // 10. LOAD CURRENT RESPONSIBILITY
       // -----------------------------------------------------
 
       let responsibility = await SubjectResultResponsibility.findOne({
@@ -660,7 +724,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
       const isNewResponsibility = !responsibility;
 
       // -----------------------------------------------------
-      // 5. CHECK WHETHER THE OWNER IS ACTUALLY CHANGING
+      // 11. CHECK WHETHER THE OWNER IS CHANGING
       // -----------------------------------------------------
 
       const previousAssignment = responsibility
@@ -673,7 +737,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
         !responsibility || previousAssignment !== newAssignment;
 
       // -----------------------------------------------------
-      // 6. PREVENT REASSIGNMENT AFTER SUBMISSION
+      // 12. PREVENT REASSIGNMENT AFTER SUBMISSION
       // -----------------------------------------------------
 
       if (isChangingOwner) {
@@ -696,7 +760,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
       }
 
       // -----------------------------------------------------
-      // 7. CREATE OR UPDATE RESPONSIBILITY
+      // 13. CREATE OR UPDATE RESPONSIBILITY
       // -----------------------------------------------------
 
       if (!responsibility) {
@@ -730,21 +794,27 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
         ownerChanged = true;
       }
 
-      // When the same owner is selected again, do not create
-      // unnecessary history or increment writeVersion.
+      // Same-owner selection must not create unnecessary history
+      // or increment writeVersion.
       if (isNewResponsibility) {
         responsibility.updatedBy = req.admin._id;
       }
 
-      // Save responsibility within the transaction.
-      await responsibility.save({ session: dbSession });
+      // -----------------------------------------------------
+      // 14. SAVE RESPONSIBILITY
+      // -----------------------------------------------------
 
       responsibilityId = responsibility._id;
+
+      await responsibility.save({
+        session: dbSession,
+      });
     });
   } catch (error) {
     console.error("SET SUBJECT RESULT RESPONSIBILITY ERROR:", error);
+
     // -------------------------------------------------------
-    // 8. HANDLE TRANSACTION ERRORS
+    // 15. HANDLE TRANSACTION ERRORS
     // -------------------------------------------------------
 
     if (error.statusCode) {
@@ -788,23 +858,20 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
   }
 
   // ---------------------------------------------------------
-  // 9. AUDIT LOG AFTER SUCCESSFUL TRANSACTION
+  // 16. AUDIT LOG AFTER SUCCESSFUL TRANSACTION
   // ---------------------------------------------------------
 
   if (ownerChanged) {
-    const [allocation, session, assignment] = await Promise.all([
-      ClassSubjectAllocation.findById(allocationId)
-        .populate("schoolClass", "name")
-        .populate("department", "name")
-        .populate("subject", "name"),
+    const allocation = await ClassSubjectAllocation.findById(allocationId)
+      .populate("schoolClass", "name")
+      .populate("department", "name")
+      .populate("subject", "name");
 
-      AcademicSession.findById(academicSession),
+    const session = await AcademicSession.findById(academicSession);
 
-      TeacherAssignment.findById(teacherAssignment).populate(
-        "teacher",
-        "fullName",
-      ),
-    ]);
+    const assignment = await TeacherAssignment.findById(
+      teacherAssignment,
+    ).populate("teacher", "fullName");
 
     await createAuditLog({
       user: req.admin._id,
@@ -822,7 +889,7 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
   }
 
   // ---------------------------------------------------------
-  // 10. FETCH POPULATED RESPONSE
+  // 17. FETCH POPULATED RESPONSE
   // ---------------------------------------------------------
 
   const populatedResponsibility = await SubjectResultResponsibility.findById(
@@ -846,6 +913,10 @@ exports.setSubjectResultResponsibility = asyncHandler(async (req, res) => {
     })
     .populate("assignedBy", "fullName")
     .populate("updatedBy", "fullName");
+
+  // ---------------------------------------------------------
+  // 18. RETURN RESPONSE
+  // ---------------------------------------------------------
 
   return res.status(200).json({
     success: true,
