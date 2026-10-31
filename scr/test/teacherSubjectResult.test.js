@@ -136,6 +136,13 @@ describe("TEACHER SUBJECT RESULT API", () => {
         term: "first",
       });
 
+  // Always find a student's saved row by ID.
+  // The API sorts eligible students, so array position is not guaranteed.
+  const findSavedStudent = (submission, selectedStudent) =>
+    submission.studentResults.find(
+      (row) => row.student.toString() === selectedStudent._id.toString(),
+    );
+
   beforeEach(async () => {
     schoolClass = await SchoolClass.create({
       name: "JSS1",
@@ -438,9 +445,12 @@ describe("TEACHER SUBJECT RESULT API", () => {
         term: "first",
       });
 
-      expect(submission.studentResults[0].ca1).toBe(15);
-      expect(submission.studentResults[0].ca2).toBeNull();
-      expect(submission.studentResults[0].exam).toBeNull();
+      const savedStudent = findSavedStudent(submission, student);
+
+      expect(savedStudent).toBeDefined();
+      expect(savedStudent.ca1).toBe(15);
+      expect(savedStudent.ca2).toBeNull();
+      expect(savedStudent.exam).toBeNull();
     });
 
     test("preserves existing scores when updating only some score fields", async () => {
@@ -466,9 +476,12 @@ describe("TEACHER SUBJECT RESULT API", () => {
         term: "first",
       });
 
-      expect(submission.studentResults[0].ca1).toBe(18);
-      expect(submission.studentResults[0].ca2).toBe(8);
-      expect(submission.studentResults[0].exam).toBe(60);
+      const savedStudent = findSavedStudent(submission, student);
+
+      expect(savedStudent).toBeDefined();
+      expect(savedStudent.ca1).toBe(18);
+      expect(savedStudent.ca2).toBe(8);
+      expect(savedStudent.exam).toBe(60);
     });
 
     test("rejects a CA1 score above 20", async () => {
