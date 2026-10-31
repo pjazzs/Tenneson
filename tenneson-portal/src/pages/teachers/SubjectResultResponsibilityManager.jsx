@@ -666,7 +666,7 @@ function SubjectResultResponsibilityManager() {
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-xl text-xs text-gray-500">
-                Once a subject result has been submitted, the backend prevents
+                Once a subject result has been submitted, the system prevents
                 responsibility from being transferred to another teacher.
               </p>
 
