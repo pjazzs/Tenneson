@@ -56,6 +56,13 @@ const subjectResultResponsibilitySchema = new mongoose.Schema(
       required: [true, "A designated teacher assignment is required."],
     },
 
+    // Incremented whenever ownership or teacher result work changes.
+    writeVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     assignmentHistory: {
       type: [responsibilityHistorySchema],
       default: [],
@@ -99,9 +106,16 @@ subjectResultResponsibilitySchema.pre("validate", async function () {
     return;
   }
 
-  const assignment = await TeacherAssignment.findById(
+  let assignmentQuery = TeacherAssignment.findById(
     this.teacherAssignment,
   ).select("allocation academicSession");
+
+  // Keep the validation query inside the active transaction, when present.
+  if (this.$session()) {
+    assignmentQuery = assignmentQuery.session(this.$session());
+  }
+
+  const assignment = await assignmentQuery;
 
   if (!assignment) {
     this.invalidate(

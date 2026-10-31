@@ -12,6 +12,7 @@ const TeacherAssignment = require("../models/TeacherAssignment");
 const SubjectResultResponsibility = require("../models/SubjectResultResponsibility");
 const SubjectResultSubmission = require("../models/SubjectResultSubmission");
 const Student = require("../models/student");
+const AuditLog = require("../models/AuditLog");
 
 describe("TEACHER SUBJECT RESULT API", () => {
   let teacher;
@@ -427,6 +428,39 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(submission.status).toBe("draft");
     });
 
+    test("creates audit logs when a teacher creates and updates a draft", async () => {
+      const createResponse = await saveDraft([
+        scoreFor(student),
+        scoreFor(secondStudent),
+      ]);
+
+      expect(createResponse.statusCode).toBe(200);
+
+      const updateResponse = await saveDraft([
+        {
+          student: student._id.toString(),
+          ca1: 18,
+        },
+      ]);
+
+      expect(updateResponse.statusCode).toBe(200);
+
+      const logs = await AuditLog.find({
+        teacher: teacher._id,
+        module: "SUBJECT_RESULTS",
+      }).sort({ createdAt: 1 });
+
+      expect(logs).toHaveLength(2);
+
+      expect(logs[0].action).toBe("CREATE_DRAFT");
+      expect(logs[0].description).toContain("John Teacher");
+      expect(logs[0].description).toContain("Mathematics");
+
+      expect(logs[1].action).toBe("UPDATE_DRAFT");
+      expect(logs[1].description).toContain("John Teacher");
+      expect(logs[1].description).toContain("Mathematics");
+    });
+
     test("allows incomplete scores to be saved as a draft", async () => {
       const response = await saveDraft([
         scoreFor(student, {
@@ -766,6 +800,26 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(submission.submittedByTeacher.toString()).toBe(
         teacher._id.toString(),
       );
+    });
+
+    test("creates an audit log when a teacher submits subject results", async () => {
+      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+
+      const response = await submitResults();
+
+      expect(response.statusCode).toBe(200);
+
+      const log = await AuditLog.findOne({
+        teacher: teacher._id,
+        module: "SUBJECT_RESULTS",
+        action: "SUBMIT",
+      });
+
+      expect(log).not.toBeNull();
+      expect(log.description).toContain("John Teacher");
+      expect(log.description).toContain("Mathematics");
+      expect(log.description).toContain("first term");
+      expect(log.description).toContain("2026/2027");
     });
 
     test("submits using the saved roster when student eligibility changes", async () => {
