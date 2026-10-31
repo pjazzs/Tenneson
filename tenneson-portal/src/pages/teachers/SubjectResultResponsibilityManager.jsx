@@ -75,17 +75,87 @@ function SubjectResultResponsibilityManager() {
     : availableTerms[0]?.value || "first";
 
   // Only show active allocations with active related records
-  const activeAllocations = useMemo(
-    () =>
-      options.allocations.filter(
+  // Only show active allocations, grouped by class, department and subject
+  const activeAllocations = useMemo(() => {
+    return options.allocations
+      .filter(
         (allocation) =>
           allocation.isActive !== false &&
           allocation.schoolClass?.isActive !== false &&
           allocation.subject?.isActive !== false &&
           (!allocation.department || allocation.department.isActive !== false),
-      ),
-    [options.allocations],
-  );
+      )
+      .sort((a, b) => {
+        // 1. Sort by class: JSS1, JSS2, JSS3, SS1, SS2, SS3
+        const classCompare = (a.schoolClass?.name || "").localeCompare(
+          b.schoolClass?.name || "",
+          undefined,
+          { numeric: true, sensitivity: "base" },
+        );
+
+        if (classCompare !== 0) return classCompare;
+
+        // 2. Sort by department: Arts before Science
+        const departmentCompare = (a.department?.name || "").localeCompare(
+          b.department?.name || "",
+          undefined,
+          { sensitivity: "base" },
+        );
+
+        if (departmentCompare !== 0) return departmentCompare;
+
+        // 3. Sort subjects alphabetically within each class and department
+        return (a.subject?.name || "").localeCompare(
+          b.subject?.name || "",
+          undefined,
+          { sensitivity: "base" },
+        );
+      });
+  }, [options.allocations]);
+  // Load academic sessions, teachers and subject allocations
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchOptions = async () => {
+      try {
+        const response = await api.get("/teacher-assignments/options");
+
+        if (cancelled) return;
+
+        const loadedOptions = response.data.options || initialOptions;
+        const sessions = loadedOptions.academicSessions || [];
+
+        setOptions({
+          teachers: loadedOptions.teachers || [],
+          academicSessions: sessions,
+          allocations: loadedOptions.allocations || [],
+        });
+
+        const activeSession = sessions.find((session) => session.isActive);
+        const nextSessionId = activeSession?._id || sessions[0]?._id || "";
+
+        setAcademicSessionId(nextSessionId);
+        setLoadingResponsibilities(Boolean(nextSessionId));
+        setError("");
+      } catch (err) {
+        if (cancelled) return;
+
+        setError(
+          getErrorMessage(err, "Failed to load responsibility options."),
+        );
+      } finally {
+        if (!cancelled) {
+          setLoadingOptions(false);
+        }
+      }
+    };
+
+    fetchOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Current responsibility for the selected allocation
   const currentResponsibility = useMemo(
