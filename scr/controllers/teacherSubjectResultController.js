@@ -166,7 +166,7 @@ const getTeacherResultContext = async ({
 |
 */
 
-const getEligibleStudents = async ({ allocation, sessionName }) => {
+const getEligibleStudents = async ({ allocation, sessionName, dbSession }) => {
   const filter = {
     isActive: true,
     currentClass: allocation.schoolClass.name,
@@ -179,12 +179,17 @@ const getEligibleStudents = async ({ allocation, sessionName }) => {
     filter.$or = [{ department: null }, { department: { $exists: false } }];
   }
 
-  return Student.find(filter)
+  let query = Student.find(filter)
     .select(
       "_id studentId firstName lastName otherName currentClass department session",
     )
-    .sort({ lastName: 1, firstName: 1, studentId: 1 })
-    .lean();
+    .sort({ lastName: 1, firstName: 1, studentId: 1 });
+
+  if (dbSession) {
+    query = query.session(dbSession);
+  }
+
+  return query.lean();
 };
 
 const formatStudentName = (student) =>
@@ -659,32 +664,25 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
   const { allocationId } = req.params;
   const { academicSessionId, term, studentResults } = req.body;
 
-  // Validate allocation ID
+  // ---------------------------------------------------------
+  // 1. BASIC INPUT VALIDATION
+  // ---------------------------------------------------------
+
   if (!isValidObjectId(allocationId)) {
     return invalidId(res, "subject allocation");
   }
 
-  // Validate academic session and term
-  const context = await getTermAndSession(academicSessionId, term, res);
+  if (!isValidObjectId(academicSessionId)) {
+    return invalidId(res, "academic session");
+  }
 
-  if (!context) return;
-
-  // Verify that the teacher is the designated result owner
-  const resultContext = await getTeacherResultContext({
-    teacherId: req.teacher._id,
-    allocationId,
-    academicSessionId,
-    term,
-  });
-
-  if (resultContext.error) {
-    return res.status(resultContext.error.status).json({
+  if (!VALID_TERMS.includes(term)) {
+    return res.status(400).json({
       success: false,
-      message: resultContext.error.message,
+      message: "Term must be first, second or third.",
     });
   }
 
-  // Validate the submitted score updates
   let updates;
 
   try {
@@ -696,113 +694,284 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     });
   }
 
-  // Find an existing draft before deciding which roster to use
-  let submission = await SubjectResultSubmission.findOne({
-    allocation: allocationId,
-    academicSession: academicSessionId,
-    term,
-  });
+  // ---------------------------------------------------------
+  // 2. TRANSACTION STATE
+  // ---------------------------------------------------------
 
-  const isNewSubmission = !submission;
+  const dbSession = await mongoose.startSession();
 
-  // Submitted results can no longer be edited
-  if (submission?.status === "submitted") {
-    return res.status(409).json({
-      success: false,
-      message:
-        "This subject result has already been submitted and can no longer be edited.",
-    });
-  }
+  let savedSubmissionId;
+  let savedRows = [];
+  let savedStatus = "draft";
+  let savedUpdatedAt;
+  let isNewSubmission = false;
+  let allocationLabel = "";
+  let sessionName = "";
 
-  let rows;
-
-  if (!submission) {
-    /*
-     * FIRST DRAFT:
-     * No saved roster exists yet.
-     * Fetch currently eligible students to establish the initial snapshot.
-     */
-    const eligibleStudents = await getEligibleStudents({
-      allocation: resultContext.allocation,
-      sessionName: context.session.name,
-    });
-
-    if (eligibleStudents.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "There are no eligible active students for this subject allocation.",
-      });
-    }
-
-    // Only students in the initial eligible roster can receive scores.
-    const eligibleIds = new Set(
-      eligibleStudents.map((student) => student._id.toString()),
-    );
-
-    const unknownStudent = updates.find(
-      (item) => !eligibleIds.has(item.student),
-    );
-
-    if (unknownStudent) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "One or more students are not eligible for this subject allocation.",
-      });
-    }
-
-    // Create the initial permanent roster and apply the submitted scores.
-    rows = buildStudentRows(eligibleStudents, [], updates);
-
-    submission = new SubjectResultSubmission({
-      allocation: allocationId,
-      academicSession: academicSessionId,
-      term,
-      responsibility: resultContext.responsibility._id,
-      studentResults: rows,
-      status: "draft",
-      createdByTeacher: req.teacher._id,
-      updatedByTeacher: req.teacher._id,
-    });
-  } else {
-    /*
-     * EXISTING DRAFT:
-     * The saved roster is now the source of truth.
-     * Do not fetch or rebuild from currently eligible students.
-     */
-
-    const existingRows = submission.studentResults || [];
-
-    const snapshotIds = new Set(
-      existingRows.map((item) => item.student.toString()),
-    );
-
-    // Reject attempts to add students outside the saved roster.
-    const unknownStudent = updates.find(
-      (item) => !snapshotIds.has(item.student),
-    );
-
-    if (unknownStudent) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "One or more students are not in this draft's saved roster. The roster cannot be changed during a teacher draft update.",
-      });
-    }
-
-    // Update existing rows without removing students or losing scores.
-    rows = updateStudentSnapshotRows(existingRows, updates);
-
-    submission.responsibility = resultContext.responsibility._id;
-    submission.studentResults = rows;
-    submission.updatedByTeacher = req.teacher._id;
-  }
-
-  // Save the draft
   try {
-    await submission.save();
+    await dbSession.withTransaction(async () => {
+      // Reset values because MongoDB may retry this callback.
+      savedSubmissionId = null;
+      savedRows = [];
+      savedStatus = "draft";
+      savedUpdatedAt = null;
+      isNewSubmission = false;
+      allocationLabel = "";
+      sessionName = "";
+
+      // -----------------------------------------------------
+      // 3. RE-FETCH SESSION INSIDE TRANSACTION
+      // -----------------------------------------------------
+
+      const academicSession =
+        await AcademicSession.findById(academicSessionId).session(dbSession);
+
+      if (!academicSession) {
+        const error = new Error("Academic session not found.");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const sessionTerm = academicSession.terms?.find(
+        (item) => item.key === term,
+      );
+
+      if (!sessionTerm) {
+        const error = new Error(
+          "The selected term does not exist in this academic session.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      sessionName = academicSession.name;
+
+      // -----------------------------------------------------
+      // 4. FETCH CURRENT RESPONSIBILITY INSIDE TRANSACTION
+      // -----------------------------------------------------
+
+      const responsibility = await SubjectResultResponsibility.findOne({
+        allocation: allocationId,
+        academicSession: academicSessionId,
+        term,
+      }).session(dbSession);
+
+      if (!responsibility) {
+        const error = new Error(
+          "No result teacher has been designated for this subject, session and term.",
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // -----------------------------------------------------
+      // 5. RECHECK DESIGNATED TEACHER OWNERSHIP
+      // -----------------------------------------------------
+
+      const assignment = await TeacherAssignment.findById(
+        responsibility.teacherAssignment,
+      )
+        .populate("teacher", "fullName isActive")
+        .populate({
+          path: "allocation",
+          populate: [
+            { path: "schoolClass", select: "name level isActive" },
+            { path: "department", select: "name isActive" },
+            { path: "subject", select: "name code isActive" },
+          ],
+        })
+        .session(dbSession);
+
+      if (!assignment) {
+        const error = new Error(
+          "The designated teacher assignment no longer exists.",
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (
+        !assignment.teacher ||
+        assignment.teacher._id.toString() !== req.teacher._id.toString()
+      ) {
+        const error = new Error(
+          "You are no longer the designated result teacher for this subject.",
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+
+      if (!assignment.isActive || !assignment.teacher.isActive) {
+        const error = new Error("Your teacher assignment is inactive.");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      if (
+        assignment.allocation?._id.toString() !== allocationId ||
+        assignment.academicSession.toString() !== academicSessionId
+      ) {
+        const error = new Error(
+          "The designated teacher assignment does not match this subject allocation and academic session.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const allocation = assignment.allocation;
+
+      if (
+        !allocation ||
+        !allocation.isActive ||
+        !allocation.schoolClass?.isActive ||
+        !allocation.subject?.isActive ||
+        (allocation.department && !allocation.department.isActive)
+      ) {
+        const error = new Error(
+          "This subject allocation or one of its linked records is inactive.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      allocationLabel = [
+        allocation.schoolClass?.name,
+        allocation.department?.name,
+        allocation.subject?.name,
+      ]
+        .filter(Boolean)
+        .join(" / ");
+
+      // -----------------------------------------------------
+      // 6. LOAD EXISTING SUBMISSION INSIDE TRANSACTION
+      // -----------------------------------------------------
+
+      let submission = await SubjectResultSubmission.findOne({
+        allocation: allocationId,
+        academicSession: academicSessionId,
+        term,
+      }).session(dbSession);
+
+      isNewSubmission = !submission;
+
+      if (submission?.status === "submitted") {
+        const error = new Error(
+          "This subject result has already been submitted and can no longer be edited.",
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      let rows;
+
+      // -----------------------------------------------------
+      // 7. FIRST DRAFT: CREATE THE INITIAL STUDENT SNAPSHOT
+      // -----------------------------------------------------
+
+      if (!submission) {
+        const eligibleStudents = await getEligibleStudents({
+          allocation,
+          sessionName: academicSession.name,
+          dbSession,
+        });
+
+        if (eligibleStudents.length === 0) {
+          const error = new Error(
+            "There are no eligible active students for this subject allocation.",
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const eligibleIds = new Set(
+          eligibleStudents.map((student) => student._id.toString()),
+        );
+
+        const unknownStudent = updates.find(
+          (item) => !eligibleIds.has(item.student),
+        );
+
+        if (unknownStudent) {
+          const error = new Error(
+            "One or more students are not eligible for this subject allocation.",
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        rows = buildStudentRows(eligibleStudents, [], updates);
+
+        submission = new SubjectResultSubmission({
+          allocation: allocationId,
+          academicSession: academicSessionId,
+          term,
+          responsibility: responsibility._id,
+          studentResults: rows,
+          status: "draft",
+          createdByTeacher: req.teacher._id,
+          updatedByTeacher: req.teacher._id,
+        });
+      } else {
+        // ---------------------------------------------------
+        // 8. EXISTING DRAFT: PRESERVE ITS ORIGINAL ROSTER
+        // ---------------------------------------------------
+
+        const existingRows = submission.studentResults || [];
+
+        const snapshotIds = new Set(
+          existingRows.map((item) => item.student.toString()),
+        );
+
+        const unknownStudent = updates.find(
+          (item) => !snapshotIds.has(item.student),
+        );
+
+        if (unknownStudent) {
+          const error = new Error(
+            "One or more students are not in this draft's saved roster. The roster cannot be changed during a teacher draft update.",
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        rows = updateStudentSnapshotRows(existingRows, updates);
+
+        submission.responsibility = responsibility._id;
+        submission.studentResults = rows;
+        submission.updatedByTeacher = req.teacher._id;
+      }
+
+      // -----------------------------------------------------
+      // 9. UPDATE SHARED RESPONSIBILITY VERSION
+      // -----------------------------------------------------
+
+      responsibility.writeVersion = (responsibility.writeVersion || 0) + 1;
+
+      await responsibility.save({ session: dbSession });
+
+      // -----------------------------------------------------
+      // 10. SAVE SUBMISSION IN THE SAME TRANSACTION
+      // -----------------------------------------------------
+
+      await submission.save({ session: dbSession });
+
+      savedSubmissionId = submission._id;
+      savedRows = rows;
+      savedStatus = submission.status;
+      savedUpdatedAt = submission.updatedAt;
+    });
   } catch (error) {
+    // -------------------------------------------------------
+    // 11. HANDLE TRANSACTION ERRORS
+    // -------------------------------------------------------
+
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -810,15 +979,22 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
       });
     }
 
-    if (error.name === "VersionError") {
+    if (
+      error.name === "VersionError" ||
+      error.name === "WriteConflict" ||
+      error.code === 112 ||
+      error.code === 251 ||
+      error.hasErrorLabel?.("TransientTransactionError") ||
+      error.hasErrorLabel?.("UnknownTransactionCommitResult")
+    ) {
       return res.status(409).json({
         success: false,
         message:
-          "This draft was changed elsewhere. Refresh it before saving again.",
+          "This result or its designated teacher was changed by another operation. Refresh the page and try again.",
       });
     }
 
-    if (error.name === "ValidationError") {
+    if (error.name === "ValidationError" || error.name === "CastError") {
       return res.status(400).json({
         success: false,
         message: error.message,
@@ -826,15 +1002,13 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     }
 
     throw error;
+  } finally {
+    await dbSession.endSession();
   }
 
-  const allocationLabel = [
-    resultContext.allocation?.schoolClass?.name,
-    resultContext.allocation?.department?.name,
-    resultContext.allocation?.subject?.name,
-  ]
-    .filter(Boolean)
-    .join(" / ");
+  // ---------------------------------------------------------
+  // 12. AUDIT LOG AFTER SUCCESSFUL TRANSACTION
+  // ---------------------------------------------------------
 
   await createAuditLog({
     teacher: req.teacher._id,
@@ -842,12 +1016,15 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     module: "SUBJECT_RESULTS",
     description: `${req.teacher.fullName} ${
       isNewSubmission ? "created" : "updated"
-    } a subject result draft for ${allocationLabel}, ${term} term (${context.session.name}).`,
+    } a subject result draft for ${allocationLabel}, ${term} term (${sessionName}).`,
     req,
   });
 
-  // Count students with complete scores
-  const completedStudents = rows.filter(
+  // ---------------------------------------------------------
+  // 13. COUNT COMPLETED STUDENTS
+  // ---------------------------------------------------------
+
+  const completedStudents = savedRows.filter(
     (item) =>
       item.ca1 !== null &&
       item.ca1 !== undefined &&
@@ -861,11 +1038,11 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     success: true,
     message: "Subject result draft saved successfully.",
     submission: {
-      _id: submission._id,
-      status: submission.status,
-      totalEligibleStudents: rows.length,
+      _id: savedSubmissionId,
+      status: savedStatus,
+      totalEligibleStudents: savedRows.length,
       completedStudents,
-      updatedAt: submission.updatedAt,
+      updatedAt: savedUpdatedAt,
     },
   });
 });
@@ -891,115 +1068,271 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     return invalidId(res, "subject allocation");
   }
 
-  // Validate academic session and term
+  // Validate academic session and term before starting the transaction
   const context = await getTermAndSession(academicSessionId, term, res);
 
   if (!context) return;
 
-  // Verify that the teacher is the designated result owner
-  const resultContext = await getTeacherResultContext({
-    teacherId: req.teacher._id,
-    allocationId,
-    academicSessionId,
-    term,
-  });
+  let submittedDocument;
+  let submittedRosterCount = 0;
+  let allocationLabel = "";
+  let submittedAt;
 
-  if (resultContext.error) {
-    return res.status(resultContext.error.status).json({
-      success: false,
-      message: resultContext.error.message,
-    });
-  }
-
-  // Retrieve the existing draft
-  const submission = await SubjectResultSubmission.findOne({
-    allocation: allocationId,
-    academicSession: academicSessionId,
-    term,
-  });
-
-  if (!submission) {
-    return res.status(404).json({
-      success: false,
-      message: "Save a subject result draft before submitting.",
-    });
-  }
-
-  // Prevent duplicate submission
-  if (submission.status === "submitted") {
-    return res.status(409).json({
-      success: false,
-      message: "This subject result has already been submitted.",
-    });
-  }
-
-  /*
-   * VALIDATE AGAINST THE SAVED ROSTER
-   *
-   * Do not fetch currently eligible students here.
-   * The saved roster is the source of truth once a draft exists.
-   */
-
-  const roster = submission.studentResults.filter(
-    (item) => item.offered !== false,
-  );
-
-  if (roster.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "This draft has no students in its saved roster. It cannot be submitted.",
-    });
-  }
-
-  // Find students whose CA1, CA2 or examination score is missing
-  const missingStudents = roster.filter(
-    (item) =>
-      item.ca1 === null ||
-      item.ca1 === undefined ||
-      item.ca2 === null ||
-      item.ca2 === undefined ||
-      item.exam === null ||
-      item.exam === undefined,
-  );
-
-  if (missingStudents.length > 0) {
-    const completedStudents = roster.length - missingStudents.length;
-
-    return res.status(400).json({
-      success: false,
-      message:
-        "Every student in the saved roster must have complete scores before submission.",
-
-      completion: {
-        eligibleStudents: roster.length,
-        completedStudents,
-        incompleteStudents: missingStudents.length,
-        staleStudentEntries: 0,
-      },
-
-      incompleteStudents: missingStudents.map((item) => ({
-        student: item.student,
-        studentId: item.studentId,
-        studentName: item.studentName,
-      })),
-    });
-  }
-
-  // All students have complete scores. Mark the submission as submitted.
-  submission.responsibility = resultContext.responsibility._id;
-  submission.status = "submitted";
-  submission.submittedByTeacher = req.teacher._id;
-  submission.updatedByTeacher = req.teacher._id;
-  submission.submittedAt = new Date();
+  const dbSession = await mongoose.startSession();
 
   try {
-    await submission.save();
+    await dbSession.withTransaction(async () => {
+      // Reset values because MongoDB may retry the transaction callback.
+      submittedDocument = null;
+      submittedRosterCount = 0;
+      allocationLabel = "";
+      submittedAt = null;
+
+      /*
+       * 1. RE-FETCH THE ACADEMIC SESSION
+       *
+       * The session must still exist when the transaction runs.
+       * Term validity was checked by getTermAndSession above.
+       */
+      const academicSession =
+        await AcademicSession.findById(academicSessionId).session(dbSession);
+
+      if (!academicSession) {
+        const error = new Error("Academic session not found.");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      /*
+       * 2. RE-FETCH THE RESULT RESPONSIBILITY
+       *
+       * This is the shared document that admin reassignment and
+       * teacher submission both write to.
+       */
+      const responsibility = await SubjectResultResponsibility.findOne({
+        allocation: allocationId,
+        academicSession: academicSessionId,
+        term,
+      }).session(dbSession);
+
+      if (!responsibility) {
+        const error = new Error(
+          "You are not currently designated to submit results for this subject.",
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+
+      /*
+       * 3. RE-FETCH THE DESIGNATED TEACHER ASSIGNMENT
+       */
+      const assignment = await TeacherAssignment.findOne({
+        _id: responsibility.teacherAssignment,
+        allocation: allocationId,
+        academicSession: academicSessionId,
+      })
+        .populate("teacher", "fullName isActive")
+        .populate({
+          path: "allocation",
+          populate: [
+            { path: "schoolClass", select: "name isActive" },
+            { path: "department", select: "name isActive" },
+            { path: "subject", select: "name isActive" },
+          ],
+        })
+        .session(dbSession);
+
+      if (!assignment || !assignment.isActive || !assignment.teacher) {
+        const error = new Error("Your subject assignment is no longer active.");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Confirm that this teacher is still the designated owner.
+      if (assignment.teacher._id.toString() !== req.teacher._id.toString()) {
+        const error = new Error(
+          "You are no longer the designated result owner for this subject.",
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+
+      if (!assignment.teacher.isActive) {
+        const error = new Error("Your teacher account is inactive.");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Validate the allocation and its related records.
+      const allocation = assignment.allocation;
+
+      if (
+        !allocation ||
+        !allocation.isActive ||
+        !allocation.schoolClass ||
+        !allocation.schoolClass.isActive ||
+        !allocation.subject ||
+        !allocation.subject.isActive ||
+        (allocation.department && !allocation.department.isActive)
+      ) {
+        const error = new Error(
+          "This subject allocation or one of its related records is inactive.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      /*
+       * 4. RE-FETCH THE EXISTING DRAFT
+       */
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocationId,
+        academicSession: academicSessionId,
+        term,
+      }).session(dbSession);
+
+      if (!submission) {
+        const error = new Error(
+          "Save a subject result draft before submitting.",
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Prevent duplicate submission.
+      if (submission.status === "submitted") {
+        const error = new Error(
+          "This subject result has already been submitted.",
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      /*
+       * 5. VALIDATE AGAINST THE SAVED ROSTER
+       *
+       * Do not fetch currently eligible students here.
+       * The saved roster remains the source of truth.
+       */
+      const roster = submission.studentResults.filter(
+        (item) => item.offered !== false,
+      );
+
+      if (roster.length === 0) {
+        const error = new Error(
+          "This draft has no students in its saved roster. It cannot be submitted.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // Find students whose CA1, CA2 or examination score is missing.
+      const missingStudents = roster.filter(
+        (item) =>
+          item.ca1 === null ||
+          item.ca1 === undefined ||
+          item.ca2 === null ||
+          item.ca2 === undefined ||
+          item.exam === null ||
+          item.exam === undefined,
+      );
+
+      if (missingStudents.length > 0) {
+        const completedStudents = roster.length - missingStudents.length;
+
+        const error = new Error(
+          "Every student in the saved roster must have complete scores before submission.",
+        );
+
+        error.statusCode = 400;
+        error.completion = {
+          eligibleStudents: roster.length,
+          completedStudents,
+          incompleteStudents: missingStudents.length,
+          staleStudentEntries: 0,
+        };
+
+        error.incompleteStudents = missingStudents.map((item) => ({
+          student: item.student,
+          studentId: item.studentId,
+          studentName: item.studentName,
+        }));
+
+        throw error;
+      }
+
+      /*
+       * 6. MARK THE SUBMISSION AS SUBMITTED
+       */
+      submittedAt = new Date();
+
+      submission.responsibility = responsibility._id;
+      submission.status = "submitted";
+      submission.submittedByTeacher = req.teacher._id;
+      submission.updatedByTeacher = req.teacher._id;
+      submission.submittedAt = submittedAt;
+
+      /*
+       * 7. UPDATE THE SHARED RESPONSIBILITY DOCUMENT
+       *
+       * This write is essential. It ensures that admin reassignment
+       * and teacher submission contend on the same MongoDB document.
+       */
+      responsibility.writeVersion = (responsibility.writeVersion || 0) + 1;
+
+      await responsibility.save({ session: dbSession });
+
+      // Save the submission in the same transaction.
+      await submission.save({ session: dbSession });
+
+      /*
+       * Keep the response and audit information for use after commit.
+       */
+      submittedDocument = submission;
+      submittedRosterCount = roster.length;
+
+      allocationLabel = [
+        allocation.schoolClass?.name,
+        allocation.department?.name,
+        allocation.subject?.name,
+      ]
+        .filter(Boolean)
+        .join(" / ");
+    });
   } catch (error) {
-    if (error.name === "VersionError") {
+    // Application-level errors.
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+        ...(error.completion && { completion: error.completion }),
+        ...(error.incompleteStudents && {
+          incompleteStudents: error.incompleteStudents,
+        }),
+      });
+    }
+
+    // Handle duplicate-key errors.
+    if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: "This submission changed elsewhere. Refresh and try again.",
+        message:
+          "A conflicting subject result operation occurred. Refresh and try again.",
+      });
+    }
+
+    // Handle optimistic concurrency and transaction write conflicts.
+    if (
+      error.name === "VersionError" ||
+      error.code === 112 ||
+      error.codeName === "WriteConflict" ||
+      error.hasErrorLabel?.("TransientTransactionError") ||
+      error.hasErrorLabel?.("UnknownTransactionCommitResult")
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This subject result or its assignment changed during submission. Refresh and try again.",
       });
     }
 
@@ -1011,17 +1344,16 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     }
 
     throw error;
+  } finally {
+    await dbSession.endSession();
   }
 
-  // AUDIT LOG — runs only after successful submission
-  const allocationLabel = [
-    resultContext.allocation?.schoolClass?.name,
-    resultContext.allocation?.department?.name,
-    resultContext.allocation?.subject?.name,
-  ]
-    .filter(Boolean)
-    .join(" / ");
-
+  /*
+   * 8. AUDIT LOG
+   *
+   * This must remain outside the transaction callback.
+   * It runs only after the transaction has committed.
+   */
   await createAuditLog({
     teacher: req.teacher._id,
     action: "SUBMIT",
@@ -1030,17 +1362,19 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     req,
   });
 
-  // SUCCESS RESPONSE
+  /*
+   * 9. SUCCESS RESPONSE
+   */
   return res.status(200).json({
     success: true,
     message: "Subject results submitted successfully.",
 
     submission: {
-      _id: submission._id,
-      status: submission.status,
-      totalStudents: roster.length,
-      completedStudents: roster.length,
-      submittedAt: submission.submittedAt,
+      _id: submittedDocument._id,
+      status: submittedDocument.status,
+      totalStudents: submittedRosterCount,
+      completedStudents: submittedRosterCount,
+      submittedAt: submittedDocument.submittedAt,
     },
   });
 });
