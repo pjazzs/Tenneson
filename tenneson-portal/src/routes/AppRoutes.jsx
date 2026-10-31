@@ -43,6 +43,7 @@ import AcademicSessions from "../pages/academicSessions/AcademicSessions";
 import TeacherManagement from "../pages/teachers/TeacherManagement";
 import SubjectAllocation from "../pages/academic/SubjectAllocation";
 import TeacherAssignment from "../pages/teachers/TeacherAssignment";
+import TeacherSubjectResultEntry from "../pages/teachers/TeacherSubjectResultEntry";
 
 function AppRoutes() {
   return (
@@ -99,6 +100,15 @@ function AppRoutes() {
 
       <Route element={<TeacherProtectedRoute />}>
         <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+      </Route>
+
+      <Route element={<TeacherProtectedRoute />}>
+        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+
+        <Route
+          path="/teacher/subject-results/:allocationId"
+          element={<TeacherSubjectResultEntry />}
+        />
       </Route>
 
       {/* =========================================

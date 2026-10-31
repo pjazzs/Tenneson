@@ -615,6 +615,12 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     allocationId,
+    allocation: {
+      _id: allocation._id,
+      schoolClass: allocation.schoolClass,
+      department: allocation.department,
+      subject: allocation.subject,
+    },
 
     academicSession: {
       _id: context.session._id,

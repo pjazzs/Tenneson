@@ -1011,6 +1011,18 @@ function TeacherDashboard() {
                         </span>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/teacher/subject-results/${item.allocation._id}?academicSessionId=${selectedSessionId}&term=${selectedTerm}`,
+                        )
+                      }
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                    >
+                      <FaClipboardCheck />
+                      Open Result Sheet
+                    </button>
                   </div>
                 );
               })}
