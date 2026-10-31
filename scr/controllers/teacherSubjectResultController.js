@@ -241,13 +241,21 @@ const validateScorePayload = (studentResults) => {
       throw new Error("Teacher comment must be a string.");
     }
 
-    return {
+    const validatedItem = {
       student: studentId,
       ca1: validateScore(item.ca1, "CA1", 20),
       ca2: validateScore(item.ca2, "CA2", 10),
       exam: validateScore(item.exam, "Examination", 70),
-      teacherComment: item.teacherComment?.trim() || "",
     };
+
+    // Only include teacherComment when the client actually supplies it.
+    // This allows buildStudentRows() to preserve an existing comment
+    // when the teacher updates scores only.
+    if (item.teacherComment !== undefined) {
+      validatedItem.teacherComment = item.teacherComment.trim();
+    }
+
+    return validatedItem;
   });
 };
 

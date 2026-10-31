@@ -484,6 +484,65 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(savedStudent.exam).toBe(60);
     });
 
+    test("preserves an existing teacher comment when updating only scores", async () => {
+      await saveDraft([
+        scoreFor(student, {
+          ca1: 15,
+          ca2: 8,
+          exam: 60,
+          teacherComment: "Excellent performance.",
+        }),
+      ]);
+
+      const response = await saveDraft([
+        {
+          student: student._id.toString(),
+          ca1: 18,
+        },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        term: "first",
+      });
+
+      const savedStudent = findSavedStudent(submission, student);
+
+      expect(savedStudent).toBeDefined();
+      expect(savedStudent.ca1).toBe(18);
+      expect(savedStudent.ca2).toBe(8);
+      expect(savedStudent.exam).toBe(60);
+      expect(savedStudent.teacherComment).toBe("Excellent performance.");
+    });
+    test("allows a teacher to clear an existing comment explicitly", async () => {
+      await saveDraft([
+        scoreFor(student, {
+          teacherComment: "Excellent performance.",
+        }),
+      ]);
+
+      const response = await saveDraft([
+        {
+          student: student._id.toString(),
+          teacherComment: "",
+        },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        term: "first",
+      });
+
+      const savedStudent = findSavedStudent(submission, student);
+
+      expect(savedStudent).toBeDefined();
+      expect(savedStudent.teacherComment).toBe("");
+    });
+
     test("rejects a CA1 score above 20", async () => {
       const response = await saveDraft([scoreFor(student, { ca1: 21 })]);
 
