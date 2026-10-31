@@ -516,6 +516,7 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(savedStudent.exam).toBe(60);
       expect(savedStudent.teacherComment).toBe("Excellent performance.");
     });
+
     test("allows a teacher to clear an existing comment explicitly", async () => {
       await saveDraft([
         scoreFor(student, {
@@ -541,6 +542,67 @@ describe("TEACHER SUBJECT RESULT API", () => {
 
       expect(savedStudent).toBeDefined();
       expect(savedStudent.teacherComment).toBe("");
+    });
+
+    test("does not add newly eligible students to an existing draft", async () => {
+      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+
+      const newStudent = await createStudent({
+        studentId: "TCC00003",
+        firstName: "New",
+        lastName: "Student",
+      });
+
+      const response = await saveDraft([
+        {
+          student: student._id.toString(),
+          ca1: 18,
+        },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(submission.studentResults).toHaveLength(2);
+      expect(findSavedStudent(submission, student).ca1).toBe(18);
+      expect(findSavedStudent(submission, secondStudent)).toBeDefined();
+      expect(findSavedStudent(submission, newStudent)).toBeUndefined();
+    });
+
+    test("preserves inactive students in the saved roster during draft updates", async () => {
+      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+
+      student.isActive = false;
+      await student.save();
+
+      const response = await saveDraft([
+        {
+          student: secondStudent._id.toString(),
+          ca1: 19,
+        },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(submission.studentResults).toHaveLength(2);
+
+      const savedInactiveStudent = findSavedStudent(submission, student);
+      const savedSecondStudent = findSavedStudent(submission, secondStudent);
+
+      expect(savedInactiveStudent).toBeDefined();
+      expect(savedInactiveStudent.ca1).toBe(15);
+      expect(savedSecondStudent.ca1).toBe(19);
     });
 
     test("rejects a CA1 score above 20", async () => {
@@ -704,6 +766,67 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(submission.submittedByTeacher.toString()).toBe(
         teacher._id.toString(),
       );
+    });
+
+    test("submits using the saved roster when student eligibility changes", async () => {
+      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+
+      // One original student becomes inactive after the draft is saved.
+      student.isActive = false;
+      await student.save();
+
+      // A new student becomes eligible after the draft is saved.
+      await createStudent({
+        studentId: "TCC00003",
+        firstName: "New",
+        lastName: "Student",
+      });
+
+      const response = await submitResults();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.submission.status).toBe("submitted");
+      expect(response.body.submission.totalStudents).toBe(2);
+
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(submission).not.toBeNull();
+      expect(submission.studentResults).toHaveLength(2);
+      expect(submission.status).toBe("submitted");
+
+      expect(findSavedStudent(submission, student)).toBeDefined();
+      expect(findSavedStudent(submission, secondStudent)).toBeDefined();
+    });
+
+    test("requires complete scores for inactive students in the saved roster", async () => {
+      await saveDraft([
+        scoreFor(student),
+        scoreFor(secondStudent, {
+          ca1: 15,
+          ca2: null,
+          exam: null,
+        }),
+      ]);
+
+      // The incomplete student becomes inactive after the draft is saved.
+      secondStudent.isActive = false;
+      await secondStudent.save();
+
+      const response = await submitResults();
+
+      expect(response.statusCode).toBe(400);
+
+      expect(response.body.completion.eligibleStudents).toBe(2);
+      expect(response.body.completion.completedStudents).toBe(1);
+      expect(response.body.completion.incompleteStudents).toBe(1);
+
+      expect(response.body.incompleteStudents).toHaveLength(1);
+      expect(response.body.incompleteStudents[0].studentId).toBe("TCC00002");
     });
 
     test("does not allow the teacher to submit the same results twice", async () => {

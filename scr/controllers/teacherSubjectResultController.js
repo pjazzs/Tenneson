@@ -304,6 +304,33 @@ const buildStudentRows = (
   });
 };
 
+const updateStudentSnapshotRows = (existingRows = [], updates = []) => {
+  const updateMap = new Map(updates.map((item) => [item.student, item]));
+
+  return existingRows.map((row) => {
+    const id = row.student.toString();
+    const update = updateMap.get(id);
+
+    return {
+      student: row.student,
+      studentId: row.studentId,
+      studentName: row.studentName,
+      offered: row.offered ?? true,
+
+      ca1: update?.ca1 !== undefined ? update.ca1 : (row.ca1 ?? null),
+
+      ca2: update?.ca2 !== undefined ? update.ca2 : (row.ca2 ?? null),
+
+      exam: update?.exam !== undefined ? update.exam : (row.exam ?? null),
+
+      teacherComment:
+        update?.teacherComment !== undefined
+          ? update.teacherComment
+          : row.teacherComment || "",
+    };
+  });
+};
+
 const populateSubmission = (query) =>
   query
     .populate("allocation")
@@ -332,6 +359,7 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
 
   if (!context) return;
 
+  // Get all active assignments belonging to this teacher.
   const assignments = await TeacherAssignment.find({
     teacher: req.teacher._id,
     academicSession: academicSessionId,
@@ -347,6 +375,7 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
     })
     .lean();
 
+  // Keep only assignments with active linked records.
   const availableAssignments = assignments.filter((item) => {
     const allocation = item.allocation;
 
@@ -360,6 +389,7 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
 
   const allocationIds = availableAssignments.map((item) => item.allocation._id);
 
+  // Get the designated result responsibilities.
   const responsibilities = await SubjectResultResponsibility.find({
     allocation: { $in: allocationIds },
     academicSession: academicSessionId,
@@ -370,47 +400,78 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
     responsibilities.map((item) => [item.allocation.toString(), item]),
   );
 
+  // Build assignment and submission progress information.
   const results = await Promise.all(
     availableAssignments.map(async (assignment) => {
       const allocation = assignment.allocation;
+
       const responsibility = responsibilityMap.get(allocation._id.toString());
 
       const isOwner =
         responsibility?.teacherAssignment.toString() ===
         assignment._id.toString();
 
-      const [eligibleCount, submission] = await Promise.all([
-        getEligibleStudents({
+      // Fetch the current submission.
+      const submission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: academicSessionId,
+        term,
+      }).select("status studentResults submittedAt updatedAt");
+
+      let eligibleCount;
+
+      if (submission) {
+        /*
+         * An existing submission owns its original roster.
+         * Do not use the current eligible-student count here.
+         */
+        eligibleCount = submission.studentResults.length;
+      } else {
+        /*
+         * No draft exists yet.
+         * Use the current eligible students to show the initial count.
+         */
+        const eligibleStudents = await getEligibleStudents({
           allocation,
           sessionName: context.session.name,
-        }).then((students) => students.length),
+        });
 
-        SubjectResultSubmission.findOne({
-          allocation: allocation._id,
-          academicSession: academicSessionId,
-          term,
-        }).select("status studentResults submittedAt updatedAt"),
-      ]);
+        eligibleCount = eligibleStudents.length;
+      }
+
+      // Count students with all three score components completed.
+      const studentsWithScores = submission
+        ? submission.studentResults.filter(
+            (item) =>
+              item.ca1 !== null &&
+              item.ca1 !== undefined &&
+              item.ca2 !== null &&
+              item.ca2 !== undefined &&
+              item.exam !== null &&
+              item.exam !== undefined,
+          ).length
+        : 0;
 
       return {
         assignmentId: assignment._id,
+
         allocation: {
           _id: allocation._id,
           schoolClass: allocation.schoolClass,
           department: allocation.department,
           subject: allocation.subject,
         },
+
         isResultOwner: isOwner,
+
         canEdit: isOwner && submission?.status !== "submitted",
+
         responsibilityId: responsibility?._id || null,
+
         submission: {
           status: submission?.status || "not_started",
           eligibleStudents: eligibleCount,
-          studentsWithScores:
-            submission?.studentResults?.filter(
-              (item) =>
-                item.ca1 !== null && item.ca2 !== null && item.exam !== null,
-            ).length || 0,
+          studentsWithScores,
           submittedAt: submission?.submittedAt || null,
           updatedAt: submission?.updatedAt || null,
         },
@@ -420,11 +481,14 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
 
   return res.status(200).json({
     success: true,
+
     academicSession: {
       _id: context.session._id,
       name: context.session.name,
     },
+
     term,
+
     assignments: results,
   });
 });
@@ -446,14 +510,17 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
   const { allocationId } = req.params;
   const { academicSessionId, term } = req.query;
 
+  // Validate allocation ID
   if (!isValidObjectId(allocationId)) {
     return invalidId(res, "subject allocation");
   }
 
+  // Validate academic session and term
   const context = await getTermAndSession(academicSessionId, term, res);
 
   if (!context) return;
 
+  // Confirm that the teacher has an active assignment for this allocation
   const assignment = await TeacherAssignment.findOne({
     teacher: req.teacher._id,
     allocation: allocationId,
@@ -468,6 +535,7 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
     });
   }
 
+  // Retrieve the designated result-submission owner
   const resultContext = await getTeacherResultContext({
     teacherId: req.teacher._id,
     allocationId,
@@ -475,6 +543,7 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
     term,
   });
 
+  // Retrieve the subject allocation and its related records
   const allocation = await ClassSubjectAllocation.findById(allocationId)
     .populate("schoolClass", "name level isActive")
     .populate("department", "name isActive")
@@ -487,43 +556,80 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
     });
   }
 
-  const eligibleStudents = await getEligibleStudents({
-    allocation,
-    sessionName: context.session.name,
-  });
+  // Check whether a draft or submitted result already exists
   const submission = await SubjectResultSubmission.findOne({
     allocation: allocationId,
     academicSession: academicSessionId,
     term,
   }).lean();
 
-  const existingRows = submission?.studentResults || [];
+  let studentResults;
 
-  const studentResults = buildStudentRows(eligibleStudents, existingRows);
+  if (submission) {
+    /*
+     * An existing submission owns its original student roster.
+     *
+     * Do not rebuild this roster from current eligible students.
+     * This ensures that:
+     * - Students who become inactive remain in the draft.
+     * - Students who change class or department remain in the draft.
+     * - Newly eligible students are not silently added.
+     * - Previously entered scores and teacher comments are preserved.
+     */
+    studentResults = submission.studentResults || [];
+  } else {
+    /*
+     * No submission exists yet.
+     * Fetch the current eligible students to establish the initial roster.
+     */
+    const eligibleStudents = await getEligibleStudents({
+      allocation,
+      sessionName: context.session.name,
+    });
 
+    studentResults = buildStudentRows(eligibleStudents);
+  }
+
+  // Determine whether this teacher owns result submission for this term
   const isOwner =
     !resultContext.error &&
     resultContext.assignment._id.toString() === assignment._id.toString();
 
+  // Count students whose three score components are complete
+  const completedStudents = studentResults.filter(
+    (item) =>
+      item.ca1 !== null &&
+      item.ca1 !== undefined &&
+      item.ca2 !== null &&
+      item.ca2 !== undefined &&
+      item.exam !== null &&
+      item.exam !== undefined,
+  ).length;
+
   return res.status(200).json({
     success: true,
     allocationId,
+
     academicSession: {
       _id: context.session._id,
       name: context.session.name,
     },
+
     term,
+
     isResultOwner: isOwner,
+
     canEdit: isOwner && submission?.status !== "submitted",
+
     status: submission?.status || "not_started",
-    totalEligibleStudents: eligibleStudents.length,
-    completedStudents: studentResults.filter(
-      (item) => item.ca1 !== null && item.ca2 !== null && item.exam !== null,
-    ).length,
+
+    totalEligibleStudents: studentResults.length,
+
+    completedStudents,
+
     studentResults,
   });
 });
-
 /*
 |--------------------------------------------------------------------------
 | SAVE SUBJECT RESULT DRAFT
@@ -552,14 +658,17 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
   const { allocationId } = req.params;
   const { academicSessionId, term, studentResults } = req.body;
 
+  // Validate allocation ID
   if (!isValidObjectId(allocationId)) {
     return invalidId(res, "subject allocation");
   }
 
+  // Validate academic session and term
   const context = await getTermAndSession(academicSessionId, term, res);
 
   if (!context) return;
 
+  // Verify that the teacher is the designated result owner
   const resultContext = await getTeacherResultContext({
     teacherId: req.teacher._id,
     allocationId,
@@ -574,6 +683,7 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     });
   }
 
+  // Validate the submitted score updates
   let updates;
 
   try {
@@ -585,39 +695,14 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     });
   }
 
-  const eligibleStudents = await getEligibleStudents({
-    allocation: resultContext.allocation,
-    sessionName: context.session.name,
-  });
-
-  if (eligibleStudents.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "There are no eligible active students for this subject allocation.",
-    });
-  }
-
-  const eligibleIds = new Set(
-    eligibleStudents.map((student) => student._id.toString()),
-  );
-
-  const unknownStudent = updates.find((item) => !eligibleIds.has(item.student));
-
-  if (unknownStudent) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "One or more students are not eligible for this subject allocation.",
-    });
-  }
-
+  // Find an existing draft before deciding which roster to use
   let submission = await SubjectResultSubmission.findOne({
     allocation: allocationId,
     academicSession: academicSessionId,
     term,
   });
 
+  // Submitted results can no longer be edited
   if (submission?.status === "submitted") {
     return res.status(409).json({
       success: false,
@@ -626,11 +711,47 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     });
   }
 
-  const existingRows = submission?.studentResults || [];
-
-  const rows = buildStudentRows(eligibleStudents, existingRows, updates);
+  let rows;
 
   if (!submission) {
+    /*
+     * FIRST DRAFT:
+     * No saved roster exists yet.
+     * Fetch currently eligible students to establish the initial snapshot.
+     */
+    const eligibleStudents = await getEligibleStudents({
+      allocation: resultContext.allocation,
+      sessionName: context.session.name,
+    });
+
+    if (eligibleStudents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "There are no eligible active students for this subject allocation.",
+      });
+    }
+
+    // Only students in the initial eligible roster can receive scores.
+    const eligibleIds = new Set(
+      eligibleStudents.map((student) => student._id.toString()),
+    );
+
+    const unknownStudent = updates.find(
+      (item) => !eligibleIds.has(item.student),
+    );
+
+    if (unknownStudent) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "One or more students are not eligible for this subject allocation.",
+      });
+    }
+
+    // Create the initial permanent roster and apply the submitted scores.
+    rows = buildStudentRows(eligibleStudents, [], updates);
+
     submission = new SubjectResultSubmission({
       allocation: allocationId,
       academicSession: academicSessionId,
@@ -642,11 +763,40 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
       updatedByTeacher: req.teacher._id,
     });
   } else {
+    /*
+     * EXISTING DRAFT:
+     * The saved roster is now the source of truth.
+     * Do not fetch or rebuild from currently eligible students.
+     */
+
+    const existingRows = submission.studentResults || [];
+
+    const snapshotIds = new Set(
+      existingRows.map((item) => item.student.toString()),
+    );
+
+    // Reject attempts to add students outside the saved roster.
+    const unknownStudent = updates.find(
+      (item) => !snapshotIds.has(item.student),
+    );
+
+    if (unknownStudent) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "One or more students are not in this draft's saved roster. The roster cannot be changed during a teacher draft update.",
+      });
+    }
+
+    // Update existing rows without removing students or losing scores.
+    rows = updateStudentSnapshotRows(existingRows, updates);
+
     submission.responsibility = resultContext.responsibility._id;
     submission.studentResults = rows;
     submission.updatedByTeacher = req.teacher._id;
   }
 
+  // Save the draft
   try {
     await submission.save();
   } catch (error) {
@@ -675,6 +825,17 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
     throw error;
   }
 
+  // Count students with complete scores
+  const completedStudents = rows.filter(
+    (item) =>
+      item.ca1 !== null &&
+      item.ca1 !== undefined &&
+      item.ca2 !== null &&
+      item.ca2 !== undefined &&
+      item.exam !== null &&
+      item.exam !== undefined,
+  ).length;
+
   return res.status(200).json({
     success: true,
     message: "Subject result draft saved successfully.",
@@ -682,9 +843,7 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
       _id: submission._id,
       status: submission.status,
       totalEligibleStudents: rows.length,
-      completedStudents: rows.filter(
-        (item) => item.ca1 !== null && item.ca2 !== null && item.exam !== null,
-      ).length,
+      completedStudents,
       updatedAt: submission.updatedAt,
     },
   });
@@ -706,14 +865,17 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
   const { allocationId } = req.params;
   const { academicSessionId, term } = req.body;
 
+  // Validate allocation ID
   if (!isValidObjectId(allocationId)) {
     return invalidId(res, "subject allocation");
   }
 
+  // Validate academic session and term
   const context = await getTermAndSession(academicSessionId, term, res);
 
   if (!context) return;
 
+  // Verify that the teacher is the designated result owner
   const resultContext = await getTeacherResultContext({
     teacherId: req.teacher._id,
     allocationId,
@@ -728,6 +890,7 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     });
   }
 
+  // Retrieve the existing draft
   const submission = await SubjectResultSubmission.findOne({
     allocation: allocationId,
     academicSession: academicSessionId,
@@ -741,6 +904,7 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     });
   }
 
+  // Prevent duplicate submission
   if (submission.status === "submitted") {
     return res.status(409).json({
       success: false,
@@ -748,57 +912,60 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
     });
   }
 
-  const eligibleStudents = await getEligibleStudents({
-    allocation: resultContext.allocation,
-    sessionName: context.session.name,
-  });
+  /*
+   * VALIDATE AGAINST THE SAVED ROSTER
+   *
+   * Do not fetch currently eligible students here.
+   * The saved roster is the source of truth once a draft exists.
+   */
 
-  if (eligibleStudents.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "There are no eligible students for this subject.",
-    });
-  }
-
-  const eligibleIds = new Set(
-    eligibleStudents.map((student) => student._id.toString()),
+  const roster = submission.studentResults.filter(
+    (item) => item.offered !== false,
   );
 
-  const scoreMap = new Map(
-    submission.studentResults.map((item) => [item.student.toString(), item]),
-  );
-
-  const missingStudents = eligibleStudents.filter((student) => {
-    const score = scoreMap.get(student._id.toString());
-
-    return (
-      !score || score.ca1 === null || score.ca2 === null || score.exam === null
-    );
-  });
-
-  const staleStudents = submission.studentResults.filter(
-    (item) => !eligibleIds.has(item.student.toString()),
-  );
-
-  if (missingStudents.length || staleStudents.length) {
+  if (roster.length === 0) {
     return res.status(400).json({
       success: false,
       message:
-        "Every eligible student must have complete scores before submission.",
+        "This draft has no students in its saved roster. It cannot be submitted.",
+    });
+  }
+
+  // Find students whose CA1, CA2 or examination score is missing
+  const missingStudents = roster.filter(
+    (item) =>
+      item.ca1 === null ||
+      item.ca1 === undefined ||
+      item.ca2 === null ||
+      item.ca2 === undefined ||
+      item.exam === null ||
+      item.exam === undefined,
+  );
+
+  if (missingStudents.length > 0) {
+    const completedStudents = roster.length - missingStudents.length;
+
+    return res.status(400).json({
+      success: false,
+      message:
+        "Every student in the saved roster must have complete scores before submission.",
+
       completion: {
-        eligibleStudents: eligibleStudents.length,
-        completedStudents: eligibleStudents.length - missingStudents.length,
+        eligibleStudents: roster.length,
+        completedStudents,
         incompleteStudents: missingStudents.length,
-        staleStudentEntries: staleStudents.length,
+        staleStudentEntries: 0,
       },
-      incompleteStudents: missingStudents.map((student) => ({
-        student: student._id,
-        studentId: student.studentId,
-        studentName: formatStudentName(student),
+
+      incompleteStudents: missingStudents.map((item) => ({
+        student: item.student,
+        studentId: item.studentId,
+        studentName: item.studentName,
       })),
     });
   }
 
+  // All students have complete scores. Mark the submission as submitted.
   submission.responsibility = resultContext.responsibility._id;
   submission.status = "submitted";
   submission.submittedByTeacher = req.teacher._id;
@@ -828,10 +995,12 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     message: "Subject results submitted successfully.",
+
     submission: {
       _id: submission._id,
       status: submission.status,
-      totalStudents: eligibleStudents.length,
+      totalStudents: roster.length,
+      completedStudents: roster.length,
       submittedAt: submission.submittedAt,
     },
   });
