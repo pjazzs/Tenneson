@@ -22,6 +22,7 @@ const {
   approveResultCorrection,
   rejectResultCorrection,
   publishResultCorrection,
+  getResultCompilationPreview,
 } = require("../controllers/resultController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -99,6 +100,16 @@ router.get(
  * the student authentication middleware.
  */
 router.get("/results/my", requireStudentPasswordChanged, getMyPublishedResults);
+
+/*
+ * Preview approved teacher submissions for official result compilation.
+ */
+router.get(
+  "/results/compilation-preview",
+  protect,
+  authorizePermission("results.create"),
+  getResultCompilationPreview,
+);
 
 /*
  * Get one published result belonging to
