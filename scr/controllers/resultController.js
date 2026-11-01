@@ -3396,6 +3396,31 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
   try {
     const revision = await findResultRevisionById(req.params.revisionId);
 
+    /*
+     * WORKFLOW PROTECTION
+     *
+     * Subject-teacher correction revisions must only be
+     * modified through their dedicated correction-request
+     * workflow.
+     *
+     * This prevents the generic administrator endpoint
+     * from bypassing teacher review and individual
+     * subject correction controls.
+     *
+     * Existing administrator-managed revisions continue
+     * through the normal workflow.
+     */
+    if (revision.correctionSource === "subject_teacher") {
+      return sendError(
+        res,
+        409,
+        "Subject-teacher correction revisions must be updated through the subject correction workflow.",
+      );
+    }
+
+    /*
+     * Only draft and rejected corrections can be edited.
+     */
     if (!["draft", "rejected"].includes(revision.status)) {
       return sendError(
         res,
@@ -3404,6 +3429,9 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
       );
     }
 
+    /*
+     * Resolve the student.
+     */
     const student = await Student.findById(revision.student);
 
     if (!student) {
@@ -3414,6 +3442,9 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
       );
     }
 
+    /*
+     * Resolve the academic session.
+     */
     const academicSession = await AcademicSession.findById(
       revision.academicSession,
     );
@@ -3426,8 +3457,15 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
       );
     }
 
+    /*
+     * Merge the submitted changes with the existing
+     * correction draft.
+     */
     const mergedBody = mergeCorrectionInput(revision.proposedData, req.body);
 
+    /*
+     * Validate correction reason.
+     */
     const reason =
       typeof req.body?.reason === "string"
         ? req.body.reason.trim()
@@ -3442,10 +3480,12 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
     }
 
     /*
-     * Validate the editable data structure and resolve subjects
-     * against the authoritative Subject collection.
+     * VALIDATE CORRECTION DATA
      *
-     * Incomplete scores are allowed while saving a draft.
+     * Resolve subjects against the authoritative Subject
+     * collection.
+     *
+     * Incomplete scores are allowed while saving drafts.
      */
     await buildValidatedCorrection(
       {
@@ -3459,10 +3499,20 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
       },
     );
 
+    /*
+     * UPDATE CORRECTION
+     */
     revision.proposedData = mergedBody;
     revision.reason = reason;
 
+    /*
+     * Reset the revision to draft.
+     *
+     * This is important when editing a previously
+     * rejected correction.
+     */
     revision.status = "draft";
+
     revision.rejectionReason = "";
     revision.rejectedBy = null;
     revision.rejectedAt = null;
@@ -3476,6 +3526,9 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
 
     revision.updatedBy = getAdminId(req);
 
+    /*
+     * Record the update in the revision history.
+     */
     revision.events.push({
       action: "updated",
       performedBy: getAdminId(req),
@@ -3484,6 +3537,9 @@ exports.updateResultCorrection = asyncHandler(async (req, res) => {
 
     await revision.save();
 
+    /*
+     * AUDIT LOG
+     */
     await createResultAuditLog({
       req,
       action: "UPDATE_RESULT_CORRECTION",
@@ -3518,16 +3574,42 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
   try {
     const revision = await findResultRevisionById(req.params.revisionId);
 
+    /*
+     * WORKFLOW PROTECTION
+     *
+     * Subject-teacher correction revisions must pass
+     * through the dedicated subject correction workflow.
+     *
+     * They cannot be submitted directly through this
+     * generic administrator endpoint.
+     */
+    if (revision.correctionSource === "subject_teacher") {
+      return sendError(
+        res,
+        409,
+        "Subject-teacher correction revisions must be submitted through the subject correction workflow.",
+      );
+    }
+
+    /*
+     * Only draft corrections can be submitted.
+     */
     if (revision.status !== "draft") {
       return sendError(res, 409, "Only a draft correction can be submitted.");
     }
 
+    /*
+     * Resolve the student.
+     */
     const student = await Student.findById(revision.student);
 
     if (!student) {
       return sendError(res, 404, "Student not found.");
     }
 
+    /*
+     * Resolve the academic session.
+     */
     const academicSession = await AcademicSession.findById(
       revision.academicSession,
     );
@@ -3537,8 +3619,10 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
     }
 
     /*
-     * Ensure the official result has not changed since
-     * this correction was initiated.
+     * ENSURE THE ORIGINAL RESULT IS STILL PUBLISHED
+     *
+     * A correction must not be submitted if the official
+     * result has been removed or is no longer published.
      */
     const officialResult = await Result.findById(revision.result);
 
@@ -3550,6 +3634,12 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
       );
     }
 
+    /*
+     * STALE RESULT PROTECTION
+     *
+     * Ensure the official result has not changed since
+     * this correction revision was initiated.
+     */
     const originalUpdatedAt = revision.originalSnapshot?.updatedAt
       ? new Date(revision.originalSnapshot.updatedAt).getTime()
       : null;
@@ -3558,7 +3648,7 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
       ? new Date(officialResult.updatedAt).getTime()
       : null;
 
-    if (originalUpdatedAt !== null && currentUpdatedAt !== originalUpdatedAt) {
+    if (originalUpdatedAt !== null && originalUpdatedAt !== currentUpdatedAt) {
       return sendError(
         res,
         409,
@@ -3566,6 +3656,12 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
       );
     }
 
+    /*
+     * VALIDATE COMPLETE CORRECTION
+     *
+     * All required result information must be complete
+     * before submission to the Principal.
+     */
     try {
       await buildValidatedCorrection(revision, student, academicSession, {
         requireComplete: true,
@@ -3574,11 +3670,17 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
       return sendError(res, error.statusCode || 400, error.message);
     }
 
+    /*
+     * SUBMIT CORRECTION
+     */
     revision.status = "submitted";
     revision.submittedBy = getAdminId(req);
     revision.submittedAt = new Date();
     revision.updatedBy = getAdminId(req);
 
+    /*
+     * Record the submission in the revision history.
+     */
     revision.events.push({
       action: "submitted",
       performedBy: getAdminId(req),
@@ -3587,12 +3689,18 @@ exports.submitResultCorrection = asyncHandler(async (req, res) => {
 
     await revision.save();
 
+    /*
+     * AUDIT LOG
+     */
     await createResultAuditLog({
       req,
       action: "SUBMIT_RESULT_CORRECTION",
       description: `${req.admin.fullName} submitted correction revision ${revision.revisionNumber} for result ${revision.result}.`,
     });
 
+    /*
+     * ACTIVITY LOG
+     */
     await createResultActivityLog({
       req,
       action: "SUBMIT_RESULT_CORRECTION",

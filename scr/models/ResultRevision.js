@@ -90,6 +90,14 @@ const resultRevisionSchema = new mongoose.Schema(
       min: 1,
     },
 
+    correctionSource: {
+      type: String,
+      enum: ["admin", "subject_teacher"],
+      default: "admin",
+      immutable: true,
+      index: true,
+    },
+
     /*
      * Only one unresolved correction can exist for a result.
      * A rejected correction remains active so it can be revised
