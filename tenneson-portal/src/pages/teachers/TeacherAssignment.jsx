@@ -355,6 +355,7 @@ function TeacherAssignment() {
   };
 
   // Create multiple teacher assignments.
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -379,7 +380,6 @@ function TeacherAssignment() {
       return;
     }
 
-    // Ensure every selected subject belongs to the current selection.
     const selectedAllocations = visibleSubjectAllocations.filter(
       (allocation) =>
         selectedAllocationIds.includes(allocation._id) &&
@@ -393,75 +393,147 @@ function TeacherAssignment() {
       return;
     }
 
+    let createdCount = 0;
+    let reactivatedCount = 0;
+    let alreadyAssignedCount = 0;
+    let skippedCount = 0;
+
+    const failures = [];
+
     try {
       setSaving(true);
       setError("");
       setSuccess("");
 
-      // Each subject allocation is saved as its own assignment record.
-      // This preserves the existing backend model and unique index.
-      const results = await Promise.allSettled(
-        selectedAllocations.map((allocation) =>
-          api.post("/teacher-assignments", {
+      // Process assignments sequentially so confirmation dialogs
+      // appear one at a time.
+      for (const allocation of selectedAllocations) {
+        const allocationLabel = getAllocationLabel(allocation);
+
+        try {
+          await api.post("/teacher-assignments", {
             teacher: formData.teacher,
             allocation: allocation._id,
             academicSession: formData.academicSession,
-          }),
-        ),
-      );
+          });
 
-      const successfulAssignments = results.filter(
-        (result) => result.status === "fulfilled",
-      );
+          createdCount++;
+        } catch (err) {
+          const errorData = err.response?.data || {};
+          const errorCode = errorData.code;
 
-      const failedAssignments = results
-        .map((result, index) => ({
-          result,
-          allocation: selectedAllocations[index],
-        }))
-        .filter(({ result }) => result.status === "rejected");
+          // An active assignment already exists.
+          if (errorCode === "ACTIVE_ASSIGNMENT_EXISTS") {
+            alreadyAssignedCount++;
+            continue;
+          }
 
-      const successCount = successfulAssignments.length;
-      const failureCount = failedAssignments.length;
+          // An inactive assignment exists and can be reactivated.
+          if (errorCode === "INACTIVE_ASSIGNMENT_EXISTS") {
+            const existingAssignment = errorData.existingAssignment;
 
-      if (successCount > 0) {
-        setSuccess(
-          `${successCount} subject ${
-            successCount === 1 ? "assignment was" : "assignments were"
-          } created successfully.`,
-        );
+            if (!canUpdate) {
+              failures.push(
+                `${allocationLabel}: This assignment is inactive. You need update permission to reactivate it.`,
+              );
+              continue;
+            }
 
-        // Refresh the table and show the new records.
+            if (!existingAssignment?._id) {
+              failures.push(
+                `${allocationLabel}: The existing inactive assignment could not be identified.`,
+              );
+              continue;
+            }
+
+            const confirmed = window.confirm(
+              `An inactive assignment already exists for this teacher and subject:\n\n${allocationLabel}\n\nDo you want to reactivate the existing assignment?`,
+            );
+
+            if (!confirmed) {
+              skippedCount++;
+              continue;
+            }
+
+            try {
+              await api.patch(
+                `/teacher-assignments/${existingAssignment._id}/status`,
+                {
+                  isActive: true,
+                },
+              );
+
+              reactivatedCount++;
+            } catch (reactivationError) {
+              failures.push(
+                `${allocationLabel}: ${getErrorMessage(
+                  reactivationError,
+                  "Failed to reactivate the existing assignment.",
+                )}`,
+              );
+            }
+
+            continue;
+          }
+
+          failures.push(
+            `${allocationLabel}: ${getErrorMessage(
+              err,
+              "An unexpected error occurred.",
+            )}`,
+          );
+        }
+      }
+
+      const hasChanges = createdCount > 0 || reactivatedCount > 0;
+
+      if (hasChanges) {
         setPagination((previous) => ({
           ...previous,
           currentPage: 1,
         }));
 
         setRefreshKey((previous) => previous + 1);
+      }
 
+      const summaryParts = [];
+
+      if (createdCount > 0) {
+        summaryParts.push(`${createdCount} created`);
+      }
+
+      if (reactivatedCount > 0) {
+        summaryParts.push(`${reactivatedCount} reactivated`);
+      }
+
+      if (alreadyAssignedCount > 0) {
+        summaryParts.push(`${alreadyAssignedCount} already assigned`);
+      }
+
+      if (skippedCount > 0) {
+        summaryParts.push(`${skippedCount} skipped`);
+      }
+
+      if (summaryParts.length > 0) {
+        setSuccess(`Assignment process completed: ${summaryParts.join(", ")}.`);
+      }
+
+      if (failures.length > 0) {
+        setError(
+          `${failures.length} assignment(s) could not be completed:\n${failures.join("\n")}`,
+        );
+      }
+
+      // Close and reset only when every selected subject was resolved.
+      // Keep the form open if something failed or reactivation was declined.
+      if (failures.length === 0 && skippedCount === 0) {
         setShowForm(false);
         setFormData(initialForm);
         setSelectedAllocationIds([]);
       }
 
-      if (failureCount > 0) {
-        const firstFailure = failedAssignments[0];
-        const failedSubject = getAllocationLabel(firstFailure.allocation);
-
-        const failureMessage = getErrorMessage(
-          firstFailure.result.reason,
-          "An unexpected error occurred.",
-        );
-
-        setError(
-          `${failureCount} subject ${
-            failureCount === 1 ? "assignment failed" : "assignments failed"
-          }. First failure: ${failedSubject} - ${failureMessage}`,
-        );
-      }
-
-      if (successCount === 0 && failureCount === 0) {
-        setError("No assignments were created.");
+      if (summaryParts.length === 0 && failures.length === 0) {
+        setError("No assignments were processed.");
       }
     } catch (err) {
       console.error(
@@ -469,7 +541,7 @@ function TeacherAssignment() {
         err.response?.data || err.message,
       );
 
-      setError(getErrorMessage(err, "Failed to create teacher assignments."));
+      setError(getErrorMessage(err, "Failed to process teacher assignments."));
     } finally {
       setSaving(false);
     }

@@ -89,19 +89,27 @@ exports.getTeacherAssignmentOptions = asyncHandler(async (req, res) => {
       .lean(),
 
     ClassSubjectAllocation.find({ isActive: true })
-      .populate("schoolClass", "name level hasDepartments")
-      .populate("department", "name code")
-      .populate("subject", "name code")
+      .populate("schoolClass", "name level hasDepartments isActive")
+      .populate("department", "name code isActive")
+      .populate("subject", "name code isActive")
       .sort({ createdAt: -1 })
       .lean(),
   ]);
+
+  // Only return allocations whose related records are also active.
+  const usableAllocations = allocations.filter(
+    (allocation) =>
+      allocation.schoolClass?.isActive === true &&
+      allocation.subject?.isActive === true &&
+      (!allocation.department || allocation.department.isActive === true),
+  );
 
   return res.status(200).json({
     success: true,
     options: {
       teachers,
       academicSessions,
-      allocations,
+      allocations: usableAllocations,
     },
   });
 });
@@ -192,6 +200,7 @@ exports.getTeacherAssignments = asyncHandler(async (req, res) => {
 exports.createTeacherAssignment = asyncHandler(async (req, res) => {
   const { teacher, allocation, academicSession } = req.body;
 
+  // 1. Validate required fields.
   if (
     typeof teacher !== "string" ||
     !teacher.trim() ||
@@ -206,6 +215,7 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     });
   }
 
+  // 2. Validate ObjectIds.
   if (!validateObjectId(teacher)) {
     return sendInvalidId(res, "teacher");
   }
@@ -218,13 +228,16 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     return sendInvalidId(res, "academic session");
   }
 
+  // 3. Check whether the selected records exist.
   const [selectedTeacher, selectedAllocation, selectedSession] =
     await Promise.all([
       Teacher.findById(teacher),
+
       ClassSubjectAllocation.findById(allocation)
         .populate("schoolClass", "name isActive")
         .populate("department", "name isActive")
         .populate("subject", "name isActive"),
+
       AcademicSession.findById(academicSession),
     ]);
 
@@ -249,7 +262,7 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     });
   }
 
-  // Prevent assigning a subject whose underlying records are inactive.
+  // 4. Validate the records linked to the allocation.
   if (
     !selectedAllocation.schoolClass?.isActive ||
     !selectedAllocation.subject?.isActive ||
@@ -262,6 +275,36 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     });
   }
 
+  // 5. Check for an existing assignment before creating another one.
+  const existingAssignment = await TeacherAssignment.findOne({
+    teacher: selectedTeacher._id,
+    allocation: selectedAllocation._id,
+    academicSession: selectedSession._id,
+  });
+
+  if (existingAssignment) {
+    if (existingAssignment.isActive) {
+      return res.status(409).json({
+        success: false,
+        code: "ACTIVE_ASSIGNMENT_EXISTS",
+        message:
+          "This teacher is already assigned to this subject allocation for the selected academic session.",
+      });
+    }
+
+    return res.status(409).json({
+      success: false,
+      code: "INACTIVE_ASSIGNMENT_EXISTS",
+      message:
+        "A previous inactive assignment exists for this teacher and subject allocation.",
+      existingAssignment: {
+        _id: existingAssignment._id,
+        isActive: existingAssignment.isActive,
+      },
+    });
+  }
+
+  // 6. Create the assignment if no previous record exists.
   let assignment;
 
   try {
@@ -274,7 +317,35 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
       updatedBy: req.admin._id,
     });
   } catch (error) {
-    if (handleDuplicateError(error, res)) return;
+    // The unique index remains the final protection against concurrent
+    // requests attempting to create the same assignment.
+    if (error.code === 11000) {
+      const duplicate = await TeacherAssignment.findOne({
+        teacher: selectedTeacher._id,
+        allocation: selectedAllocation._id,
+        academicSession: selectedSession._id,
+      });
+
+      if (duplicate && !duplicate.isActive) {
+        return res.status(409).json({
+          success: false,
+          code: "INACTIVE_ASSIGNMENT_EXISTS",
+          message:
+            "A previous inactive assignment exists for this teacher and subject allocation.",
+          existingAssignment: {
+            _id: duplicate._id,
+            isActive: duplicate.isActive,
+          },
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        code: "ACTIVE_ASSIGNMENT_EXISTS",
+        message:
+          "This teacher has already been assigned to this subject allocation for the selected academic session.",
+      });
+    }
 
     if (error.name === "ValidationError") {
       return res.status(400).json({
@@ -286,6 +357,7 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     throw error;
   }
 
+  // 7. Record the creation in the audit log.
   await createAuditLog({
     user: req.admin._id,
     action: "CREATE",
@@ -302,6 +374,7 @@ exports.createTeacherAssignment = asyncHandler(async (req, res) => {
     req,
   });
 
+  // 8. Return the populated assignment.
   const populatedAssignment = await populateAssignment(
     TeacherAssignment.findById(assignment._id),
   ).lean();
