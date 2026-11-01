@@ -241,9 +241,17 @@ describe("SubjectResultSubmission Model", () => {
       await expect(submission.validate()).resolves.toBeUndefined();
     });
 
-    test("should reject an unsupported status", async () => {
+    test("should accept approved status", async () => {
       const submission = createSubmission({
         status: "approved",
+      });
+
+      await expect(submission.validate()).resolves.toBeUndefined();
+    });
+
+    test("should reject an unsupported status", async () => {
+      const submission = createSubmission({
+        status: "invalid_status",
       });
 
       await expect(submission.validate()).rejects.toThrow();
