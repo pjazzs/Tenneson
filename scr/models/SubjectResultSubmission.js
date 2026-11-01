@@ -6,14 +6,6 @@ const SubjectResultResponsibility = require("./SubjectResultResponsibility");
 |--------------------------------------------------------------------------
 | INDIVIDUAL STUDENT SUBJECT SCORES
 |--------------------------------------------------------------------------
-|
-| CA1: 0–20
-| CA2: 0–10
-| Exam: 0–70
-|
-| The official total, grade and remark will be calculated later
-| when the administrator compiles the official Result document.
-|
 */
 
 const studentSubjectScoreSchema = new mongoose.Schema(
@@ -24,21 +16,18 @@ const studentSubjectScoreSchema = new mongoose.Schema(
       required: [true, "Student is required."],
     },
 
-    // Student ID snapshot for historical identification.
     studentId: {
       type: String,
       required: [true, "Student ID is required."],
       trim: true,
     },
 
-    // Student name snapshot.
     studentName: {
       type: String,
       required: [true, "Student name is required."],
       trim: true,
     },
 
-    // Whether the student offers this subject.
     offered: {
       type: Boolean,
       default: true,
@@ -78,6 +67,40 @@ const studentSubjectScoreSchema = new mongoose.Schema(
 
 /*
 |--------------------------------------------------------------------------
+| REJECTION HISTORY
+|--------------------------------------------------------------------------
+|
+| Every rejection is retained, even after the teacher corrects
+| the scores and submits the result again.
+|
+*/
+
+const rejectionHistorySchema = new mongoose.Schema(
+  {
+    reason: {
+      type: String,
+      required: [true, "A rejection reason is required."],
+      trim: true,
+    },
+
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      required: [true, "Rejecting administrator is required."],
+    },
+
+    rejectedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: true,
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
 | SUBJECT RESULT SUBMISSION
 |--------------------------------------------------------------------------
 */
@@ -102,30 +125,11 @@ const subjectResultSubmissionSchema = new mongoose.Schema(
       required: [true, "Academic term is required."],
     },
 
-    /*
-    |--------------------------------------------------------------------------
-    | DESIGNATED RESPONSIBILITY
-    |--------------------------------------------------------------------------
-    |
-    | This links the submission to the record that determines
-    | which teacher currently owns the subject result entry.
-    |
-    | The controller must verify the authenticated teacher against
-    | the CURRENT responsibility before allowing any modification.
-    |
-    */
-
     responsibility: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SubjectResultResponsibility",
       required: [true, "Subject result responsibility is required."],
     },
-
-    /*
-    |--------------------------------------------------------------------------
-    | STUDENT SCORES
-    |--------------------------------------------------------------------------
-    */
 
     studentResults: {
       type: [studentSubjectScoreSchema],
@@ -148,19 +152,71 @@ const subjectResultSubmissionSchema = new mongoose.Schema(
     |--------------------------------------------------------------------------
     |
     | draft:
-    |   Teacher can continue entering and editing scores.
+    |   Teacher can enter and edit scores.
     |
     | submitted:
-    |   Subject scores have been submitted independently.
-    |   Teacher cannot edit them through the normal submission workflow.
+    |   Waiting for administrator review.
+    |
+    | approved:
+    |   Administrator has accepted the subject score submission.
+    |
+    | rejected:
+    |   Returned to the designated teacher for correction.
+    |
+    | Approval here is NOT official result publication.
     |
     */
 
     status: {
       type: String,
-      enum: ["draft", "submitted"],
+      enum: ["draft", "submitted", "approved", "rejected"],
       default: "draft",
       index: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | REJECTION INFORMATION
+    |--------------------------------------------------------------------------
+    */
+
+    rejectionReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+
+    rejectedAt: {
+      type: Date,
+      default: null,
+    },
+
+    rejectionHistory: {
+      type: [rejectionHistorySchema],
+      default: [],
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | APPROVAL INFORMATION
+    |--------------------------------------------------------------------------
+    */
+
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+
+    approvedAt: {
+      type: Date,
+      default: null,
     },
 
     /*
@@ -202,13 +258,6 @@ const subjectResultSubmissionSchema = new mongoose.Schema(
 |--------------------------------------------------------------------------
 | ONE SUBMISSION PER ALLOCATION / SESSION / TERM
 |--------------------------------------------------------------------------
-|
-| Example:
-|
-| Mathematics + JSS1 + 2026/2027 + First Term
-|
-| Only one submission document can exist for that combination.
-|
 */
 
 subjectResultSubmissionSchema.index(
@@ -243,17 +292,6 @@ subjectResultSubmissionSchema.index({
 |--------------------------------------------------------------------------
 | RESPONSIBILITY VALIDATION
 |--------------------------------------------------------------------------
-|
-| Ensure that the responsibility belongs to the same:
-|
-| - Subject allocation
-| - Academic session
-| - Term
-|
-| This model does not decide whether the authenticated teacher
-| is allowed to modify the submission. That must be checked
-| in the controller using the current responsibility owner.
-|
 */
 
 subjectResultSubmissionSchema.pre("validate", async function () {

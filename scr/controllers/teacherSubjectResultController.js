@@ -422,7 +422,9 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
         allocation: allocation._id,
         academicSession: academicSessionId,
         term,
-      }).select("status studentResults submittedAt updatedAt");
+      }).select(
+        "status studentResults submittedAt updatedAt rejectionReason rejectedAt",
+      );
 
       let eligibleCount;
 
@@ -470,7 +472,8 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
 
         isResultOwner: isOwner,
 
-        canEdit: isOwner && submission?.status !== "submitted",
+        canEdit:
+          isOwner && !["submitted", "approved"].includes(submission?.status),
 
         responsibilityId: responsibility?._id || null,
 
@@ -631,9 +634,13 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
 
     isResultOwner: isOwner,
 
-    canEdit: isOwner && submission?.status !== "submitted",
+    canEdit: isOwner && !["submitted", "approved"].includes(submission?.status),
 
     status: submission?.status || "not_started",
+
+    rejectionReason: submission?.rejectionReason || "",
+
+    rejectedAt: submission?.rejectedAt || null,
 
     totalEligibleStudents: studentResults.length,
 
@@ -860,9 +867,9 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
 
       isNewSubmission = !submission;
 
-      if (submission?.status === "submitted") {
+      if (["submitted", "approved"].includes(submission?.status)) {
         const error = new Error(
-          "This subject result has already been submitted and can no longer be edited.",
+          "This subject result has already been submitted for review and can no longer be edited.",
         );
         error.statusCode = 409;
         throw error;
@@ -945,6 +952,18 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
         submission.responsibility = responsibility._id;
         submission.studentResults = rows;
         submission.updatedByTeacher = req.teacher._id;
+
+        // A rejected submission becomes a new draft when the
+        // designated teacher saves corrections.
+        //
+        // The previous rejection remains in rejectionHistory.
+        if (submission.status === "rejected") {
+          submission.status = "draft";
+
+          submission.rejectionReason = "";
+          submission.rejectedBy = null;
+          submission.rejectedAt = null;
+        }
       }
 
       // -----------------------------------------------------
@@ -1205,12 +1224,22 @@ exports.submitTeacherSubjectResult = asyncHandler(async (req, res) => {
         throw error;
       }
 
-      // Prevent duplicate submission.
-      if (submission.status === "submitted") {
+      // Prevent duplicate submission and resubmission of approved scores.
+      if (["submitted", "approved"].includes(submission.status)) {
         const error = new Error(
-          "This subject result has already been submitted.",
+          "This subject result has already been submitted for review.",
         );
         error.statusCode = 409;
+        throw error;
+      }
+
+      // A rejected submission must first be saved as a draft.
+      // This ensures the teacher has explicitly saved the corrections.
+      if (submission.status === "rejected") {
+        const error = new Error(
+          "This submission was rejected. Save your corrections before resubmitting.",
+        );
+        error.statusCode = 400;
         throw error;
       }
 
