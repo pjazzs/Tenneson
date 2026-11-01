@@ -23,6 +23,7 @@ const {
   rejectResultCorrection,
   publishResultCorrection,
   getResultCompilationPreview,
+  createSubjectResultCorrectionRequest,
 } = require("../controllers/resultController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -227,6 +228,16 @@ router.post(
 );
 
 /*
+ * Initiate a correction for one subject in a published result.
+ */
+router.post(
+  "/results/:id/subject-corrections",
+  protect,
+  authorizePermission("results.update"),
+  createSubjectResultCorrectionRequest,
+);
+
+/*
  * Retrieve the active correction for a result.
  */
 router.get(
@@ -245,6 +256,16 @@ router.get(
   protect,
   authorizePermission("results.view"),
   getResultCorrections,
+);
+
+/*
+ * Create an individual student-subject correction request.
+ */
+router.post(
+  "/results/:id/subject-corrections",
+  protect,
+  authorizePermission("results.update"),
+  createSubjectResultCorrectionRequest,
 );
 
 /*

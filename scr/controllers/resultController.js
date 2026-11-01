@@ -21,6 +21,10 @@ const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const SubjectResultResponsibility = require("../models/SubjectResultResponsibility");
 const SubjectResultSubmission = require("../models/SubjectResultSubmission");
 
+const Teacher = require("../models/Teacher");
+const TeacherAssignment = require("../models/TeacherAssignment");
+const SubjectResultCorrectionRequest = require("../models/SubjectResultCorrectionRequest");
+
 const VALID_TERMS = ["first", "second", "third"];
 
 const VALID_STATUSES = ["draft", "submitted", "approved", "published"];
@@ -3258,6 +3262,1107 @@ exports.createResultCorrection = asyncHandler(async (req, res) => {
     );
   }
 });
+
+/*
+|--------------------------------------------------------------------------
+| CREATE SUBJECT RESULT CORRECTION REQUEST
+|--------------------------------------------------------------------------
+|
+| POST /results/:id/subject-corrections
+|
+| Admin initiates a correction for one student and one subject.
+|
+| The request is routed to the teacher who originally submitted
+| the approved subject result.
+|
+| The official published result is never modified here.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.createSubjectResultCorrectionRequest = asyncHandler(
+  async (req, res) => {
+    const session = await mongoose.startSession();
+
+    let revision;
+    let correctionRequest;
+    let student;
+    let teacher;
+
+    try {
+      const resultId = req.params.id;
+      const subjectId = req.body?.subjectId;
+
+      const requestReason =
+        typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+      const adminId = getAdminId(req);
+
+      if (!adminId) {
+        return sendError(res, 401, "Administrator authentication is required.");
+      }
+
+      if (!isValidObjectId(resultId)) {
+        return sendError(res, 400, "Invalid result ID.");
+      }
+
+      if (!isValidObjectId(subjectId)) {
+        return sendError(res, 400, "A valid subject ID is required.");
+      }
+
+      if (requestReason.length < 5) {
+        return sendError(
+          res,
+          400,
+          "Please provide a correction reason of at least 5 characters.",
+        );
+      }
+
+      if (requestReason.length > 1000) {
+        return sendError(
+          res,
+          400,
+          "The correction reason cannot exceed 1000 characters.",
+        );
+      }
+
+      await session.withTransaction(async () => {
+        /*
+         * 1. Retrieve the official result.
+         */
+
+        const result = await Result.findById(resultId).session(session);
+
+        if (!result) {
+          throw createControllerError("Result not found.", 404);
+        }
+
+        if (result.status !== "published") {
+          throw createControllerError(
+            "Only published results can receive subject correction requests.",
+            409,
+          );
+        }
+
+        /*
+         * 2. Find the exact subject in the published result.
+         */
+
+        const resultSubject = result.subjectResults.find(
+          (item) => item.subject.toString() === subjectId.toString(),
+        );
+
+        if (!resultSubject) {
+          throw createControllerError(
+            "The selected subject does not exist in this student's published result.",
+            404,
+          );
+        }
+
+        /*
+         * 3. Resolve the student and academic session.
+         */
+
+        student = await Student.findById(result.student).session(session);
+
+        if (!student) {
+          throw createControllerError(
+            "The student associated with this result no longer exists.",
+            404,
+          );
+        }
+
+        const academicSession = await AcademicSession.findById(
+          result.academicSession,
+        ).session(session);
+
+        if (!academicSession) {
+          throw createControllerError(
+            "The academic session associated with this result no longer exists.",
+            404,
+          );
+        }
+
+        /*
+         * 4. Find approved submissions containing this student.
+         *
+         * We deliberately do not filter by the student's current
+         * department. The result may belong to an earlier class or
+         * department arrangement.
+         */
+
+        const submissions = await SubjectResultSubmission.find({
+          academicSession: result.academicSession,
+          term: result.term,
+          status: "approved",
+          "studentResults.student": student._id,
+        })
+          .populate({
+            path: "allocation",
+            populate: [
+              {
+                path: "schoolClass",
+                select: "name",
+              },
+              {
+                path: "department",
+                select: "name",
+              },
+              {
+                path: "subject",
+                select: "name code",
+              },
+            ],
+          })
+          .populate({
+            path: "responsibility",
+            select:
+              "allocation academicSession term teacherAssignment assignmentHistory",
+          })
+          .session(session);
+
+        /*
+         * 5. Match the original submission using:
+         *
+         * - The subject in the published result.
+         * - The class snapshot stored on the result.
+         * - The exact student score entry.
+         *
+         * If multiple allocations match, do not guess which
+         * department's submission supplied the published score.
+         */
+
+        const matchingSubmissions = submissions.filter((submission) => {
+          const allocation = submission.allocation;
+
+          if (!allocation?.schoolClass || !allocation?.subject) {
+            return false;
+          }
+
+          return (
+            allocation.schoolClass.name === result.currentClass &&
+            allocation.subject._id.toString() === subjectId.toString()
+          );
+        });
+
+        if (matchingSubmissions.length === 0) {
+          throw createControllerError(
+            "No approved original subject submission was found for this student, subject, class and academic term.",
+            409,
+          );
+        }
+
+        if (matchingSubmissions.length > 1) {
+          throw createControllerError(
+            "More than one approved subject submission matches this result. The original department allocation must be resolved before creating a correction request.",
+            409,
+          );
+        }
+
+        const originalSubmission = matchingSubmissions[0];
+
+        const studentScore = originalSubmission.studentResults.find(
+          (item) => item.student?.toString() === student._id.toString(),
+        );
+
+        if (!studentScore) {
+          throw createControllerError(
+            "The student's original score entry could not be found.",
+            404,
+          );
+        }
+
+        /*
+         * 6. Resolve the original submitting teacher.
+         *
+         * Never route using the current responsibility owner.
+         * The original submission's submittedByTeacher is authoritative.
+         */
+
+        const originalTeacherId = originalSubmission.submittedByTeacher;
+
+        if (!originalTeacherId) {
+          throw createControllerError(
+            "The original submission does not contain a submitting teacher. Manual review is required.",
+            409,
+          );
+        }
+
+        const responsibility = originalSubmission.responsibility;
+
+        if (!responsibility) {
+          throw createControllerError(
+            "The original subject responsibility could not be found.",
+            409,
+          );
+        }
+
+        if (
+          responsibility.allocation.toString() !==
+            originalSubmission.allocation._id.toString() ||
+          responsibility.academicSession.toString() !==
+            result.academicSession.toString() ||
+          responsibility.term !== result.term
+        ) {
+          throw createControllerError(
+            "The original subject responsibility does not match the submission.",
+            409,
+          );
+        }
+
+        /*
+         * 7. Resolve the historical teacher assignment.
+         *
+         * Include the current assignment and every previous assignment
+         * stored in assignmentHistory.
+         *
+         * Do not filter by isActive: the original assignment may have
+         * been deactivated after the teacher was reassigned.
+         */
+
+        const assignmentIds = [
+          responsibility.teacherAssignment,
+          ...(responsibility.assignmentHistory || []).map(
+            (entry) => entry.teacherAssignment,
+          ),
+        ].filter(Boolean);
+
+        const uniqueAssignmentIds = [
+          ...new Map(assignmentIds.map((id) => [id.toString(), id])).values(),
+        ];
+
+        const matchingAssignments = await TeacherAssignment.find({
+          _id: { $in: uniqueAssignmentIds },
+          teacher: originalTeacherId,
+          allocation: originalSubmission.allocation._id,
+          academicSession: result.academicSession,
+        })
+          .select("_id teacher allocation academicSession")
+          .session(session);
+
+        if (matchingAssignments.length !== 1) {
+          throw createControllerError(
+            "The original teacher assignment could not be uniquely verified. Manual review is required.",
+            409,
+          );
+        }
+
+        const originalTeacherAssignment = matchingAssignments[0];
+
+        teacher = await Teacher.findById(originalTeacherId)
+          .select("fullName email isActive")
+          .session(session);
+
+        if (!teacher) {
+          throw createControllerError(
+            "The original submitting teacher account no longer exists.",
+            404,
+          );
+        }
+
+        if (!teacher.isActive) {
+          throw createControllerError(
+            "The original submitting teacher account is inactive. Reactivate or resolve the account before routing this correction.",
+            409,
+          );
+        }
+
+        /*
+         * 8. Find or create the parent ResultRevision.
+         *
+         * Multiple individual subject requests may belong to one
+         * subject-teacher revision.
+         */
+
+        revision = await ResultRevision.findOne({
+          result: result._id,
+          isActive: true,
+        }).session(session);
+
+        if (revision) {
+          if (revision.correctionSource !== "subject_teacher") {
+            throw createControllerError(
+              "An administrator correction is already active for this result. Complete it before starting subject-teacher corrections.",
+              409,
+            );
+          }
+
+          if (revision.status !== "draft") {
+            throw createControllerError(
+              "The subject-teacher correction package is already being processed. New requests cannot be added at this stage.",
+              409,
+            );
+          }
+        } else {
+          const revisionNumber =
+            (await ResultRevision.countDocuments({
+              result: result._id,
+            }).session(session)) + 1;
+
+          revision = new ResultRevision({
+            result: result._id,
+            student: result.student,
+            academicSession: result.academicSession,
+            term: result.term,
+            revisionNumber,
+
+            correctionSource: "subject_teacher",
+
+            originalSnapshot: result.toObject({
+              depopulate: true,
+            }),
+
+            proposedData: buildCorrectionInputFromResult(
+              result,
+              student,
+              academicSession,
+            ),
+
+            reason: requestReason,
+
+            status: "draft",
+            isActive: true,
+
+            createdBy: adminId,
+            updatedBy: adminId,
+
+            events: [
+              {
+                action: "created",
+                performedBy: adminId,
+                note: "Subject-teacher correction package initiated.",
+              },
+            ],
+          });
+
+          await revision.save({ session });
+        }
+
+        /*
+         * 9. Create the individual subject correction request.
+         *
+         * The original score comes from the published result,
+         * not from the potentially older source submission.
+         */
+
+        correctionRequest = new SubjectResultCorrectionRequest({
+          resultRevision: revision._id,
+          result: result._id,
+          student: student._id,
+          academicSession: result.academicSession,
+          term: result.term,
+
+          subject: subjectId,
+          allocation: originalSubmission.allocation._id,
+
+          submission: originalSubmission._id,
+          submissionStudentResult: studentScore._id,
+          responsibility: responsibility._id,
+
+          originalSubmittingTeacher: originalTeacherId,
+          originalTeacherAssignment: originalTeacherAssignment._id,
+          originalTeacherName: teacher.fullName,
+
+          originalScore: {
+            offered: resultSubject.offered !== false,
+            ca1: resultSubject.ca1 ?? null,
+            ca2: resultSubject.ca2 ?? null,
+            exam: resultSubject.exam ?? null,
+            teacherComment: resultSubject.teacherComment || "",
+          },
+
+          requestReason,
+
+          status: "pending_teacher",
+          isActive: true,
+
+          requestedBy: adminId,
+          requestedAt: new Date(),
+
+          events: [
+            {
+              action: "created",
+              actorType: "admin",
+              performedByAdmin: adminId,
+              note: requestReason,
+            },
+          ],
+        });
+
+        await correctionRequest.save({ session });
+
+        /*
+         * 10. Record the request on the parent revision.
+         */
+
+        if (revision.isNew === false) {
+          revision.updatedBy = adminId;
+
+          revision.events.push({
+            action: "updated",
+            performedBy: adminId,
+            note:
+              `Subject correction request created for ` +
+              `${resultSubject.subjectName || subjectId}.`,
+          });
+
+          await revision.save({ session });
+        }
+      });
+
+      /*
+       * 11. Write audit and activity logs after the transaction commits.
+       */
+
+      await createResultAuditLog({
+        req,
+        action: "CREATE_SUBJECT_RESULT_CORRECTION_REQUEST",
+        description:
+          `${req.admin.fullName} created a subject correction request ` +
+          `for student ${student.studentId}. ` +
+          `Original submitting teacher: ${teacher.fullName}. ` +
+          `Reason: ${requestReason}`,
+      });
+
+      await createResultActivityLog({
+        req,
+        action: "CREATE_SUBJECT_RESULT_CORRECTION_REQUEST",
+        studentId: student.studentId,
+        details:
+          "Created a subject-specific correction request for the original submitting teacher.",
+      });
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Subject correction request created and routed to the original submitting teacher.",
+        revision,
+        correctionRequest,
+        routing: {
+          teacherId: teacher._id,
+          teacherName: teacher.fullName,
+        },
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return sendError(
+          res,
+          409,
+          "An active correction request already exists for this subject in the current revision.",
+        );
+      }
+
+      return sendError(
+        res,
+        error.statusCode || 500,
+        error.message || "Unable to create subject correction request.",
+      );
+    } finally {
+      await session.endSession();
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| CREATE SUBJECT RESULT CORRECTION REQUEST
+|--------------------------------------------------------------------------
+|
+| POST /results/:id/subject-corrections
+|
+| Creates an individual correction request for one student
+| and one subject within an already-published result.
+|
+| The original submitting teacher is resolved from the
+| approved SubjectResultSubmission.
+|
+| The official Result is never modified here.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.createSubjectResultCorrectionRequest = asyncHandler(
+  async (req, res) => {
+    let dbSession;
+
+    try {
+      const adminId = getAdminId(req);
+
+      if (!adminId) {
+        return sendError(res, 401, "Administrator authentication is required.");
+      }
+
+      /*
+       * 1. Resolve the published result.
+       */
+      const result = await findResultById(req.params.id);
+
+      if (result.status !== "published") {
+        return sendError(
+          res,
+          409,
+          "Subject corrections can only be requested for published results.",
+        );
+      }
+
+      /*
+       * 2. Validate the requested subject.
+       */
+      const { subjectId } = req.body;
+
+      if (!subjectId || !isValidObjectId(subjectId)) {
+        return sendError(res, 400, "A valid subject ID is required.");
+      }
+
+      const resultSubject = result.subjectResults.find(
+        (item) => item.subject.toString() === subjectId.toString(),
+      );
+
+      if (!resultSubject) {
+        return sendError(
+          res,
+          404,
+          "The selected subject is not part of this student's published result.",
+        );
+      }
+
+      /*
+       * 3. Validate the correction reason.
+       */
+      const reason =
+        typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+      if (reason.length < 5 || reason.length > 1000) {
+        return sendError(
+          res,
+          400,
+          "The correction reason must be between 5 and 1000 characters.",
+        );
+      }
+
+      /*
+       * 4. Resolve the student and academic session.
+       */
+      const [student, academicSession] = await Promise.all([
+        Student.findById(result.student),
+        AcademicSession.findById(result.academicSession),
+      ]);
+
+      if (!student) {
+        return sendError(
+          res,
+          404,
+          "The student associated with this result no longer exists.",
+        );
+      }
+
+      if (!academicSession) {
+        return sendError(
+          res,
+          404,
+          "The academic session associated with this result no longer exists.",
+        );
+      }
+
+      /*
+       * 5. Find the approved teacher submission containing
+       *    this exact student and subject.
+       *
+       * We match the result's historical class snapshot.
+       * We do not depend on the student's current class or
+       * department because those may have changed since
+       * the published result was created.
+       */
+      const submissions = await SubjectResultSubmission.find({
+        academicSession: result.academicSession,
+        term: result.term,
+        status: "approved",
+        "studentResults.student": student._id,
+      }).populate({
+        path: "allocation",
+        populate: [
+          {
+            path: "schoolClass",
+            select: "name",
+          },
+          {
+            path: "department",
+            select: "name",
+          },
+          {
+            path: "subject",
+            select: "name code",
+          },
+        ],
+      });
+
+      const matchingSubmissions = [];
+
+      for (const submission of submissions) {
+        const allocation = submission.allocation;
+
+        if (!allocation || !allocation.subject || !allocation.schoolClass) {
+          continue;
+        }
+
+        const sameSubject =
+          allocation.subject._id.toString() === subjectId.toString();
+
+        const sameHistoricalClass =
+          allocation.schoolClass.name === result.currentClass;
+
+        if (!sameSubject || !sameHistoricalClass) {
+          continue;
+        }
+
+        const studentScore = submission.studentResults.find(
+          (item) => item.student.toString() === student._id.toString(),
+        );
+
+        if (!studentScore) {
+          continue;
+        }
+
+        matchingSubmissions.push({
+          submission,
+          allocation,
+          studentScore,
+        });
+      }
+
+      if (matchingSubmissions.length === 0) {
+        return sendError(
+          res,
+          404,
+          "No approved original teacher submission was found for this student and subject.",
+        );
+      }
+
+      /*
+       * Never guess when multiple department allocations
+       * or submissions match the same student and subject.
+       */
+      if (matchingSubmissions.length > 1) {
+        return sendError(
+          res,
+          409,
+          "Multiple original teacher submissions match this subject. The correction must be resolved manually before a request can be created.",
+        );
+      }
+
+      const { submission, allocation, studentScore } = matchingSubmissions[0];
+
+      /*
+       * 6. Confirm that the original submission identifies
+       *    the teacher who actually submitted it.
+       *
+       * Do not silently fall back to the current assignment.
+       */
+      if (!submission.submittedByTeacher) {
+        return sendError(
+          res,
+          409,
+          "The original submission has no recorded submitting teacher. This correction request cannot be routed safely.",
+        );
+      }
+
+      /*
+       * 7. Resolve the original responsibility.
+       */
+      const responsibility = await SubjectResultResponsibility.findById(
+        submission.responsibility,
+      );
+
+      if (!responsibility) {
+        return sendError(
+          res,
+          404,
+          "The original subject result responsibility could not be found.",
+        );
+      }
+
+      const responsibilityMatches =
+        responsibility.allocation.toString() === allocation._id.toString() &&
+        responsibility.academicSession.toString() ===
+          result.academicSession.toString() &&
+        responsibility.term === result.term;
+
+      if (!responsibilityMatches) {
+        return sendError(
+          res,
+          409,
+          "The original submission's responsibility does not match the published result.",
+        );
+      }
+
+      /*
+       * 8. Resolve the original teacher assignment.
+       *
+       * The responsibility may have been reassigned after
+       * the original submission.
+       *
+       * Search both its current assignment and its recorded
+       * assignment history. Select the assignment belonging
+       * to submittedByTeacher, not necessarily the current owner.
+       */
+      const assignmentIds = [
+        responsibility.teacherAssignment,
+        ...(responsibility.assignmentHistory || []).map(
+          (item) => item.teacherAssignment,
+        ),
+      ]
+        .filter(Boolean)
+        .map((id) => id.toString());
+
+      const uniqueAssignmentIds = [...new Set(assignmentIds)];
+
+      const historicalAssignments = await TeacherAssignment.find({
+        _id: { $in: uniqueAssignmentIds },
+        allocation: allocation._id,
+        academicSession: result.academicSession,
+      })
+        .select("teacher allocation academicSession")
+        .lean();
+
+      const originalAssignments = historicalAssignments.filter(
+        (assignment) =>
+          assignment.teacher.toString() ===
+          submission.submittedByTeacher.toString(),
+      );
+
+      if (originalAssignments.length !== 1) {
+        return sendError(
+          res,
+          409,
+          "The original teacher assignment could not be identified uniquely from the responsibility history.",
+        );
+      }
+
+      const originalTeacherAssignment = originalAssignments[0];
+
+      /*
+       * 9. Resolve the original submitting teacher.
+       */
+      const originalTeacher = await Teacher.findById(
+        submission.submittedByTeacher,
+      ).select("fullName isActive");
+
+      if (!originalTeacher) {
+        return sendError(
+          res,
+          404,
+          "The original submitting teacher account could not be found.",
+        );
+      }
+
+      if (!originalTeacher.isActive) {
+        return sendError(
+          res,
+          409,
+          "The original submitting teacher account is inactive. Reactivate the account before routing this correction request.",
+        );
+      }
+
+      /*
+       * 10. Verify that the approved source score still
+       *     matches the score in the published result.
+       *
+       * This prevents a correction request from being
+       * routed using a stale or unrelated submission.
+       */
+      const normalizeScore = (value) => value ?? null;
+
+      const sourceMatchesPublished =
+        Boolean(studentScore.offered) === Boolean(resultSubject.offered) &&
+        normalizeScore(studentScore.ca1) ===
+          normalizeScore(resultSubject.ca1) &&
+        normalizeScore(studentScore.ca2) ===
+          normalizeScore(resultSubject.ca2) &&
+        normalizeScore(studentScore.exam) ===
+          normalizeScore(resultSubject.exam) &&
+        (studentScore.teacherComment || "").trim() ===
+          (resultSubject.teacherComment || "").trim();
+
+      if (!sourceMatchesPublished) {
+        return sendError(
+          res,
+          409,
+          "The approved teacher submission does not match the published subject score. The source records must be reviewed before creating this correction request.",
+        );
+      }
+
+      /*
+       * 11. Prepare the original score snapshot.
+       */
+      const originalScore = {
+        offered: studentScore.offered !== false,
+        ca1: studentScore.ca1 ?? null,
+        ca2: studentScore.ca2 ?? null,
+        exam: studentScore.exam ?? null,
+        teacherComment: studentScore.teacherComment || "",
+      };
+
+      /*
+       * 12. Create or reuse the parent ResultRevision
+       *     and create the individual request atomically.
+       *
+       * A subject-teacher revision can accept additional
+       * individual requests only while it remains a draft.
+       *
+       * An administrator-managed revision must never be
+       * reused by this workflow.
+       */
+      dbSession = await mongoose.startSession();
+
+      let createdRevision = null;
+      let createdRequest = null;
+      let revisionWasCreated = false;
+
+      await dbSession.withTransaction(async () => {
+        const existingRevision = await ResultRevision.findOne({
+          result: result._id,
+          isActive: true,
+        }).session(dbSession);
+
+        let revision;
+
+        if (existingRevision) {
+          if (existingRevision.correctionSource !== "subject_teacher") {
+            throw createControllerError(
+              "An administrator-managed correction is already active for this result. Complete it before starting a subject-teacher correction.",
+              409,
+            );
+          }
+
+          if (existingRevision.status !== "draft") {
+            throw createControllerError(
+              "The existing subject-teacher correction revision is no longer accepting new requests.",
+              409,
+            );
+          }
+
+          /*
+           * Confirm the official result has not changed
+           * since the parent correction revision was opened.
+           */
+          const originalUpdatedAt = existingRevision.originalSnapshot?.updatedAt
+            ? new Date(existingRevision.originalSnapshot.updatedAt).getTime()
+            : null;
+
+          const currentUpdatedAt = result.updatedAt
+            ? new Date(result.updatedAt).getTime()
+            : null;
+
+          if (
+            originalUpdatedAt !== null &&
+            originalUpdatedAt !== currentUpdatedAt
+          ) {
+            throw createControllerError(
+              "The published result has changed since the correction revision was opened. Review the latest result before continuing.",
+              409,
+            );
+          }
+
+          revision = existingRevision;
+        } else {
+          const revisionNumber =
+            (await ResultRevision.countDocuments({
+              result: result._id,
+            }).session(dbSession)) + 1;
+
+          const proposedData = buildCorrectionInputFromResult(
+            result,
+            student,
+            academicSession,
+          );
+
+          const [newRevision] = await ResultRevision.create(
+            [
+              {
+                result: result._id,
+                student: result.student,
+                academicSession: result.academicSession,
+                term: result.term,
+                revisionNumber,
+
+                correctionSource: "subject_teacher",
+
+                originalSnapshot: result.toObject({
+                  depopulate: true,
+                }),
+
+                proposedData,
+
+                reason,
+
+                status: "draft",
+                isActive: true,
+
+                createdBy: adminId,
+                updatedBy: adminId,
+
+                events: [
+                  {
+                    action: "created",
+                    performedBy: adminId,
+                    note: `Subject-teacher correction workflow initiated. ${reason}`,
+                  },
+                ],
+              },
+            ],
+            { session: dbSession },
+          );
+
+          revision = newRevision;
+          revisionWasCreated = true;
+        }
+
+        /*
+         * Prevent another active request for the same
+         * subject within this parent revision.
+         */
+        const existingRequest = await SubjectResultCorrectionRequest.findOne({
+          resultRevision: revision._id,
+          subject: subjectId,
+          isActive: true,
+        }).session(dbSession);
+
+        if (existingRequest) {
+          throw createControllerError(
+            "An active correction request already exists for this subject in this result revision.",
+            409,
+          );
+        }
+
+        /*
+         * Create the individual subject correction request.
+         */
+        const [newRequest] = await SubjectResultCorrectionRequest.create(
+          [
+            {
+              resultRevision: revision._id,
+              result: result._id,
+              student: student._id,
+              academicSession: result.academicSession,
+              term: result.term,
+              subject: subjectId,
+
+              allocation: allocation._id,
+
+              submission: submission._id,
+              submissionStudentResult: studentScore._id,
+
+              responsibility: responsibility._id,
+
+              originalSubmittingTeacher: originalTeacher._id,
+              originalTeacherAssignment: originalTeacherAssignment._id,
+              originalTeacherName: originalTeacher.fullName || "",
+
+              originalScore,
+              proposedScore: null,
+
+              requestReason: reason,
+
+              status: "pending_teacher",
+              isActive: true,
+
+              requestedBy: adminId,
+              requestedAt: new Date(),
+
+              events: [
+                {
+                  action: "created",
+                  actorType: "admin",
+                  performedByAdmin: adminId,
+                  note: reason,
+                },
+              ],
+            },
+          ],
+          { session: dbSession },
+        );
+
+        /*
+         * If this is an existing parent revision,
+         * record the additional request in its history.
+         */
+        if (!revisionWasCreated) {
+          revision.updatedBy = adminId;
+
+          revision.events.push({
+            action: "updated",
+            performedBy: adminId,
+            note: `Added a subject correction request for ${allocation.subject.name}.`,
+          });
+
+          await revision.save({ session: dbSession });
+        }
+
+        createdRevision = revision;
+        createdRequest = newRequest;
+      });
+
+      /*
+       * Always close the database session.
+       */
+      await dbSession.endSession();
+      dbSession = null;
+
+      /*
+       * 13. Audit the successful request creation.
+       */
+      await createResultAuditLog({
+        req,
+        action: "CREATE_SUBJECT_RESULT_CORRECTION_REQUEST",
+        description:
+          `${req.admin?.fullName || "Administrator"} created a correction request for ` +
+          `${allocation.subject.name}, student ${student.studentId}, ` +
+          `teacher ${originalTeacher.fullName || originalTeacher._id}.`,
+      });
+
+      await createResultActivityLog({
+        req,
+        action: "CREATE_SUBJECT_RESULT_CORRECTION_REQUEST",
+        studentId: student.studentId,
+        details:
+          `Created a subject correction request for ${allocation.subject.name}. ` +
+          `The request was routed to ${originalTeacher.fullName || "the original submitting teacher"}.`,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Subject correction request created successfully.",
+        revision: createdRevision,
+        correctionRequest: createdRequest,
+        routing: {
+          teacherId: originalTeacher._id,
+          teacherName: originalTeacher.fullName,
+          subjectId: allocation.subject._id,
+          subjectName: allocation.subject.name,
+          allocationId: allocation._id,
+        },
+      });
+    } catch (error) {
+      if (dbSession) {
+        await dbSession.endSession();
+      }
+
+      if (error.code === 11000) {
+        return sendError(
+          res,
+          409,
+          "An active correction request or revision already exists for this result and subject.",
+        );
+      }
+
+      return sendError(
+        res,
+        error.statusCode || 500,
+        error.message || "Unable to create subject correction request.",
+      );
+    }
+  },
+);
 
 /*
 |--------------------------------------------------------------------------
