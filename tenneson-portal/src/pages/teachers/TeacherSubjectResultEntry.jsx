@@ -70,6 +70,9 @@ function TeacherSubjectResultEntry() {
   const [isResultOwner, setIsResultOwner] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
 
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectedAt, setRejectedAt] = useState(null);
+
   const handleUnauthorized = useCallback(
     (err) => {
       if (err.response?.status === 401) {
@@ -90,6 +93,8 @@ function TeacherSubjectResultEntry() {
       return;
     }
 
+    setLoading(true);
+
     try {
       const response = await teacherApi.get(
         `/teacher/subject-results/${allocationId}`,
@@ -107,8 +112,13 @@ function TeacherSubjectResultEntry() {
       setAcademicSession(data.academicSession || null);
       setStudentResults(data.studentResults || []);
       setStatus(data.status || "not_started");
+
+      setRejectionReason(data.rejectionReason || "");
+      setRejectedAt(data.rejectedAt || null);
+
       setIsResultOwner(Boolean(data.isResultOwner));
       setCanEdit(Boolean(data.canEdit));
+
       setError("");
     } catch (err) {
       console.error(
@@ -219,6 +229,12 @@ function TeacherSubjectResultEntry() {
       );
 
       setStatus(response.data.submission?.status || "draft");
+
+      // Clear the current rejection notice after corrections are saved.
+      // The backend preserves the previous rejection in rejectionHistory.
+      setRejectionReason("");
+      setRejectedAt(null);
+
       setCanEdit(true);
       setNotice(response.data.message || "Draft saved successfully.");
     } catch (err) {
@@ -266,6 +282,7 @@ function TeacherSubjectResultEntry() {
 
       setStatus("submitted");
       setCanEdit(false);
+
       setNotice(
         response.data.message || "Subject results submitted successfully.",
       );
@@ -295,16 +312,20 @@ function TeacherSubjectResultEntry() {
   const statusLabel =
     status === "submitted"
       ? "Submitted"
-      : status === "draft"
-        ? "Draft"
-        : "Not Started";
+      : status === "rejected"
+        ? "Rejected"
+        : status === "draft"
+          ? "Draft"
+          : "Not Started";
 
   const statusClass =
     status === "submitted"
       ? "bg-blue-100 text-blue-700"
-      : status === "draft"
-        ? "bg-amber-100 text-amber-700"
-        : "bg-slate-100 text-slate-600";
+      : status === "rejected"
+        ? "bg-red-100 text-red-700"
+        : status === "draft"
+          ? "bg-amber-100 text-amber-700"
+          : "bg-slate-100 text-slate-600";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -368,6 +389,8 @@ function TeacherSubjectResultEntry() {
             >
               {status === "submitted" ? (
                 <FaCheckCircle />
+              ) : status === "rejected" ? (
+                <FaExclamationCircle />
               ) : (
                 <FaClipboardCheck />
               )}
@@ -428,6 +451,56 @@ function TeacherSubjectResultEntry() {
           <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
             <FaCheckCircle className="mt-0.5 shrink-0" />
             <p>{notice}</p>
+          </div>
+        )}
+
+        {/* Rejection feedback */}
+        {!loading && status === "rejected" && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5">
+            <div className="flex items-start gap-3">
+              <FaExclamationCircle className="mt-1 shrink-0 text-red-600" />
+
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-red-800">
+                  Results Rejected — Corrections Required
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-red-700">
+                  Your submitted results have been rejected by the
+                  administrator. Please review the reason below, make the
+                  necessary corrections, save your draft and resubmit.
+                </p>
+
+                <div className="mt-4 rounded-lg border border-red-200 bg-white p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-red-500">
+                    Administrator's Reason
+                  </p>
+
+                  {rejectionReason ? (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                      {rejectionReason}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">
+                      No rejection reason was provided.
+                    </p>
+                  )}
+
+                  {rejectedAt && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Rejected on: {new Date(rejectedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {canEdit && (
+                  <p className="mt-3 text-sm font-medium text-red-700">
+                    Editing is enabled. Correct the necessary entries and select
+                    Save Draft before resubmitting.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -655,7 +728,9 @@ function TeacherSubjectResultEntry() {
               <div className="mt-6 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
                 <div>
                   <p className="font-semibold text-slate-800">
-                    Ready to save or submit?
+                    {status === "rejected"
+                      ? "Correct and resubmit your results"
+                      : "Ready to save or submit?"}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     Save a draft to continue later. Submission locks this

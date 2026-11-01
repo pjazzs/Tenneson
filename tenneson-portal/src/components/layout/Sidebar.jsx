@@ -14,6 +14,7 @@ import {
   FaCalendarAlt,
   FaChalkboardTeacher,
   FaBook,
+  FaClipboardCheck,
 } from "react-icons/fa";
 
 import { NavLink } from "react-router-dom";
@@ -72,6 +73,14 @@ function Sidebar({ isMobileOpen, onClose }) {
       path: "/results/entry",
       icon: <FaClipboardList />,
       visible: hasPermission("results.create"),
+      end: true,
+    },
+
+    {
+      name: "Subject Result Review",
+      path: "/subject-result-review",
+      icon: <FaClipboardCheck />,
+      visible: hasPermission("results.view"),
       end: true,
     },
 

@@ -44,6 +44,8 @@ import TeacherManagement from "../pages/teachers/TeacherManagement";
 import SubjectAllocation from "../pages/academic/SubjectAllocation";
 import TeacherAssignment from "../pages/teachers/TeacherAssignment";
 import TeacherSubjectResultEntry from "../pages/teachers/TeacherSubjectResultEntry";
+import SubjectResultSubmissionDetails from "../pages/results/SubjectResultSubmissionDetails";
+import SubjectResultReview from "../pages/results/SubjectResultReview";
 
 function AppRoutes() {
   return (
@@ -232,6 +234,24 @@ function AppRoutes() {
             element={
               <PermissionRoute permission="results.create">
                 <ResultEntry />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/subject-result-review"
+            element={
+              <PermissionRoute permission="results.view">
+                <SubjectResultReview />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/subject-result-review/:submissionId"
+            element={
+              <PermissionRoute permission="results.view">
+                <SubjectResultSubmissionDetails />
               </PermissionRoute>
             }
           />
