@@ -249,7 +249,7 @@ exports.submitTeacherSubjectCorrection = asyncHandler(async (req, res) => {
         result: correctionRequest.result,
         correctionSource: "subject_teacher",
         isActive: true,
-        status: "draft",
+        status: { $in: ["draft", "rejected"] },
       }).session(session);
 
       if (!parentRevision) {
@@ -258,6 +258,41 @@ exports.submitTeacherSubjectCorrection = asyncHandler(async (req, res) => {
         );
         error.statusCode = 409;
         throw error;
+      }
+
+      /*
+       * Reopen a rejected parent revision when a teacher
+       * resubmits a returned individual correction request.
+       *
+       * The other returned requests remain outstanding.
+       * The administrator cannot resubmit the package until
+       * every active request has been accepted again.
+       */
+
+      if (parentRevision.status === "rejected") {
+        parentRevision.status = "draft";
+
+        parentRevision.rejectionReason = "";
+        parentRevision.rejectedBy = null;
+        parentRevision.rejectedAt = null;
+
+        parentRevision.submittedBy = null;
+        parentRevision.submittedAt = null;
+
+        parentRevision.approvedBy = null;
+        parentRevision.approvedAt = null;
+
+        parentRevision.principalComment = "";
+
+        parentRevision.updatedBy = null;
+
+        parentRevision.events.push({
+          action: "resubmitted",
+          performedBy: null,
+          note: "Correction package reopened after a teacher resubmitted a returned subject correction request.",
+        });
+
+        await parentRevision.save({ session });
       }
 
       /*

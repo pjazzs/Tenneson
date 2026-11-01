@@ -259,16 +259,6 @@ router.get(
 );
 
 /*
- * Create an individual student-subject correction request.
- */
-router.post(
-  "/results/:id/subject-corrections",
-  protect,
-  authorizePermission("results.update"),
-  createSubjectResultCorrectionRequest,
-);
-
-/*
  * Retrieve a correction by its revision ID.
  */
 router.get(

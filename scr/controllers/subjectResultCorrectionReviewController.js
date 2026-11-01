@@ -130,8 +130,8 @@ const findOpenParentRevision = async (correctionRequest, dbSession) => {
     : null;
 
   if (
-    originalUpdatedAt !== null &&
-    currentUpdatedAt !== null &&
+    originalUpdatedAt === null ||
+    currentUpdatedAt === null ||
     originalUpdatedAt !== currentUpdatedAt
   ) {
     throw createWorkflowError(
