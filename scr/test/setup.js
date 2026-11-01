@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { MongoMemoryReplSet } = require("mongodb-memory-server");
+const Student = require("../models/student");
 
 let mongoServer;
 
@@ -16,6 +17,10 @@ beforeAll(async () => {
   });
 
   await mongoose.connect(mongoServer.getUri());
+
+  // Ensure the Student model's unique indexes are built
+  // before any tests attempt student registration.
+  await Student.init();
 
   console.log("MongoDB Memory Replica Set connected (test)...");
 });

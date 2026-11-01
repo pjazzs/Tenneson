@@ -4064,46 +4064,29 @@ exports.createSubjectResultCorrectionRequest = asyncHandler(
       }
 
       /*
-       * 10. Verify that the approved source score still
-       *     matches the score in the published result.
+       * 10. Prepare the original score snapshot.
        *
-       * This prevents a correction request from being
-       * routed using a stale or unrelated submission.
-       */
-      const normalizeScore = (value) => value ?? null;
-
-      const sourceMatchesPublished =
-        Boolean(studentScore.offered) === Boolean(resultSubject.offered) &&
-        normalizeScore(studentScore.ca1) ===
-          normalizeScore(resultSubject.ca1) &&
-        normalizeScore(studentScore.ca2) ===
-          normalizeScore(resultSubject.ca2) &&
-        normalizeScore(studentScore.exam) ===
-          normalizeScore(resultSubject.exam) &&
-        (studentScore.teacherComment || "").trim() ===
-          (resultSubject.teacherComment || "").trim();
-
-      if (!sourceMatchesPublished) {
-        return sendError(
-          res,
-          409,
-          "The approved teacher submission does not match the published subject score. The source records must be reviewed before creating this correction request.",
-        );
-      }
-
-      /*
-       * 11. Prepare the original score snapshot.
+       * IMPORTANT:
+       * Use the current published result, not the historical
+       * teacher submission.
+       *
+       * The original submission is used for teacher routing.
+       * The published result is the authoritative score that
+       * the student currently sees.
+       *
+       * This also supports future corrections after an earlier
+       * correction has already been approved and published.
        */
       const originalScore = {
-        offered: studentScore.offered !== false,
-        ca1: studentScore.ca1 ?? null,
-        ca2: studentScore.ca2 ?? null,
-        exam: studentScore.exam ?? null,
-        teacherComment: studentScore.teacherComment || "",
+        offered: resultSubject.offered !== false,
+        ca1: resultSubject.ca1 ?? null,
+        ca2: resultSubject.ca2 ?? null,
+        exam: resultSubject.exam ?? null,
+        teacherComment: resultSubject.teacherComment || "",
       };
 
       /*
-       * 12. Create or reuse the parent ResultRevision
+       * 11. Create or reuse the parent ResultRevision
        *     and create the individual request atomically.
        *
        * A subject-teacher revision can accept additional
@@ -4235,7 +4218,7 @@ exports.createSubjectResultCorrectionRequest = asyncHandler(
         }
 
         /*
-         * Create the individual subject correction request.
+         * 12. Create the individual subject correction request.
          */
         const [newRequest] = await SubjectResultCorrectionRequest.create(
           [
@@ -4303,13 +4286,13 @@ exports.createSubjectResultCorrectionRequest = asyncHandler(
       });
 
       /*
-       * Always close the database session.
+       * 13. Close the database session.
        */
       await dbSession.endSession();
       dbSession = null;
 
       /*
-       * 13. Audit the successful request creation.
+       * 14. Audit the successful request creation.
        */
       await createResultAuditLog({
         req,
