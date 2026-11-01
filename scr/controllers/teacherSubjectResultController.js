@@ -483,6 +483,17 @@ exports.getMySubjectResultResponsibilities = asyncHandler(async (req, res) => {
           studentsWithScores,
           submittedAt: submission?.submittedAt || null,
           updatedAt: submission?.updatedAt || null,
+
+          // Rejection feedback is visible only to the designated teacher.
+          rejectionReason:
+            isOwner && submission?.status === "rejected"
+              ? submission.rejectionReason || ""
+              : "",
+
+          rejectedAt:
+            isOwner && submission?.status === "rejected"
+              ? submission.rejectedAt || null
+              : null,
         },
       };
     }),

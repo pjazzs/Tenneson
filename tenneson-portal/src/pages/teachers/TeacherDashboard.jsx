@@ -39,6 +39,12 @@ function getSubmissionStatus(status) {
         className: "bg-amber-100 text-amber-700",
         icon: <FaClock />,
       };
+    case "rejected":
+      return {
+        label: "Rejected",
+        className: "bg-red-100 text-red-700",
+        icon: <FaExclamationCircle />,
+      };
 
     default:
       return {
@@ -349,6 +355,9 @@ function TeacherDashboard() {
     .toUpperCase();
 
   const totalResultAssignments = resultAssignments.length;
+  const rejectedAssignments = resultAssignments.filter(
+    (item) => item.isResultOwner && item.submission?.status === "rejected",
+  );
 
   const ownedResponsibilities = resultAssignments.filter(
     (item) => item.isResultOwner,
@@ -738,6 +747,88 @@ function TeacherDashboard() {
             )}
 
           {/* SUMMARY */}
+
+          {/* REJECTED RESULT NOTIFICATIONS */}
+          {!resultsLoading &&
+            !resultsError &&
+            rejectedAssignments.length > 0 && (
+              <div className="mt-6 space-y-4">
+                {rejectedAssignments.map((item) => {
+                  const allocation = item.allocation || {};
+                  const schoolClass = allocation.schoolClass || {};
+                  const subject = allocation.subject || {};
+                  const submission = item.submission || {};
+
+                  return (
+                    <div
+                      key={`rejected-${item.assignmentId}`}
+                      className="rounded-xl border border-red-200 bg-red-50 p-5"
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                            <FaExclamationCircle />
+                          </div>
+
+                          <div>
+                            <h3 className="font-bold text-red-800">
+                              Result Submission Rejected
+                            </h3>
+
+                            <p className="mt-1 text-sm text-red-700">
+                              Your submitted result for{" "}
+                              <strong>{subject.name || "Subject"}</strong> in{" "}
+                              <strong>
+                                {schoolClass.name || "Class not available"}
+                              </strong>{" "}
+                              requires correction.
+                            </p>
+
+                            <div className="mt-3 space-y-1 text-sm text-red-800">
+                              <p>
+                                <strong>Term:</strong>{" "}
+                                {TERM_LABELS[selectedTerm] || selectedTerm}
+                              </p>
+
+                              <p>
+                                <strong>Reason for rejection:</strong>{" "}
+                                {submission.rejectionReason ||
+                                  "No rejection reason was provided."}
+                              </p>
+
+                              {submission.rejectedAt && (
+                                <p className="text-xs text-red-600">
+                                  Rejected on{" "}
+                                  {new Date(
+                                    submission.rejectedAt,
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "numeric",
+                                    month: "long",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/teacher/subject-results/${allocation._id}?academicSessionId=${selectedSessionId}&term=${selectedTerm}`,
+                            )
+                          }
+                          className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                        >
+                          Correct Result
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           {!resultsLoading && !resultsError && resultAssignments.length > 0 && (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
