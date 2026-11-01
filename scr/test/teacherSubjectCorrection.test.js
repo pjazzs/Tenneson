@@ -650,8 +650,14 @@ describe("TEACHER SUBJECT RESULT CORRECTION API", () => {
     });
 
     test("does not allow submission when the parent revision is not a subject-teacher revision", async () => {
-      revision.correctionSource = "admin";
-      await revision.save();
+      await ResultRevision.collection.updateOne(
+        { _id: revision._id },
+        { $set: { correctionSource: "admin" } },
+      );
+
+      const savedRevision = await ResultRevision.findById(revision._id).lean();
+
+      expect(savedRevision.correctionSource).toBe("admin");
 
       const response = await submitCorrection();
 
