@@ -4552,9 +4552,10 @@ exports.approveResultCorrection = asyncHandler(async (req, res) => {
       }
 
       if (revision.status !== "submitted" || !revision.isActive) {
-        throw createControllerError(
-          "Only active submitted corrections can be approved.",
+        return sendError(
+          res,
           409,
+          "Only active submitted corrections can be rejected.",
         );
       }
 
@@ -4775,50 +4776,55 @@ exports.rejectResultCorrection = asyncHandler(async (req, res) => {
         !currentRevision ||
         currentRevision.status !== "submitted" ||
         !currentRevision.isActive
-      )
-        if (currentRevision.correctionSource === "subject_teacher") {
-          const correctionRequests = await SubjectResultCorrectionRequest.find({
-            resultRevision: currentRevision._id,
-            isActive: true,
-          }).session(session);
+      ) {
+        throw createControllerError(
+          "This correction is no longer awaiting Principal review.",
+          409,
+        );
+      }
+      if (currentRevision.correctionSource === "subject_teacher") {
+        const correctionRequests = await SubjectResultCorrectionRequest.find({
+          resultRevision: currentRevision._id,
+          isActive: true,
+        }).session(session);
 
-          if (correctionRequests.length === 0) {
-            throw createControllerError(
-              "The subject-teacher correction package has no active requests.",
-              409,
-            );
-          }
-
-          const unresolvedRequests = correctionRequests.filter(
-            (item) => item.status !== "accepted",
+        if (correctionRequests.length === 0) {
+          throw createControllerError(
+            "The subject-teacher correction package has no active requests.",
+            409,
           );
-
-          if (unresolvedRequests.length > 0) {
-            throw createControllerError(
-              "The correction package contains unresolved subject requests.",
-              409,
-            );
-          }
-
-          for (const correctionRequest of correctionRequests) {
-            correctionRequest.status = "returned";
-            correctionRequest.adminReviewNote = rejectionReason;
-            correctionRequest.reviewedBy = adminId;
-            correctionRequest.reviewedAt = new Date();
-
-            correctionRequest.events.push({
-              action: "returned",
-              actorType: "admin",
-              performedByAdmin: adminId,
-              note: rejectionReason,
-              performedAt: new Date(),
-            });
-
-            await correctionRequest.save({ session });
-          }
-
-          returnedRequestCount = correctionRequests.length;
         }
+
+        const unresolvedRequests = correctionRequests.filter(
+          (item) => item.status !== "accepted",
+        );
+
+        if (unresolvedRequests.length > 0) {
+          throw createControllerError(
+            "The correction package contains unresolved subject requests.",
+            409,
+          );
+        }
+
+        for (const correctionRequest of correctionRequests) {
+          correctionRequest.status = "returned";
+          correctionRequest.adminReviewNote = rejectionReason;
+          correctionRequest.reviewedBy = adminId;
+          correctionRequest.reviewedAt = new Date();
+
+          correctionRequest.events.push({
+            action: "returned",
+            actorType: "admin",
+            performedByAdmin: adminId,
+            note: rejectionReason,
+            performedAt: new Date(),
+          });
+
+          await correctionRequest.save({ session });
+        }
+
+        returnedRequestCount = correctionRequests.length;
+      }
 
       currentRevision.status = "rejected";
       currentRevision.rejectionReason = rejectionReason;
