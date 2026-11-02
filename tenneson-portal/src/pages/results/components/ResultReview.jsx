@@ -19,15 +19,15 @@ const ResultReview = ({
   selectedStudent,
   academicSession,
   term,
-  scoreEntries,
+  scoreEntries = [],
   onTeacherCommentChange,
   previousTermResults = { first: null, second: null },
   attendance,
   affectiveDomain,
   psychomotorDomain,
   conduct,
-  sports,
-  clubs,
+  sports = [],
+  clubs = [],
   specialReport,
   comments,
   onBack,
@@ -36,6 +36,8 @@ const ResultReview = ({
   error,
   successMessage,
 }) => {
+  const canEditTeacherComments = typeof onTeacherCommentChange === "function";
+
   const currentTermKey = String(term || "")
     .trim()
     .toLowerCase()
@@ -267,10 +269,6 @@ const ResultReview = ({
                     <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Grade
                     </th>
-
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Teacher Comment
-                    </th>
                   </tr>
                 </thead>
 
@@ -279,7 +277,7 @@ const ResultReview = ({
                     <tr>
                       <td
                         colSpan={
-                          7 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 3 : 0)
+                          6 + (showFirstTerm ? 1 : 0) + (showSecondTerm ? 2 : 0)
                         }
                         className="px-4 py-8 text-center text-sm text-slate-500"
                       >
@@ -324,8 +322,6 @@ const ResultReview = ({
                       if (isThirdTerm) {
                         let cumulative = 0;
 
-                        // Only include the current third-term score when
-                        // the subject is offered and every score is entered.
                         if (
                           entry.offered &&
                           scoresComplete &&
@@ -335,7 +331,6 @@ const ResultReview = ({
                           termsOffered += 1;
                         }
 
-                        // Include eligible first- and second-term totals.
                         for (const previousTotal of [
                           previousFirstTotal,
                           previousSecondTotal,
@@ -363,15 +358,9 @@ const ResultReview = ({
                         }
                       }
 
-                      // Total is the current term's score only.
-                      // It remains blank when the subject is not offered
-                      // or its scores are incomplete.
                       const displayedTotal =
                         entry.offered && scoresComplete ? currentTotal : "—";
 
-                      // Third-term grades use the average of eligible
-                      // term scores. First and second terms use their
-                      // own completed current-term scores.
                       const gradeResult = isThirdTerm
                         ? weightedAverage !== null
                           ? calculateResultGrade(weightedAverage)
@@ -390,7 +379,6 @@ const ResultReview = ({
                           key={entry.subjectId}
                           className="border-b border-white/5 last:border-b-0"
                         >
-                          {/* Subject */}
                           <td className="px-4 py-4">
                             <p className="text-sm font-medium text-white">
                               {entry.subjectName}
@@ -403,43 +391,36 @@ const ResultReview = ({
                             )}
                           </td>
 
-                          {/* First Term */}
                           {showFirstTerm && (
                             <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
                               {formatValue(previousFirstTotal)}
                             </td>
                           )}
 
-                          {/* Second Term */}
                           {showSecondTerm && (
                             <td className="px-3 py-4 text-center text-sm font-semibold text-slate-300">
                               {formatValue(previousSecondTotal)}
                             </td>
                           )}
 
-                          {/* CA1 */}
                           <td className="px-3 py-4 text-center text-sm text-slate-300">
                             {formatValue(entry.ca1)}
                           </td>
 
-                          {/* CA2 */}
                           <td className="px-3 py-4 text-center text-sm text-slate-300">
                             {formatValue(entry.ca2)}
                           </td>
 
-                          {/* Exam */}
                           <td className="px-3 py-4 text-center text-sm text-slate-300">
                             {formatValue(entry.exam)}
                           </td>
 
-                          {/* Current Term Total */}
                           <td className="px-3 py-4 text-center">
                             <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-blue-500/10 px-2 py-1 text-sm font-semibold text-blue-300">
                               {formatValue(displayedTotal)}
                             </span>
                           </td>
 
-                          {/* Cumulative Score */}
                           {showSecondTerm && (
                             <td className="px-3 py-4 text-center">
                               <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-violet-500/10 px-2 py-1 text-sm font-semibold text-violet-300">
@@ -448,7 +429,6 @@ const ResultReview = ({
                             </td>
                           )}
 
-                          {/* Weighted Average */}
                           {showSecondTerm && (
                             <td className="px-3 py-4 text-center">
                               <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-emerald-500/10 px-2 py-1 text-sm font-semibold text-emerald-300">
@@ -457,7 +437,6 @@ const ResultReview = ({
                             </td>
                           )}
 
-                          {/* Grade */}
                           <td className="px-3 py-4 text-center">
                             <div className="flex flex-col items-center gap-1">
                               <span
@@ -481,29 +460,6 @@ const ResultReview = ({
                               )}
                             </div>
                           </td>
-
-                          {/* Teacher Comment */}
-                          <td className="min-w-64 px-4 py-4">
-                            {onTeacherCommentChange ? (
-                              <textarea
-                                value={entry.teacherComment || ""}
-                                onChange={(event) =>
-                                  onTeacherCommentChange(
-                                    entry.subjectId,
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Add an optional teacher comment..."
-                                rows={2}
-                                maxLength={1000}
-                                className="w-full min-w-56 rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            ) : (
-                              <span className="text-sm text-slate-400">
-                                {formatValue(entry.teacherComment)}
-                              </span>
-                            )}
-                          </td>
                         </tr>
                       );
                     })
@@ -512,6 +468,72 @@ const ResultReview = ({
               </table>
             </div>
           </div>
+        </section>
+
+        {/* Subject Teacher Comments */}
+        <section className="mb-6 rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-xl sm:p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold">Subject Teacher Comments</h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Add or update an optional comment for each subject. These comments
+              will be saved with the compiled result.
+            </p>
+          </div>
+
+          {!canEditTeacherComments && (
+            <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+              Subject teacher comments are currently read-only because the
+              comment update handler was not provided.
+            </div>
+          )}
+
+          {scoreEntries.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-500">
+              There are no subject entries to comment on.
+            </p>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2">
+              {scoreEntries.map((entry) => {
+                const teacherComment = entry.teacherComment || "";
+
+                return (
+                  <div
+                    key={entry.subjectId}
+                    className="rounded-xl border border-white/10 bg-slate-950/60 p-4"
+                  >
+                    <label
+                      htmlFor={`teacher-comment-${entry.subjectId}`}
+                      className="mb-2 block text-sm font-semibold text-white"
+                    >
+                      {entry.subjectName}
+                    </label>
+
+                    <textarea
+                      id={`teacher-comment-${entry.subjectId}`}
+                      name={`teacherComment-${entry.subjectId}`}
+                      value={teacherComment}
+                      onChange={(event) =>
+                        onTeacherCommentChange?.(
+                          entry.subjectId,
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Add an optional teacher comment..."
+                      rows={3}
+                      maxLength={1000}
+                      disabled={!canEditTeacherComments}
+                      className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+
+                    <p className="mt-2 text-right text-xs text-slate-500">
+                      {teacherComment.length}/1000 characters
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Attendance */}
@@ -709,6 +731,7 @@ const ResultReview = ({
                       <p className="text-sm font-semibold text-blue-300">
                         {sport.event}
                       </p>
+
                       {sport.remark && (
                         <p className="mt-1 text-xs text-slate-400">
                           {sport.remark}
@@ -761,6 +784,7 @@ const ResultReview = ({
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                 Special Report
               </p>
+
               <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                 <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                   {formatValue(specialReport)}
@@ -774,6 +798,7 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Class Teacher's Comment
                 </p>
+
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.classTeacher)}
@@ -785,6 +810,7 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Performance Comment
                 </p>
+
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.performance)}
@@ -796,6 +822,7 @@ const ResultReview = ({
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
                   Principal's Comment
                 </p>
+
                 <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
                     {formatValue(comments?.principal)}
