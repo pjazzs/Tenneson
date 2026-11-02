@@ -23,6 +23,7 @@ const {
   rejectResultCorrection,
   publishResultCorrection,
   getResultCompilationPreview,
+  compileStudentResult,
   createSubjectResultCorrectionRequest,
 } = require("../controllers/resultController");
 
@@ -110,6 +111,19 @@ router.get(
   protect,
   authorizePermission("results.create"),
   getResultCompilationPreview,
+);
+
+/*
+ * Compile approved subject submissions into an official result draft.
+ *
+ * IMPORTANT:
+ * This creates a draft only. It does not approve or publish the result.
+ */
+router.post(
+  "/results/compile",
+  protect,
+  authorizePermission("results.create"),
+  compileStudentResult,
 );
 
 /*

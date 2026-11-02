@@ -192,6 +192,41 @@ const subjectResultSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+
+    /*
+    |--------------------------------------------------------------------------
+    | SUBJECT RESULT SOURCE / PROVENANCE
+    |--------------------------------------------------------------------------
+    */
+
+    sourceSubmission: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SubjectResultSubmission",
+      default: null,
+    },
+
+    sourceStudentResult: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+
+    sourceAllocation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ClassSubjectAllocation",
+      default: null,
+    },
+
+    sourceResponsibility: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SubjectResultResponsibility",
+      default: null,
+    },
+
+    sourceTeacher: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Teacher",
+      default: null,
+    },
   },
   {
     _id: true,

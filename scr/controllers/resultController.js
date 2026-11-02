@@ -287,9 +287,7 @@ const clearCalculatedFields = (subjectResults = []) => {
     offered: Boolean(subject.offered),
 
     ca1: subject.offered ? (subject.ca1 ?? null) : null,
-
     ca2: subject.offered ? (subject.ca2 ?? null) : null,
-
     exam: subject.offered ? (subject.exam ?? null) : null,
 
     total: null,
@@ -310,6 +308,13 @@ const clearCalculatedFields = (subjectResults = []) => {
     remark: "",
 
     teacherComment: subject.teacherComment || "",
+
+    // Preserve trusted teacher-submission provenance.
+    sourceSubmission: subject.sourceSubmission || null,
+    sourceStudentResult: subject.sourceStudentResult || null,
+    sourceAllocation: subject.sourceAllocation || null,
+    sourceResponsibility: subject.sourceResponsibility || null,
+    sourceTeacher: subject.sourceTeacher || null,
   }));
 };
 
@@ -399,7 +404,10 @@ const validateCompleteSubjectScore = (subject) => {
 |--------------------------------------------------------------------------
 */
 
-const resolveSubjects = async (subjectResults) => {
+const resolveSubjects = async (
+  subjectResults,
+  trustedSubjectProvenance = [],
+) => {
   if (!Array.isArray(subjectResults) || subjectResults.length === 0) {
     throw createControllerError(
       "At least one subject result is required.",
@@ -423,6 +431,19 @@ const resolveSubjects = async (subjectResults) => {
       throw createControllerError("One or more subject IDs are invalid.", 400);
     }
   }
+
+  const provenanceMap = new Map(
+    trustedSubjectProvenance.map((item) => [
+      String(item.subjectId || item.subject),
+      {
+        sourceSubmission: item.sourceSubmission || null,
+        sourceStudentResult: item.sourceStudentResult || null,
+        sourceAllocation: item.sourceAllocation || null,
+        sourceResponsibility: item.sourceResponsibility || null,
+        sourceTeacher: item.sourceTeacher || null,
+      },
+    ]),
+  );
 
   const subjects = await Subject.find({
     _id: {
@@ -471,6 +492,15 @@ const resolveSubjects = async (subjectResults) => {
         typeof item.teacherComment === "string"
           ? item.teacherComment.trim()
           : "",
+
+      // Preserve trusted teacher-submission provenance.
+      ...(provenanceMap.get(String(subject._id)) || {
+        sourceSubmission: null,
+        sourceStudentResult: null,
+        sourceAllocation: null,
+        sourceResponsibility: null,
+        sourceTeacher: null,
+      }),
     };
   });
 };
@@ -630,8 +660,12 @@ const buildResultPayload = async ({
   termConfiguration,
   requireCompleteCalculation = false,
   requirePreviousTerms = false,
+  trustedSubjectProvenance = [],
 }) => {
-  const subjectResults = await resolveSubjects(body.subjectResults);
+  const subjectResults = await resolveSubjects(
+    body.subjectResults,
+    trustedSubjectProvenance,
+  );
 
   const attendance = normalizeAttendance(body.attendance);
 
@@ -1928,6 +1962,18 @@ exports.updateResult = asyncHandler(async (req, res) => {
       requireCompleteCalculation: false,
 
       requirePreviousTerms: false,
+
+      // Preserve provenance for subjects already in this result.
+      // Newly added manual subjects will have null provenance.
+      trustedSubjectProvenance: result.subjectResults.map((subject) => ({
+        subjectId: subject.subject?.toString(),
+
+        sourceSubmission: subject.sourceSubmission || null,
+        sourceStudentResult: subject.sourceStudentResult || null,
+        sourceAllocation: subject.sourceAllocation || null,
+        sourceResponsibility: subject.sourceResponsibility || null,
+        sourceTeacher: subject.sourceTeacher || null,
+      })),
     });
 
     /*
