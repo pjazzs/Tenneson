@@ -17,6 +17,7 @@ import {
 
 import teacherApi from "../../api/teacherApi";
 import useTeacherAuth from "../../hooks/useTeacherAuth";
+import TeacherSubjectCorrectionRequests from "./TeacherSubjectCorrectionRequests";
 
 const TERM_LABELS = {
   first: "First Term",
@@ -24,7 +25,7 @@ const TERM_LABELS = {
   third: "Third Term",
 };
 
-function getSubmissionStatus(status) {
+const getSubmissionStatus = (status) => {
   switch (status) {
     case "submitted":
       return {
@@ -53,9 +54,10 @@ function getSubmissionStatus(status) {
         icon: <FaClipboardCheck />,
       };
   }
-}
+};
 
-function TeacherDashboard() {
+const TeacherDashboard = () => {
+  console.log("UPDATED TEACHER DASHBOARD IS RUNNING");
   const navigate = useNavigate();
 
   const { teacher, updateTeacher, logoutTeacher } = useTeacherAuth();
@@ -435,6 +437,9 @@ function TeacherDashboard() {
             {error}
           </div>
         )}
+
+        {/* PUBLISHED RESULT CORRECTION REQUESTS */}
+        <TeacherSubjectCorrectionRequests />
 
         {/* PROFILE SUMMARY */}
         <section className="mb-8">
@@ -1128,6 +1133,6 @@ function TeacherDashboard() {
       </footer>
     </div>
   );
-}
+};
 
 export default TeacherDashboard;
