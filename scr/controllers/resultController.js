@@ -1182,6 +1182,304 @@ exports.getResultCompilationPreview = asyncHandler(async (req, res) => {
   }
 });
 
+/*
+|--------------------------------------------------------------------------
+| COMPILE OFFICIAL STUDENT RESULT
+|--------------------------------------------------------------------------
+|
+| POST /results/compile
+|
+| Creates an official result draft using approved subject
+| teacher submissions only.
+|
+| Scores and provenance are retrieved from the database.
+| Browser-supplied subject scores are never trusted.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.compileStudentResult = asyncHandler(async (req, res) => {
+  try {
+    const { studentId, academicSessionId, term } = req.body;
+
+    // 1. Resolve student, academic session and term.
+    const student = await resolveStudent(studentId);
+
+    const academicSession = await resolveAcademicSession(academicSessionId);
+
+    const termConfiguration = resolveTermConfiguration(academicSession, term);
+
+    // 2. Ensure the student belongs to the selected session.
+    if (student.session !== academicSession.name) {
+      return sendError(
+        res,
+        400,
+        `This student belongs to ${student.session}, not ${academicSession.name}.`,
+      );
+    }
+
+    // 3. Prevent duplicate official results.
+    const existingResult = await Result.findOne({
+      student: student._id,
+      academicSession: academicSession._id,
+      term,
+    });
+
+    if (existingResult) {
+      return sendError(
+        res,
+        409,
+        `A ${term} term result already exists for this student in the selected academic session.`,
+      );
+    }
+
+    // 4. Resolve the student's class.
+    const schoolClass = await SchoolClass.findOne({
+      name: student.currentClass,
+    });
+
+    if (!schoolClass) {
+      return sendError(
+        res,
+        404,
+        "The student's current class could not be found.",
+      );
+    }
+
+    // 5. Validate department assignment.
+    if (schoolClass.hasDepartments && !student.department) {
+      return sendError(
+        res,
+        400,
+        "This student has no department assigned. Assign a department before compiling the result.",
+      );
+    }
+
+    // 6. Retrieve active subject allocations.
+    const allocations = await ClassSubjectAllocation.find({
+      schoolClass: schoolClass._id,
+      department: schoolClass.hasDepartments ? student.department : null,
+      isActive: true,
+    })
+      .populate({
+        path: "schoolClass",
+        select: "name hasDepartments isActive",
+      })
+      .populate({
+        path: "department",
+        select: "name isActive",
+      })
+      .populate({
+        path: "subject",
+        select: "name code isActive",
+      })
+      .lean();
+
+    const requiredAllocations = allocations.filter(
+      (allocation) =>
+        allocation.schoolClass?.isActive &&
+        allocation.subject?.isActive &&
+        (!allocation.department || allocation.department.isActive),
+    );
+
+    if (requiredAllocations.length === 0) {
+      return sendError(
+        res,
+        404,
+        "No active subject allocations were found for this student's class and department.",
+      );
+    }
+
+    const allocationIds = requiredAllocations.map(
+      (allocation) => allocation._id,
+    );
+
+    // 7. Retrieve responsibilities and teacher submissions.
+    const [responsibilities, submissions] = await Promise.all([
+      SubjectResultResponsibility.find({
+        allocation: { $in: allocationIds },
+        academicSession: academicSession._id,
+        term,
+      }).lean(),
+
+      SubjectResultSubmission.find({
+        allocation: { $in: allocationIds },
+        academicSession: academicSession._id,
+        term,
+      })
+        .select(
+          "allocation responsibility status studentResults approvedAt submittedByTeacher",
+        )
+        .lean(),
+    ]);
+
+    const responsibilityMap = new Map(
+      responsibilities.map((item) => [item.allocation.toString(), item]),
+    );
+
+    const submissionMap = new Map(
+      submissions.map((item) => [item.allocation.toString(), item]),
+    );
+
+    // 8. Validate every required subject and collect its approved scores.
+    const subjectResults = [];
+    const trustedSubjectProvenance = [];
+    const incompleteSubjects = [];
+
+    for (const allocation of requiredAllocations) {
+      const allocationId = allocation._id.toString();
+      const subjectName = allocation.subject.name;
+
+      const responsibility = responsibilityMap.get(allocationId);
+
+      const submission = submissionMap.get(allocationId);
+
+      if (!responsibility) {
+        incompleteSubjects.push(`${subjectName} (teacher not assigned)`);
+        continue;
+      }
+
+      if (!submission) {
+        incompleteSubjects.push(`${subjectName} (no submission)`);
+        continue;
+      }
+
+      if (submission.status !== "approved") {
+        incompleteSubjects.push(`${subjectName} (${submission.status})`);
+        continue;
+      }
+
+      // Ensure the submission belongs to the current responsibility.
+      if (
+        !submission.responsibility ||
+        submission.responsibility.toString() !== responsibility._id.toString()
+      ) {
+        incompleteSubjects.push(`${subjectName} (responsibility mismatch)`);
+        continue;
+      }
+
+      const studentResult = submission.studentResults?.find(
+        (item) => item.student?.toString() === student._id.toString(),
+      );
+
+      if (!studentResult) {
+        incompleteSubjects.push(`${subjectName} (student score missing)`);
+        continue;
+      }
+
+      const subjectData = {
+        subjectId: allocation.subject._id,
+        offered: studentResult.offered !== false,
+        ca1: studentResult.offered !== false ? studentResult.ca1 : null,
+        ca2: studentResult.offered !== false ? studentResult.ca2 : null,
+        exam: studentResult.offered !== false ? studentResult.exam : null,
+        teacherComment: studentResult.teacherComment || "",
+      };
+
+      // Validate the approved score values and ranges.
+      validateCompleteSubjectScore({
+        ...subjectData,
+        subjectName,
+      });
+
+      subjectResults.push(subjectData);
+
+      // Provenance is constructed from trusted database records.
+      trustedSubjectProvenance.push({
+        subjectId: allocation.subject._id,
+        sourceSubmission: submission._id,
+        sourceStudentResult: studentResult._id,
+        sourceAllocation: allocation._id,
+        sourceResponsibility: responsibility._id,
+        sourceTeacher: submission.submittedByTeacher || null,
+      });
+    }
+
+    if (incompleteSubjects.length > 0) {
+      return sendError(
+        res,
+        400,
+        `Cannot compile this result. The following subjects are not ready: ${incompleteSubjects.join(", ")}.`,
+      );
+    }
+
+    // 9. Require at least one offered subject.
+    if (!subjectResults.some((subject) => subject.offered)) {
+      return sendError(
+        res,
+        400,
+        "At least one subject must be offered before a result can be compiled.",
+      );
+    }
+
+    // 10. Build the official result draft.
+    // Only database-retrieved subject scores are passed here.
+    const payload = await buildResultPayload({
+      body: {
+        studentId,
+        academicSessionId,
+        term,
+        subjectResults,
+      },
+
+      student,
+
+      academicSession,
+
+      termConfiguration,
+
+      requireCompleteCalculation: true,
+
+      // Previous-term requirements are enforced when the
+      // result is submitted for official review.
+      requirePreviousTerms: false,
+
+      trustedSubjectProvenance,
+    });
+
+    payload.createdBy = getAdminId(req);
+    payload.updatedBy = getAdminId(req);
+
+    // 11. Save the official result as a draft.
+    const result = await Result.create(payload);
+
+    // 12. Audit log.
+    await createResultAuditLog({
+      req,
+      action: "CREATE",
+      description: `${req.admin.fullName} compiled a ${term} term result draft for student ${student.studentId} from approved subject submissions.`,
+    });
+
+    // 13. Activity log.
+    await createResultActivityLog({
+      req,
+      action: "CREATE_RESULT",
+      studentId: student.studentId,
+      details: `Compiled ${term} term result draft from approved subject submissions.`,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Student result compiled successfully as a draft.",
+      result,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return sendError(
+        res,
+        409,
+        "A result already exists for this student, academic session, and term.",
+      );
+    }
+
+    return sendError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to compile student result.",
+    );
+  }
+});
+
 exports.createResult = asyncHandler(async (req, res) => {
   try {
     const { studentId, academicSessionId, term } = req.body;
