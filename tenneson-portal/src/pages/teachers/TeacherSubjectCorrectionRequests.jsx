@@ -84,7 +84,6 @@ const formatScore = (score) => {
 };
 
 const TeacherSubjectCorrectionRequests = () => {
-  console.log("TeacherSubjectCorrectionRequests rendered");
   const navigate = useNavigate();
 
   const [requests, setRequests] = useState([]);

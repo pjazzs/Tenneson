@@ -48,6 +48,8 @@ import SubjectResultSubmissionDetails from "../pages/results/SubjectResultSubmis
 import SubjectResultReview from "../pages/results/SubjectResultReview";
 import CompleteResultDraft from "../pages/results/CompleteResultDraft";
 
+import TeacherSubjectCorrectionDetails from "../pages/teachers/TeacherSubjectCorrectionDetails";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -111,6 +113,12 @@ function AppRoutes() {
         <Route
           path="/teacher/subject-results/:allocationId"
           element={<TeacherSubjectResultEntry />}
+        />
+      </Route>
+      <Route element={<TeacherProtectedRoute />}>
+        <Route
+          path="/teacher/subject-corrections/:requestId"
+          element={<TeacherSubjectCorrectionDetails />}
         />
       </Route>
 

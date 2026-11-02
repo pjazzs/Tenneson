@@ -57,7 +57,6 @@ const getSubmissionStatus = (status) => {
 };
 
 const TeacherDashboard = () => {
-  console.log("UPDATED TEACHER DASHBOARD IS RUNNING");
   const navigate = useNavigate();
 
   const { teacher, updateTeacher, logoutTeacher } = useTeacherAuth();
