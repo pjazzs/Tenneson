@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaSpinner } from "react-icons/fa";
 
@@ -131,6 +131,7 @@ const CompleteResultDraft = () => {
   const draftResultId = location.state?.draftResultId || "";
 
   const [result, setResult] = useState(null);
+  const [scoreEntries, setScoreEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -218,6 +219,9 @@ const CompleteResultDraft = () => {
 
         setResult(retrievedResult);
 
+        // Initialize editable subject entries, including teacher comments.
+        setScoreEntries(getSavedScoreEntries(retrievedResult));
+
         setAttendance({
           ...getEmptyAttendance(),
           ...(retrievedResult.attendance || {}),
@@ -286,8 +290,6 @@ const CompleteResultDraft = () => {
   const selectedSession = result?.academicSession || null;
   const term = String(result?.term || "").toLowerCase();
 
-  const scoreEntries = useMemo(() => getSavedScoreEntries(result), [result]);
-
   /*
   |--------------------------------------------------------------------------
   | Navigation Between Completion Steps
@@ -327,6 +329,22 @@ const CompleteResultDraft = () => {
 
   /*
   |--------------------------------------------------------------------------
+  | Subject Teacher Comment Editing
+  |--------------------------------------------------------------------------
+  */
+
+  const handleTeacherCommentChange = (subjectId, teacherComment) => {
+    setScoreEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        String(entry.subjectId) === String(subjectId)
+          ? { ...entry, teacherComment }
+          : entry,
+      ),
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
   | Review Section Navigation
   |--------------------------------------------------------------------------
   */
@@ -354,8 +372,9 @@ const CompleteResultDraft = () => {
   |--------------------------------------------------------------------------
   | Save Completed Draft
   |--------------------------------------------------------------------------
-  | Only non-subject fields are sent.
-  | The backend preserves the original compiled subject scores.
+  | Preserve the compiled subject scores while saving editable comments.
+  | Subject scores are sent unchanged alongside their comments.
+  |--------------------------------------------------------------------------
   */
 
   const handleSaveDraft = async () => {
@@ -367,6 +386,15 @@ const CompleteResultDraft = () => {
       setSuccessMessage("");
 
       const payload = {
+        subjectResults: scoreEntries.map((entry) => ({
+          subjectId: entry.subjectId,
+          offered: entry.offered,
+          ca1: entry.ca1 === "" ? null : Number(entry.ca1),
+          ca2: entry.ca2 === "" ? null : Number(entry.ca2),
+          exam: entry.exam === "" ? null : Number(entry.exam),
+          teacherComment: entry.teacherComment || "",
+        })),
+
         attendance: {
           daysSchoolOpened: Number(attendance.daysSchoolOpened),
           daysPresent: Number(attendance.daysPresent),
@@ -419,7 +447,7 @@ const CompleteResultDraft = () => {
       setError(
         err.response?.data?.message ||
           err.message ||
-          "Failed to save the completed result draft.",
+          "Failed to save the compiled result draft.",
       );
     } finally {
       setSaving(false);
@@ -589,6 +617,7 @@ const CompleteResultDraft = () => {
           academicSession={selectedSession}
           term={term}
           scoreEntries={scoreEntries}
+          onTeacherCommentChange={handleTeacherCommentChange}
           previousTermResults={{ first: null, second: null }}
           attendance={attendance}
           affectiveDomain={affectiveDomain}

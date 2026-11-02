@@ -20,6 +20,7 @@ const ResultReview = ({
   academicSession,
   term,
   scoreEntries,
+  onTeacherCommentChange,
   previousTermResults = { first: null, second: null },
   attendance,
   affectiveDomain,
@@ -482,8 +483,26 @@ const ResultReview = ({
                           </td>
 
                           {/* Teacher Comment */}
-                          <td className="px-4 py-4 text-sm text-slate-400">
-                            {formatValue(entry.teacherComment)}
+                          <td className="min-w-64 px-4 py-4">
+                            {onTeacherCommentChange ? (
+                              <textarea
+                                value={entry.teacherComment || ""}
+                                onChange={(event) =>
+                                  onTeacherCommentChange(
+                                    entry.subjectId,
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Add an optional teacher comment..."
+                                rows={2}
+                                maxLength={1000}
+                                className="w-full min-w-56 rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              <span className="text-sm text-slate-400">
+                                {formatValue(entry.teacherComment)}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
