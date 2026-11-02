@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ResultCorrections from "./ResultCorrections";
+import SubjectResultCorrectionRequest from "./SubjectResultCorrectionRequest";
 
 import {
   approveResult,
@@ -1594,6 +1595,13 @@ const Results = () => {
               Corrections are reviewed separately. The student's official result
               remains unchanged until an approved correction is published.
             </p>
+
+            <SubjectResultCorrectionRequest
+              result={selectedResult}
+              onCreated={() =>
+                setCorrectionsRefreshKey((current) => current + 1)
+              }
+            />
 
             <div className="mt-4 flex flex-wrap gap-3">
               <button

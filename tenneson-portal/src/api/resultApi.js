@@ -178,3 +178,24 @@ export const publishResultCorrection = async (revisionId) => {
 
   return response.data;
 };
+
+/*
+|--------------------------------------------------------------------------
+| Individual Published Subject Correction Request
+|--------------------------------------------------------------------------
+| Allows an admin to request correction of one subject
+| for one student in a published result.
+|--------------------------------------------------------------------------
+*/
+
+export const createSubjectResultCorrectionRequest = async (
+  resultId,
+  payload,
+) => {
+  const response = await api.post(
+    `/results/${resultId}/subject-corrections`,
+    payload,
+  );
+
+  return response.data;
+};
