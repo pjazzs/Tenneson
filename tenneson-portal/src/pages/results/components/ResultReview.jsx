@@ -36,8 +36,6 @@ const ResultReview = ({
   error,
   successMessage,
 }) => {
-  const canEditTeacherComments = typeof onTeacherCommentChange === "function";
-
   const currentTermKey = String(term || "")
     .trim()
     .toLowerCase()
@@ -471,22 +469,17 @@ const ResultReview = ({
         </section>
 
         {/* Subject Teacher Comments */}
-        <section className="mb-6 rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-xl sm:p-6">
+        <section className="mb-6 rounded-2xl border border-blue-500/20 bg-slate-900/70 p-5 shadow-xl sm:p-6">
           <div className="mb-5">
-            <h2 className="text-lg font-semibold">Subject Teacher Comments</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Subject Teacher Comments
+            </h2>
 
             <p className="mt-1 text-sm text-slate-400">
               Add or update an optional comment for each subject. These comments
               will be saved with the compiled result.
             </p>
           </div>
-
-          {!canEditTeacherComments && (
-            <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-              Subject teacher comments are currently read-only because the
-              comment update handler was not provided.
-            </div>
-          )}
 
           {scoreEntries.length === 0 ? (
             <p className="rounded-xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-500">
@@ -496,6 +489,8 @@ const ResultReview = ({
             <div className="grid gap-5 md:grid-cols-2">
               {scoreEntries.map((entry) => {
                 const teacherComment = entry.teacherComment || "";
+                const canEditTeacherComments =
+                  typeof onTeacherCommentChange === "function";
 
                 return (
                   <div
@@ -519,11 +514,11 @@ const ResultReview = ({
                           event.target.value,
                         )
                       }
+                      disabled={!canEditTeacherComments}
                       placeholder="Add an optional teacher comment..."
                       rows={3}
                       maxLength={1000}
-                      disabled={!canEditTeacherComments}
-                      className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                     />
 
                     <p className="mt-2 text-right text-xs text-slate-500">

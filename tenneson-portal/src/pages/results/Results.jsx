@@ -126,12 +126,12 @@ const Results = () => {
       const response = await getResult(resultId);
       const result = response?.result || response;
 
-      console.log("Single result retrieved:", result);
+      // console.log("Single result retrieved:", result);
 
-      console.log(
-        "THIRD TERM SUBJECT DETAILS:",
-        JSON.stringify(result?.subjectResults || [], null, 2),
-      );
+      // console.log(
+      //   "THIRD TERM SUBJECT DETAILS:",
+      //   JSON.stringify(result?.subjectResults || [], null, 2),
+      // );
 
       setSelectedResult(result);
     } catch (err) {

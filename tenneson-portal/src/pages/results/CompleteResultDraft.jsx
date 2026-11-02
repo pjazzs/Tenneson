@@ -333,11 +333,11 @@ const CompleteResultDraft = () => {
   |--------------------------------------------------------------------------
   */
 
-  const handleTeacherCommentChange = (subjectId, teacherComment) => {
-    setScoreEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        String(entry.subjectId) === String(subjectId)
-          ? { ...entry, teacherComment }
+  const handleTeacherCommentChange = (subjectId, comment) => {
+    setScoreEntries((previousEntries) =>
+      previousEntries.map((entry) =>
+        entry.subjectId === subjectId
+          ? { ...entry, teacherComment: comment }
           : entry,
       ),
     );
