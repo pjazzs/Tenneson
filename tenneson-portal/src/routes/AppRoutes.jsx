@@ -46,6 +46,7 @@ import TeacherAssignment from "../pages/teachers/TeacherAssignment";
 import TeacherSubjectResultEntry from "../pages/teachers/TeacherSubjectResultEntry";
 import SubjectResultSubmissionDetails from "../pages/results/SubjectResultSubmissionDetails";
 import SubjectResultReview from "../pages/results/SubjectResultReview";
+import CompleteResultDraft from "../pages/results/CompleteResultDraft";
 
 function AppRoutes() {
   return (
@@ -234,6 +235,15 @@ function AppRoutes() {
             element={
               <PermissionRoute permission="results.create">
                 <ResultEntry />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/results/complete-draft"
+            element={
+              <PermissionRoute permission="results.create">
+                <CompleteResultDraft />
               </PermissionRoute>
             }
           />

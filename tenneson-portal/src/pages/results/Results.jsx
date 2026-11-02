@@ -1540,14 +1540,30 @@ const Results = () => {
 
           <div className="flex flex-wrap gap-3">
             {selectedResult.status === "draft" && (
-              <button
-                type="button"
-                onClick={() => handleWorkflowAction("submit")}
-                disabled={workflowActionLoading}
-                className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-              >
-                {workflowActionLoading ? "Processing..." : "Submit for Review"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate("/results/complete-draft", {
+                      state: { draftResultId: selectedResult._id },
+                    })
+                  }
+                  className="rounded-lg bg-indigo-500 px-4 py-2 font-semibold text-white hover:bg-indigo-600"
+                >
+                  Complete Draft
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleWorkflowAction("submit")}
+                  disabled={workflowActionLoading}
+                  className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                >
+                  {workflowActionLoading
+                    ? "Processing..."
+                    : "Submit for Review"}
+                </button>
+              </>
             )}
 
             {selectedResult.status === "submitted" && (
