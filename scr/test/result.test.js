@@ -10,6 +10,7 @@ const Subject = require("../models/Subject");
 const Result = require("../models/Result");
 const generateToken = require("../utils/generateToken");
 const ResultRevision = require("../models/ResultRevision");
+const SubjectResultCorrectionRequest = require("../models/SubjectResultCorrectionRequest");
 const API = "/api/v1";
 
 jest.setTimeout(120000);
@@ -1936,6 +1937,273 @@ describe("RESULT API", () => {
 
     return revisionId;
   };
+
+  const createSubjectTeacherCorrectionPackage = async ({
+    requestStatuses = ["accepted"],
+    teacherIds = [],
+  } = {}) => {
+    const originalResult = await createStoredResult({
+      status: "published",
+      total: 83,
+    });
+
+    const revision = await ResultRevision.create({
+      result: originalResult._id,
+      student: originalResult.student,
+      academicSession: originalResult.academicSession,
+      term: originalResult.term,
+      revisionNumber: 1,
+      correctionSource: "subject_teacher",
+      isActive: true,
+      originalSnapshot: originalResult.toObject(),
+      proposedData: originalResult.toObject(),
+      reason: "Correct incorrectly recorded subject scores.",
+      status: "submitted",
+      createdBy: admin._id,
+      submittedBy: admin._id,
+      submittedAt: new Date(),
+    });
+
+    const correctionRequests = [];
+
+    for (let i = 0; i < requestStatuses.length; i += 1) {
+      const status = requestStatuses[i];
+
+      const teacherId = teacherIds[i] || new mongoose.Types.ObjectId();
+
+      const correctionRequest = await SubjectResultCorrectionRequest.create({
+        resultRevision: revision._id,
+        result: originalResult._id,
+        student: originalResult.student,
+        academicSession: originalResult.academicSession,
+        term: originalResult.term,
+        subject: i === 0 ? subject._id : secondSubject._id,
+
+        allocation: new mongoose.Types.ObjectId(),
+        submission: new mongoose.Types.ObjectId(),
+        submissionStudentResult: new mongoose.Types.ObjectId(),
+        responsibility: new mongoose.Types.ObjectId(),
+
+        originalSubmittingTeacher: teacherId,
+        originalTeacherAssignment: new mongoose.Types.ObjectId(),
+        originalTeacherName: `Teacher ${i + 1}`,
+
+        originalScore: {
+          offered: true,
+          ca1: 15,
+          ca2: 8,
+          exam: 60,
+          teacherComment: "Original score.",
+        },
+
+        proposedScore: {
+          offered: true,
+          ca1: 18,
+          ca2: 9,
+          exam: 65,
+          teacherComment: "Corrected score.",
+        },
+
+        requestReason: "The original examination score was incorrect.",
+        teacherReason: "The examination score was entered incorrectly.",
+
+        status,
+        isActive: true,
+
+        requestedBy: admin._id,
+        submittedByTeacher: teacherId,
+        submittedAt: new Date(),
+
+        events: [
+          {
+            action: status === "accepted" ? "accepted" : "teacher_submitted",
+            actorType: status === "accepted" ? "admin" : "teacher",
+            performedByAdmin: status === "accepted" ? admin._id : null,
+            performedByTeacher: status === "accepted" ? null : teacherId,
+            note: "Test correction event.",
+          },
+        ],
+      });
+
+      correctionRequests.push(correctionRequest);
+    }
+
+    return {
+      originalResult,
+      revision,
+      correctionRequests,
+    };
+  };
+
+  describe("PATCH /result-corrections/:revisionId/reject", () => {
+    test("rejects a valid submitted subject-teacher correction package", async () => {
+      const { revision, correctionRequests } =
+        await createSubjectTeacherCorrectionPackage();
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revision._id}/reject`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          rejectionReason:
+            "The correction package requires further verification.",
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.revision.status).toBe("rejected");
+      expect(response.body.returnedRequestCount).toBe(1);
+
+      const savedRevision = await ResultRevision.findById(revision._id);
+      const savedRequest = await SubjectResultCorrectionRequest.findById(
+        correctionRequests[0]._id,
+      );
+
+      expect(savedRevision.status).toBe("rejected");
+      expect(savedRevision.rejectionReason).toBe(
+        "The correction package requires further verification.",
+      );
+
+      expect(savedRequest.status).toBe("returned");
+    });
+
+    test("rejects an inactive correction revision without modifying requests", async () => {
+      const { revision, correctionRequests } =
+        await createSubjectTeacherCorrectionPackage();
+
+      await ResultRevision.updateOne(
+        { _id: revision._id },
+        { $set: { isActive: false } },
+      );
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revision._id}/reject`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          rejectionReason: "This correction should not be processed.",
+        });
+
+      expect(response.status).toBe(409);
+
+      const savedRequest = await SubjectResultCorrectionRequest.findById(
+        correctionRequests[0]._id,
+      );
+
+      expect(savedRequest.status).toBe("accepted");
+      expect(savedRequest.adminReviewNote).toBe("");
+      expect(savedRequest.reviewedBy).toBeNull();
+      expect(savedRequest.reviewedAt).toBeNull();
+      expect(savedRequest.events).toHaveLength(1);
+    });
+
+    test("rejects a revision that is no longer submitted", async () => {
+      const { revision, correctionRequests } =
+        await createSubjectTeacherCorrectionPackage();
+
+      await ResultRevision.updateOne(
+        { _id: revision._id },
+        { $set: { status: "approved" } },
+      );
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revision._id}/reject`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          rejectionReason: "This revision is no longer awaiting review.",
+        });
+
+      expect(response.status).toBe(409);
+
+      const savedRequest = await SubjectResultCorrectionRequest.findById(
+        correctionRequests[0]._id,
+      );
+
+      expect(savedRequest.status).toBe("accepted");
+      expect(savedRequest.adminReviewNote).toBe("");
+      expect(savedRequest.reviewedBy).toBeNull();
+      expect(savedRequest.reviewedAt).toBeNull();
+      expect(savedRequest.events).toHaveLength(1);
+    });
+
+    test("returns accepted requests to their original submitting teachers", async () => {
+      const originalTeacherIds = [
+        new mongoose.Types.ObjectId(),
+        new mongoose.Types.ObjectId(),
+      ];
+
+      const { revision, correctionRequests } =
+        await createSubjectTeacherCorrectionPackage({
+          requestStatuses: ["accepted", "accepted"],
+          teacherIds: originalTeacherIds,
+        });
+
+      const rejectionReason =
+        "The Principal requires the teachers to review these corrections again.";
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revision._id}/reject`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ rejectionReason });
+
+      expect(response.status).toBe(200);
+      expect(response.body.returnedRequestCount).toBe(2);
+
+      for (let i = 0; i < correctionRequests.length; i += 1) {
+        const savedRequest = await SubjectResultCorrectionRequest.findById(
+          correctionRequests[i]._id,
+        );
+
+        expect(savedRequest.status).toBe("returned");
+
+        expect(savedRequest.originalSubmittingTeacher.toString()).toBe(
+          originalTeacherIds[i].toString(),
+        );
+
+        expect(savedRequest.submittedByTeacher.toString()).toBe(
+          originalTeacherIds[i].toString(),
+        );
+
+        expect(savedRequest.adminReviewNote).toBe(rejectionReason);
+        expect(savedRequest.reviewedBy.toString()).toBe(admin._id.toString());
+
+        expect(savedRequest.events).toHaveLength(2);
+        expect(savedRequest.events[1].action).toBe("returned");
+      }
+    });
+
+    test("does not modify any correction request when rejection fails", async () => {
+      const { revision, correctionRequests } =
+        await createSubjectTeacherCorrectionPackage({
+          requestStatuses: ["accepted", "submitted"],
+        });
+
+      const response = await request(app)
+        .patch(`${API}/result-corrections/${revision._id}/reject`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          rejectionReason:
+            "The correction package contains unresolved requests.",
+        });
+
+      expect(response.status).toBe(409);
+
+      const savedRevision = await ResultRevision.findById(revision._id);
+
+      expect(savedRevision.status).toBe("submitted");
+
+      for (let i = 0; i < correctionRequests.length; i += 1) {
+        const savedRequest = await SubjectResultCorrectionRequest.findById(
+          correctionRequests[i]._id,
+        );
+
+        expect(savedRequest.status).toBe(i === 0 ? "accepted" : "submitted");
+
+        expect(savedRequest.adminReviewNote).toBe("");
+        expect(savedRequest.reviewedBy).toBeNull();
+        expect(savedRequest.reviewedAt).toBeNull();
+        expect(savedRequest.events).toHaveLength(1);
+      }
+    });
+  });
 
   describe("PATCH /result-corrections/:revisionId/publish", () => {
     test("publishes an approved correction and closes its revision", async () => {
