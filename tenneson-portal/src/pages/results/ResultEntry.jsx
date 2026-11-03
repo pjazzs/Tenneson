@@ -8,6 +8,7 @@ import ResultPsychomotorDomain from "./components/ResultPsychomotorDomain";
 import ResultConduct from "./components/ResultConduct";
 import ResultAdditionalInfo from "./components/ResultAdditionalInfo";
 import ResultReview from "./components/ResultReview";
+
 import {
   FaArrowRight,
   FaCheckCircle,
