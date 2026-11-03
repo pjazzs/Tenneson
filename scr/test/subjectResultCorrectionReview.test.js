@@ -72,6 +72,11 @@ describe("ADMIN SUBJECT RESULT CORRECTION REVIEW API", () => {
   });
 
   const requestUrl = (id) => `/api/v1/subject-result-correction-requests/${id}`;
+  const returnRequest = (id = correctionRequest._id, body = {}) =>
+    request(app)
+      .patch(`${requestUrl(id)}/return`)
+      .set(auth())
+      .send(body);
 
   // ---------------------------------------------------------
   // CORRECTION REQUEST FIXTURE
@@ -924,12 +929,6 @@ describe("ADMIN SUBJECT RESULT CORRECTION REVIEW API", () => {
   // ---------------------------------------------------------
 
   describe("PATCH /api/v1/subject-result-correction-requests/:id/return", () => {
-    const returnRequest = (id = correctionRequest._id, body = {}) =>
-      request(app)
-        .patch(`${requestUrl(id)}/return`)
-        .set(auth())
-        .send(body);
-
     test("returns a correction request with an explanation", async () => {
       const reason =
         "Please verify the examination script and correct the proposed score.";

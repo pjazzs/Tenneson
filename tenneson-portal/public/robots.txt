@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tenneson.vercel.app/sitemap.xml
+Sitemap: https://tenneson.com.ng/sitemap.xml
