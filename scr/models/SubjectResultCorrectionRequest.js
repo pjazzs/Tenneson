@@ -42,9 +42,13 @@ const correctionScoreSchema = new mongoose.Schema(
     },
 
     teacherComment: {
-      type: String,
-      trim: true,
+      type: mongoose.Schema.Types.Mixed,
       default: "",
+      validate: {
+        validator: (value) =>
+          value === undefined || value === null || typeof value === "string",
+        message: "Teacher comment must be text.",
+      },
     },
   },
   {

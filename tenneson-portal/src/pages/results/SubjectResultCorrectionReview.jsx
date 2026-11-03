@@ -311,7 +311,7 @@ const SubjectResultCorrectionReview = () => {
     <section className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 className="text-xl font-bold text-slate-900">
             Subject Correction Requests
           </h2>
           <p className="mt-1 text-sm text-slate-400">

@@ -49,6 +49,7 @@ import SubjectResultReview from "../pages/results/SubjectResultReview";
 import CompleteResultDraft from "../pages/results/CompleteResultDraft";
 
 import TeacherSubjectCorrectionDetails from "../pages/teachers/TeacherSubjectCorrectionDetails";
+import SubjectResultCorrectionReview from "../pages/results/SubjectResultCorrectionReview";
 
 function AppRoutes() {
   return (
@@ -148,6 +149,15 @@ function AppRoutes() {
             element={
               <PermissionRoute permission="class-subject-allocations.view">
                 <SubjectAllocation />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/subject-result-correction-requests"
+            element={
+              <PermissionRoute permission="results.view">
+                <SubjectResultCorrectionReview />
               </PermissionRoute>
             }
           />

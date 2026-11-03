@@ -654,6 +654,153 @@ describe("ADMIN SUBJECT RESULT CORRECTION REVIEW API", () => {
       expect(auditLog.description).toContain(correctionRequest._id.toString());
     });
 
+    test("rejects acceptance when the proposed score is missing", async () => {
+      await SubjectResultCorrectionRequest.collection.updateOne(
+        { _id: correctionRequest._id },
+        { $unset: { proposedScore: "" } },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted acceptance without a proposed score.",
+      });
+
+      expect(response.statusCode).toBe(400);
+
+      const savedRevision = await ResultRevision.findById(revision._id).lean();
+      const mathematicsResult = savedRevision.proposedData.subjectResults.find(
+        (item) => item.subjectId === mathematics._id.toString(),
+      );
+
+      expect(mathematicsResult.ca1).toBe(15);
+    });
+
+    test("rejects a proposed score that changes whether the student offered the subject", async () => {
+      await SubjectResultCorrectionRequest.collection.updateOne(
+        { _id: correctionRequest._id },
+        { $set: { "proposedScore.offered": false } },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted to change subject offering status.",
+      });
+
+      expect(response.statusCode).toBe(409);
+
+      const savedRevision = await ResultRevision.findById(revision._id).lean();
+      const mathematicsResult = savedRevision.proposedData.subjectResults.find(
+        (item) => item.subjectId === mathematics._id.toString(),
+      );
+
+      expect(mathematicsResult.ca1).toBe(15);
+    });
+
+    test("rejects a non-text teacher comment in the proposed score", async () => {
+      await SubjectResultCorrectionRequest.collection.updateOne(
+        { _id: correctionRequest._id },
+        { $set: { "proposedScore.teacherComment": 123 } },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted acceptance with an invalid teacher comment.",
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test("rejects a proposed teacher comment longer than 1000 characters", async () => {
+      await SubjectResultCorrectionRequest.collection.updateOne(
+        { _id: correctionRequest._id },
+        { $set: { "proposedScore.teacherComment": "x".repeat(1001) } },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted acceptance with an oversized teacher comment.",
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test("does not accept a correction when its subject is missing from the parent revision", async () => {
+      await ResultRevision.updateOne(
+        { _id: revision._id },
+        {
+          $set: {
+            "proposedData.subjectResults": [
+              {
+                subjectId: english._id.toString(),
+                subject: english._id.toString(),
+                subjectName: "English Language",
+                subjectCode: "ENG",
+                offered: true,
+                ca1: 12,
+                ca2: 7,
+                exam: 55,
+                teacherComment: "Original English comment",
+              },
+            ],
+          },
+        },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted acceptance for a missing subject.",
+      });
+
+      expect(response.statusCode).toBe(409);
+
+      const savedRequest = await SubjectResultCorrectionRequest.findById(
+        correctionRequest._id,
+      ).lean();
+      const savedRevision = await ResultRevision.findById(revision._id).lean();
+
+      expect(savedRequest.status).toBe("submitted");
+      expect(savedRevision.proposedData.subjectResults).toHaveLength(1);
+      expect(savedRevision.proposedData.subjectResults[0].subjectId).toBe(
+        english._id.toString(),
+      );
+    });
+
+    test("does not accept a correction when its subject appears more than once in the parent revision", async () => {
+      const duplicateMathematics = {
+        subjectId: mathematics._id.toString(),
+        subject: mathematics._id.toString(),
+        subjectName: "Mathematics",
+        subjectCode: "MTH",
+        offered: true,
+        ca1: 15,
+        ca2: 8,
+        exam: 60,
+        teacherComment: "Duplicate mathematics entry",
+      };
+
+      await ResultRevision.updateOne(
+        { _id: revision._id },
+        {
+          $push: {
+            "proposedData.subjectResults": duplicateMathematics,
+          },
+        },
+      );
+
+      const response = await acceptRequest(correctionRequest._id, {
+        note: "Attempted acceptance for a duplicated subject.",
+      });
+
+      expect(response.statusCode).toBe(409);
+
+      const savedRequest = await SubjectResultCorrectionRequest.findById(
+        correctionRequest._id,
+      ).lean();
+      const savedRevision = await ResultRevision.findById(revision._id).lean();
+
+      expect(savedRequest.status).toBe("submitted");
+      expect(
+        savedRevision.proposedData.subjectResults.filter(
+          (item) => item.subjectId === mathematics._id.toString(),
+        ),
+      ).toHaveLength(2);
+    });
+
     test("rejects invalid request IDs", async () => {
       const response = await acceptRequest("invalid-id", {
         note: "Accept this correction.",

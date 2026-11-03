@@ -200,6 +200,12 @@ const validateProposedScore = (correctionRequest) => {
     }
   }
 
+  console.log(
+    "TEACHER COMMENT:",
+    proposed.teacherComment,
+    typeof proposed.teacherComment,
+  );
+
   if (
     proposed.teacherComment !== undefined &&
     proposed.teacherComment !== null &&

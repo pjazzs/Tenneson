@@ -85,6 +85,14 @@ function Sidebar({ isMobileOpen, onClose }) {
     },
 
     {
+      name: "Subject Correction Requests",
+      path: "/subject-result-correction-requests",
+      icon: <FaClipboardCheck />,
+      visible: hasPermission("results.view"),
+      end: true,
+    },
+
+    {
       name: "Academic Sessions",
       path: "/academic-sessions",
       icon: <FaCalendarAlt />,
