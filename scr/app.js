@@ -18,6 +18,8 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://tenneson.vercel.app",
+  "https://tenneson.com.ng",
+  "https://www.tenneson.com.ng",
 ];
 
 app.use(
@@ -30,7 +32,7 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json());
@@ -42,12 +44,11 @@ app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "API is healthy",
-    timestamp: new Date()
+    timestamp: new Date(),
   });
 });
 
 app.use("/api/v1", apiLimiter);
-
 
 readdirSync("routes").map((r) => {
   app.use("/api/v1", require(`./routes/${r}`));
