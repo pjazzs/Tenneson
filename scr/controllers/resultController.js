@@ -3609,6 +3609,610 @@ exports.createResultCorrection = asyncHandler(async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
+| ADMIN SUBJECT RESULT CORRECTION REQUESTS
+|--------------------------------------------------------------------------
+|
+| These endpoints allow administrators to review individual
+| subject correction requests submitted by teachers.
+|
+| Accepting a request updates only the matching subject score
+| in the parent ResultRevision.
+|
+| It does NOT approve or publish the result.
+|--------------------------------------------------------------------------
+*/
+
+const populateAdminSubjectCorrectionRequest = (query) =>
+  query
+    .populate("result", "status term academicSession")
+    .populate("student", "studentId firstName lastName otherName currentClass")
+    .populate("subject", "name code")
+    .populate("academicSession", "name")
+    .populate("originalSubmittingTeacher", "fullName employeeId")
+    .populate("submittedByTeacher", "fullName employeeId")
+    .populate("requestedBy", "fullName email")
+    .populate("reviewedBy", "fullName email");
+
+/*
+|--------------------------------------------------------------------------
+| GET ALL SUBJECT CORRECTION REQUESTS
+|--------------------------------------------------------------------------
+|
+| GET /subject-result-correction-requests
+|
+| Optional query filters:
+| status, resultId, studentId, sessionId, term
+|--------------------------------------------------------------------------
+*/
+
+exports.getSubjectResultCorrectionRequests = asyncHandler(async (req, res) => {
+  const allowedStatuses = [
+    "pending_teacher",
+    "submitted",
+    "accepted",
+    "returned",
+    "cancelled",
+  ];
+
+  const { status, resultId, studentId, sessionId, term } = req.query;
+
+  const filter = {
+    isActive: true,
+  };
+
+  if (status) {
+    if (!allowedStatuses.includes(status)) {
+      return sendError(res, 400, "Invalid subject correction request status.");
+    }
+
+    filter.status = status;
+  }
+
+  if (resultId) {
+    if (!isValidObjectId(resultId)) {
+      return sendError(res, 400, "Invalid result ID.");
+    }
+
+    filter.result = resultId;
+  }
+
+  if (studentId) {
+    if (!isValidObjectId(studentId)) {
+      return sendError(res, 400, "Invalid student ID.");
+    }
+
+    filter.student = studentId;
+  }
+
+  if (sessionId) {
+    if (!isValidObjectId(sessionId)) {
+      return sendError(res, 400, "Invalid academic session ID.");
+    }
+
+    filter.academicSession = sessionId;
+  }
+
+  if (term) {
+    if (!["first", "second", "third"].includes(term)) {
+      return sendError(res, 400, "Invalid academic term.");
+    }
+
+    filter.term = term;
+  }
+
+  const requests = await populateAdminSubjectCorrectionRequest(
+    SubjectResultCorrectionRequest.find(filter).sort({
+      requestedAt: -1,
+      createdAt: -1,
+    }),
+  );
+
+  return res.status(200).json({
+    success: true,
+    count: requests.length,
+    requests,
+  });
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET ONE SUBJECT CORRECTION REQUEST
+|--------------------------------------------------------------------------
+|
+| GET /subject-result-correction-requests/:requestId
+|--------------------------------------------------------------------------
+*/
+
+exports.getSubjectResultCorrectionRequest = asyncHandler(async (req, res) => {
+  const { requestId } = req.params;
+
+  if (!isValidObjectId(requestId)) {
+    return sendError(res, 400, "Invalid correction request ID.");
+  }
+
+  const correctionRequest = await populateAdminSubjectCorrectionRequest(
+    SubjectResultCorrectionRequest.findOne({
+      _id: requestId,
+      isActive: true,
+    }),
+  );
+
+  if (!correctionRequest) {
+    return sendError(res, 404, "Subject correction request not found.");
+  }
+
+  const revision = await ResultRevision.findById(
+    correctionRequest.resultRevision,
+  ).select("revisionNumber correctionSource status isActive");
+
+  return res.status(200).json({
+    success: true,
+    request: correctionRequest,
+    revision,
+  });
+});
+
+/*
+|--------------------------------------------------------------------------
+| ACCEPT TEACHER SUBJECT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /subject-result-correction-requests/:requestId/accept
+|
+| Optional body:
+| {
+|   adminReviewNote: "Reviewed and accepted."
+| }
+|--------------------------------------------------------------------------
+*/
+
+exports.acceptSubjectResultCorrectionRequest = asyncHandler(
+  async (req, res) => {
+    const adminId = getAdminId(req);
+
+    if (!adminId) {
+      return sendError(res, 401, "Administrator authentication is required.");
+    }
+
+    const { requestId } = req.params;
+
+    if (!isValidObjectId(requestId)) {
+      return sendError(res, 400, "Invalid correction request ID.");
+    }
+
+    const adminReviewNote =
+      typeof req.body?.adminReviewNote === "string"
+        ? req.body.adminReviewNote.trim()
+        : "";
+
+    if (adminReviewNote.length > 2000) {
+      return sendError(
+        res,
+        400,
+        "Admin review note cannot exceed 2000 characters.",
+      );
+    }
+
+    const session = await mongoose.startSession();
+
+    let acceptedRequest;
+    let student;
+
+    try {
+      await session.withTransaction(async () => {
+        /*
+         * 1. Find the active correction request.
+         */
+
+        const correctionRequest = await SubjectResultCorrectionRequest.findOne({
+          _id: requestId,
+          isActive: true,
+        }).session(session);
+
+        if (!correctionRequest) {
+          throw createControllerError(
+            "Subject correction request not found.",
+            404,
+          );
+        }
+
+        if (correctionRequest.status !== "submitted") {
+          throw createControllerError(
+            "Only teacher-submitted correction requests can be accepted.",
+            409,
+          );
+        }
+
+        /*
+         * 2. Find the parent correction revision.
+         */
+
+        const revision = await ResultRevision.findOne({
+          _id: correctionRequest.resultRevision,
+          result: correctionRequest.result,
+          correctionSource: "subject_teacher",
+          isActive: true,
+          status: {
+            $in: ["draft", "rejected"],
+          },
+        }).session(session);
+
+        if (!revision) {
+          throw createControllerError(
+            "The parent correction package is no longer open for administrator review.",
+            409,
+          );
+        }
+
+        /*
+         * 3. Confirm the original result is still published.
+         */
+
+        const officialResult = await Result.findById(
+          correctionRequest.result,
+        ).session(session);
+
+        if (!officialResult || officialResult.status !== "published") {
+          throw createControllerError(
+            "The original published result is no longer available for correction.",
+            409,
+          );
+        }
+
+        /*
+         * 4. Prevent corrections against an outdated result.
+         */
+
+        const originalUpdatedAt = revision.originalSnapshot?.updatedAt
+          ? new Date(revision.originalSnapshot.updatedAt).getTime()
+          : null;
+
+        const currentUpdatedAt = officialResult.updatedAt
+          ? new Date(officialResult.updatedAt).getTime()
+          : null;
+
+        if (
+          originalUpdatedAt === null ||
+          currentUpdatedAt === null ||
+          originalUpdatedAt !== currentUpdatedAt
+        ) {
+          throw createControllerError(
+            "The official result has changed since this correction was initiated. Review the latest result before accepting this request.",
+            409,
+          );
+        }
+
+        /*
+         * 5. Validate the teacher's submission.
+         */
+
+        const proposedScore = correctionRequest.proposedScore;
+
+        if (
+          !proposedScore ||
+          typeof correctionRequest.teacherReason !== "string" ||
+          correctionRequest.teacherReason.trim().length < 5
+        ) {
+          throw createControllerError(
+            "The teacher's proposed score or explanation is incomplete.",
+            400,
+          );
+        }
+
+        /*
+         * 6. Find the matching subject in the parent revision.
+         */
+
+        const subjectResults = Array.isArray(
+          revision.proposedData?.subjectResults,
+        )
+          ? [...revision.proposedData.subjectResults]
+          : [];
+
+        const subjectIndex = subjectResults.findIndex((item) => {
+          const subjectId = item.subjectId || item.subject?._id || item.subject;
+
+          return (
+            subjectId &&
+            subjectId.toString() === correctionRequest.subject.toString()
+          );
+        });
+
+        if (subjectIndex === -1) {
+          throw createControllerError(
+            "The requested subject could not be found in the parent correction data.",
+            409,
+          );
+        }
+
+        /*
+         * 7. Merge only the teacher's proposed subject score.
+         *
+         * Other subjects and result fields remain unchanged.
+         */
+
+        subjectResults[subjectIndex] = {
+          ...subjectResults[subjectIndex],
+
+          offered: proposedScore.offered !== false,
+
+          ca1: proposedScore.offered === false ? null : proposedScore.ca1,
+
+          ca2: proposedScore.offered === false ? null : proposedScore.ca2,
+
+          exam: proposedScore.offered === false ? null : proposedScore.exam,
+
+          teacherComment: proposedScore.teacherComment || "",
+        };
+
+        revision.proposedData = {
+          ...revision.proposedData,
+          subjectResults,
+        };
+
+        revision.markModified("proposedData");
+
+        revision.updatedBy = adminId;
+
+        revision.events.push({
+          action: "updated",
+          performedBy: adminId,
+          note: `Accepted teacher correction for subject ${correctionRequest.subject}.`,
+        });
+
+        /*
+         * 8. Update the individual correction request.
+         */
+
+        correctionRequest.status = "accepted";
+        correctionRequest.adminReviewNote = adminReviewNote;
+        correctionRequest.reviewedBy = adminId;
+        correctionRequest.reviewedAt = new Date();
+
+        correctionRequest.events.push({
+          action: "accepted",
+          actorType: "admin",
+          performedByAdmin: adminId,
+          note: adminReviewNote,
+          performedAt: new Date(),
+        });
+
+        /*
+         * Save both documents in the same transaction.
+         */
+
+        await revision.save({
+          session,
+        });
+
+        await correctionRequest.save({
+          session,
+        });
+
+        acceptedRequest = correctionRequest;
+
+        student = await Student.findById(correctionRequest.student)
+          .select("studentId")
+          .session(session);
+      });
+
+      /*
+       * 9. Record audit and activity logs.
+       */
+
+      await createResultAuditLog({
+        req,
+        action: "ACCEPT_SUBJECT_RESULT_CORRECTION",
+        description:
+          `${req.admin.fullName} accepted teacher-submitted ` +
+          `subject correction request ${acceptedRequest._id}.`,
+      });
+
+      if (student) {
+        await createResultActivityLog({
+          req,
+          action: "ACCEPT_SUBJECT_RESULT_CORRECTION",
+          studentId: student.studentId,
+          details: "Accepted a teacher-submitted subject score correction.",
+        });
+      }
+
+      /*
+       * 10. Return the updated request.
+       */
+
+      const populatedRequest = await populateAdminSubjectCorrectionRequest(
+        SubjectResultCorrectionRequest.findById(acceptedRequest._id),
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Teacher correction accepted and added to the parent correction draft. The result has not been approved or published.",
+        request: populatedRequest,
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        error.statusCode || 500,
+        error.message || "Unable to accept subject correction request.",
+      );
+    } finally {
+      await session.endSession();
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| RETURN TEACHER SUBJECT CORRECTION
+|--------------------------------------------------------------------------
+|
+| PATCH /subject-result-correction-requests/:requestId/return
+|
+| Required body:
+| {
+|   adminReviewNote: "Please review the examination score."
+| }
+|--------------------------------------------------------------------------
+*/
+
+exports.returnSubjectResultCorrectionRequest = asyncHandler(
+  async (req, res) => {
+    const adminId = getAdminId(req);
+
+    if (!adminId) {
+      return sendError(res, 401, "Administrator authentication is required.");
+    }
+
+    const { requestId } = req.params;
+
+    if (!isValidObjectId(requestId)) {
+      return sendError(res, 400, "Invalid correction request ID.");
+    }
+
+    const adminReviewNote =
+      typeof req.body?.adminReviewNote === "string"
+        ? req.body.adminReviewNote.trim()
+        : "";
+
+    if (adminReviewNote.length < 5 || adminReviewNote.length > 2000) {
+      return sendError(
+        res,
+        400,
+        "Please provide a return note between 5 and 2000 characters.",
+      );
+    }
+
+    const session = await mongoose.startSession();
+
+    let returnedRequest;
+    let student;
+
+    try {
+      await session.withTransaction(async () => {
+        /*
+         * 1. Find the active correction request.
+         */
+
+        const correctionRequest = await SubjectResultCorrectionRequest.findOne({
+          _id: requestId,
+          isActive: true,
+        }).session(session);
+
+        if (!correctionRequest) {
+          throw createControllerError(
+            "Subject correction request not found.",
+            404,
+          );
+        }
+
+        if (correctionRequest.status !== "submitted") {
+          throw createControllerError(
+            "Only teacher-submitted correction requests can be returned.",
+            409,
+          );
+        }
+
+        /*
+         * 2. Confirm the parent revision is still open.
+         */
+
+        const revision = await ResultRevision.findOne({
+          _id: correctionRequest.resultRevision,
+          result: correctionRequest.result,
+          correctionSource: "subject_teacher",
+          isActive: true,
+          status: {
+            $in: ["draft", "rejected"],
+          },
+        }).session(session);
+
+        if (!revision) {
+          throw createControllerError(
+            "The parent correction package is no longer open for administrator review.",
+            409,
+          );
+        }
+
+        /*
+         * 3. Return the request to its original teacher.
+         */
+
+        correctionRequest.status = "returned";
+        correctionRequest.adminReviewNote = adminReviewNote;
+        correctionRequest.reviewedBy = adminId;
+        correctionRequest.reviewedAt = new Date();
+
+        correctionRequest.events.push({
+          action: "returned",
+          actorType: "admin",
+          performedByAdmin: adminId,
+          note: adminReviewNote,
+          performedAt: new Date(),
+        });
+
+        await correctionRequest.save({
+          session,
+        });
+
+        returnedRequest = correctionRequest;
+
+        student = await Student.findById(correctionRequest.student)
+          .select("studentId")
+          .session(session);
+      });
+
+      /*
+       * 4. Record audit and activity logs.
+       */
+
+      await createResultAuditLog({
+        req,
+        action: "RETURN_SUBJECT_RESULT_CORRECTION",
+        description:
+          `${req.admin.fullName} returned subject correction ` +
+          `request ${returnedRequest._id} to its submitting teacher. ` +
+          `Note: ${adminReviewNote}`,
+      });
+
+      if (student) {
+        await createResultActivityLog({
+          req,
+          action: "RETURN_SUBJECT_RESULT_CORRECTION",
+          studentId: student.studentId,
+          details:
+            "Returned a subject score correction request to the submitting teacher.",
+        });
+      }
+
+      /*
+       * 5. Return the updated request.
+       */
+
+      const populatedRequest = await populateAdminSubjectCorrectionRequest(
+        SubjectResultCorrectionRequest.findById(returnedRequest._id),
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Correction request returned to the original subject teacher.",
+        request: populatedRequest,
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        error.statusCode || 500,
+        error.message || "Unable to return subject correction request.",
+      );
+    } finally {
+      await session.endSession();
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
 | CREATE SUBJECT RESULT CORRECTION REQUEST
 |--------------------------------------------------------------------------
 |
