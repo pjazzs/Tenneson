@@ -250,6 +250,25 @@ function StudentDashboard() {
               </p>
             </div>
 
+            {String(currentStudent.currentClass || "").startsWith("SS") && (
+              <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+                <div className="mb-3 flex items-center gap-2 text-gray-400">
+                  <FaBookOpen />
+                  <span className="text-sm">Department</span>
+                </div>
+
+                <p className="font-semibold text-white">
+                  {currentStudent.department?.name || "Not assigned"}
+                </p>
+
+                {currentStudent.department?.code && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {currentStudent.department.code}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* ACADEMIC SESSION */}
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-5">
               <div className="flex items-center gap-3 mb-3">
