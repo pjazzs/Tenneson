@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthProvider";
-import { StudentAuthProvider } from "./context/StudentAuthContext";
+import { StudentAuthProvider } from "./context/StudentAuthProvider";
 import { TeacherAuthProvider } from "./context/TeacherAuthContext";
 
 import App from "./App.jsx";

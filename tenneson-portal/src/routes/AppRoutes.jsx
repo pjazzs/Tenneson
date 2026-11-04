@@ -1,10 +1,14 @@
 import { Routes, Route } from "react-router-dom";
-import LandingPage from "../pages/LandingPage";
 
+import LandingPage from "../pages/LandingPage";
 import Layout from "../components/layout/Layout";
 
+// Admin authentication
 import Login from "../pages/auth/Login";
+import ProtectedRoute from "../components/auth/ProtectedRoute";
+import PermissionRoute from "../components/auth/PermissionRoute";
 
+// Student authentication
 import StudentLogin from "../pages/students/StudentLogin";
 import StudentChangePassword from "../pages/students/StudentChangePassword";
 import StudentProfile from "../pages/students/StudentProfile";
@@ -14,42 +18,44 @@ import AcademicRecords from "../pages/students/AcademicRecords";
 import StudentDashboard from "../pages/students/StudentDashboard";
 import StudentProtectedRoute from "../components/students/StudentProtectedRoute";
 
+// Teacher authentication
 import TeacherLogin from "../pages/teachers/TeacherLogin";
 import TeacherChangePassword from "../pages/teachers/TeacherChangePassword";
 import TeacherDashboard from "../pages/teachers/TeacherDashboard";
 import TeacherProtectedRoute from "../components/teachers/TeacherProtectedRoute";
 
+// Dashboard and general pages
 import Dashboard from "../pages/dashboard/Dashboard";
 import Promotions from "../pages/promotions/Promotions";
 import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 
-import ProtectedRoute from "../components/auth/ProtectedRoute";
-import PermissionRoute from "../components/auth/PermissionRoute";
-
+// Student management
 import AddStudent from "../pages/students/AddStudent";
 import StudentDetails from "../pages/students/StudentDetails";
 import EditStudent from "../pages/students/EditStudent";
 import ArchivedStudents from "../pages/students/ArchivedStudents";
+
+// Results management
 import ResultEntry from "../pages/results/ResultEntry";
+import SubjectResultSubmissionDetails from "../pages/results/SubjectResultSubmissionDetails";
+import SubjectResultReview from "../pages/results/SubjectResultReview";
+import CompleteResultDraft from "../pages/results/CompleteResultDraft";
+import SubjectResultCorrectionReview from "../pages/results/SubjectResultCorrectionReview";
 
-import ActivityLogs from "../pages/activity/ActivityLogs";
-
-import AdminManagement from "../pages/admin/AdminManagement";
-import AuditLog from "../pages/admin/AuditLog";
-import AcademicSessions from "../pages/academicSessions/AcademicSessions";
-
+// Teacher management and workflows
 import TeacherManagement from "../pages/teachers/TeacherManagement";
 import SubjectAllocation from "../pages/academic/SubjectAllocation";
 import TeacherAssignment from "../pages/teachers/TeacherAssignment";
 import TeacherSubjectResultEntry from "../pages/teachers/TeacherSubjectResultEntry";
-import SubjectResultSubmissionDetails from "../pages/results/SubjectResultSubmissionDetails";
-import SubjectResultReview from "../pages/results/SubjectResultReview";
-import CompleteResultDraft from "../pages/results/CompleteResultDraft";
-
 import TeacherSubjectCorrectionDetails from "../pages/teachers/TeacherSubjectCorrectionDetails";
-import SubjectResultCorrectionReview from "../pages/results/SubjectResultCorrectionReview";
+
+// Administration
+import ActivityLogs from "../pages/activity/ActivityLogs";
+import AdminManagement from "../pages/admin/AdminManagement";
+import AuditLog from "../pages/admin/AuditLog";
+import AcademicSessions from "../pages/academicSessions/AcademicSessions";
 
 function AppRoutes() {
   return (
@@ -65,6 +71,7 @@ function AppRoutes() {
 
       {/* Student authentication */}
       <Route path="/student/login" element={<StudentLogin />} />
+
       <Route
         path="/student/change-password"
         element={<StudentChangePassword />}
@@ -72,6 +79,7 @@ function AppRoutes() {
 
       {/* Teacher authentication */}
       <Route path="/teacher/login" element={<TeacherLogin />} />
+
       <Route
         path="/teacher/change-password"
         element={<TeacherChangePassword />}
@@ -82,31 +90,28 @@ function AppRoutes() {
 
       {/* =========================================
           PROTECTED STUDENT PORTAL
+          Uses separate student authentication
       ========================================= */}
 
       <Route element={<StudentProtectedRoute />}>
         <Route path="/student/dashboard" element={<StudentDashboard />} />
+
+        <Route path="/student/profile" element={<StudentProfile />} />
+
+        <Route path="/student/results" element={<StudentResults />} />
+
+        <Route
+          path="/student/results/:resultId"
+          element={<StudentResultDetails />}
+        />
+
+        <Route path="/student/academic-records" element={<AcademicRecords />} />
       </Route>
-
-      <Route path="/student/profile" element={<StudentProfile />} />
-
-      <Route path="/student/results" element={<StudentResults />} />
-
-      <Route
-        path="/student/results/:resultId"
-        element={<StudentResultDetails />}
-      />
-
-      <Route path="/student/academic-records" element={<AcademicRecords />} />
 
       {/* =========================================
           PROTECTED TEACHER PORTAL
-          Separate from admin authentication/layout
+          Uses separate teacher authentication
       ========================================= */}
-
-      <Route element={<TeacherProtectedRoute />}>
-        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-      </Route>
 
       <Route element={<TeacherProtectedRoute />}>
         <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
@@ -115,8 +120,7 @@ function AppRoutes() {
           path="/teacher/subject-results/:allocationId"
           element={<TeacherSubjectResultEntry />}
         />
-      </Route>
-      <Route element={<TeacherProtectedRoute />}>
+
         <Route
           path="/teacher/subject-corrections/:requestId"
           element={<TeacherSubjectCorrectionDetails />}
@@ -125,6 +129,7 @@ function AppRoutes() {
 
       {/* =========================================
           PROTECTED ADMIN PORTAL
+          Uses admin authentication and permissions
       ========================================= */}
 
       <Route element={<ProtectedRoute />}>
