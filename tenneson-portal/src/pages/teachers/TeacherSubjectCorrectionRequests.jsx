@@ -15,7 +15,7 @@ import {
 
 import teacherApi from "../../api/teacherApi";
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 3;
 
 const TERM_LABELS = {
   first: "First Term",
