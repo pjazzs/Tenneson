@@ -1020,6 +1020,12 @@ exports.getMyProfile = asyncHandler(async (req, res) => {
     });
   }
 
+  // Populate the student's current department.
+  await student.populate({
+    path: "department",
+    select: "name code",
+  });
+
   return res.status(200).json({
     success: true,
 
@@ -1038,10 +1044,19 @@ exports.getMyProfile = asyncHandler(async (req, res) => {
 
       currentClass: student.currentClass,
 
+      department: student.department
+        ? {
+            name: student.department.name,
+            code: student.department.code,
+          }
+        : null,
+
       session: student.session,
 
       photo: student.photo,
+
       parentName: student.parentName,
+
       parentPhone: student.parentPhone,
     },
   });
