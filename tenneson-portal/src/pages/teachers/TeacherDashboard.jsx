@@ -13,16 +13,71 @@ import {
   FaClock,
   FaLock,
   FaExclamationCircle,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 
 import teacherApi from "../../api/teacherApi";
 import useTeacherAuth from "../../hooks/useTeacherAuth";
 import TeacherSubjectCorrectionRequests from "./TeacherSubjectCorrectionRequests";
 
+const ITEMS_PER_PAGE = 3;
+
 const TERM_LABELS = {
   first: "First Term",
   second: "Second Term",
   third: "Third Term",
+};
+
+const PaginationControls = ({ totalItems, currentPage, onPageChange }) => {
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+
+  const safePage = Math.min(currentPage, Math.max(totalPages, 1));
+
+  const startItem = (safePage - 1) * ITEMS_PER_PAGE + 1;
+  const endItem = Math.min(safePage * ITEMS_PER_PAGE, totalItems);
+
+  if (totalItems <= ITEMS_PER_PAGE) {
+    return (
+      <p className="mt-4 text-center text-xs text-slate-500">
+        Showing all {totalItems} {totalItems === 1 ? "item" : "items"}.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row">
+      <p className="text-xs text-slate-500">
+        Showing {startItem}–{endItem} of {totalItems}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(safePage - 1)}
+          disabled={safePage === 1}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <FaChevronLeft />
+          Previous
+        </button>
+
+        <span className="px-2 text-sm font-semibold text-slate-700">
+          {safePage} / {totalPages}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(safePage + 1)}
+          disabled={safePage === totalPages}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+          <FaChevronRight />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const getSubmissionStatus = (status) => {
@@ -40,6 +95,7 @@ const getSubmissionStatus = (status) => {
         className: "bg-amber-100 text-amber-700",
         icon: <FaClock />,
       };
+
     case "rejected":
       return {
         label: "Rejected",
@@ -69,6 +125,9 @@ const TeacherDashboard = () => {
   const [assignmentError, setAssignmentError] = useState("");
   const [assignmentRefresh, setAssignmentRefresh] = useState(0);
 
+  // TEACHING WORKSPACE PAGINATION
+  const [assignmentsPage, setAssignmentsPage] = useState(1);
+
   // RESULT RESPONSIBILITY STATE
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
@@ -77,6 +136,10 @@ const TeacherDashboard = () => {
   const [resultsLoading, setResultsLoading] = useState(false);
   const [resultsError, setResultsError] = useState("");
   const [resultsRefresh, setResultsRefresh] = useState(0);
+
+  // SUBJECT RESULT RESPONSIBILITIES PAGINATION
+  const [resultResponsibilitiesPage, setResultResponsibilitiesPage] =
+    useState(1);
 
   // --------------------------------------------------
   // AVAILABLE ACADEMIC SESSIONS FROM TEACHER ASSIGNMENTS
@@ -103,6 +166,36 @@ const TeacherDashboard = () => {
   );
 
   const availableTerms = selectedSession?.terms || [];
+
+  // --------------------------------------------------
+  // PAGINATION DATA
+  // --------------------------------------------------
+
+  const totalAssignmentsPages = Math.ceil(assignments.length / ITEMS_PER_PAGE);
+
+  const safeAssignmentsPage = Math.min(
+    assignmentsPage,
+    Math.max(totalAssignmentsPages, 1),
+  );
+
+  const paginatedAssignments = assignments.slice(
+    (safeAssignmentsPage - 1) * ITEMS_PER_PAGE,
+    safeAssignmentsPage * ITEMS_PER_PAGE,
+  );
+
+  const totalResultResponsibilitiesPages = Math.ceil(
+    resultAssignments.length / ITEMS_PER_PAGE,
+  );
+
+  const safeResultResponsibilitiesPage = Math.min(
+    resultResponsibilitiesPage,
+    Math.max(totalResultResponsibilitiesPages, 1),
+  );
+
+  const paginatedResultAssignments = resultAssignments.slice(
+    (safeResultResponsibilitiesPage - 1) * ITEMS_PER_PAGE,
+    safeResultResponsibilitiesPage * ITEMS_PER_PAGE,
+  );
 
   // --------------------------------------------------
   // FETCH TEACHER PROFILE
@@ -168,6 +261,7 @@ const TeacherDashboard = () => {
         const fetchedAssignments = response.data.assignments || [];
 
         setAssignments(fetchedAssignments);
+        setAssignmentsPage(1);
 
         // Select a default academic session only when
         // the teacher has not already selected one.
@@ -247,6 +341,7 @@ const TeacherDashboard = () => {
     const fetchResultResponsibilities = async () => {
       if (!selectedSessionId || !selectedTerm) {
         setResultAssignments([]);
+        setResultResponsibilitiesPage(1);
         setResultsLoading(false);
         setResultsError("");
         return;
@@ -265,6 +360,7 @@ const TeacherDashboard = () => {
 
         if (isMounted) {
           setResultAssignments(response.data.assignments || []);
+          setResultResponsibilitiesPage(1);
         }
       } catch (err) {
         console.error(
@@ -274,6 +370,7 @@ const TeacherDashboard = () => {
 
         if (isMounted) {
           setResultAssignments([]);
+          setResultResponsibilitiesPage(1);
 
           setResultsError(
             err.response?.data?.message ||
@@ -315,10 +412,12 @@ const TeacherDashboard = () => {
   };
 
   const handleRetryAssignments = () => {
+    setAssignmentsPage(1);
     setAssignmentRefresh((previous) => previous + 1);
   };
 
   const handleRetryResults = () => {
+    setResultResponsibilitiesPage(1);
     setResultsRefresh((previous) => previous + 1);
   };
 
@@ -326,6 +425,7 @@ const TeacherDashboard = () => {
     const sessionId = event.target.value;
 
     setSelectedSessionId(sessionId);
+    setResultResponsibilitiesPage(1);
 
     const session = academicSessions.find(
       (item) => item._id.toString() === sessionId,
@@ -339,6 +439,7 @@ const TeacherDashboard = () => {
 
   const handleTermChange = (event) => {
     setSelectedTerm(event.target.value);
+    setResultResponsibilitiesPage(1);
   };
 
   // --------------------------------------------------
@@ -356,6 +457,7 @@ const TeacherDashboard = () => {
     .toUpperCase();
 
   const totalResultAssignments = resultAssignments.length;
+
   const rejectedAssignments = resultAssignments.filter(
     (item) => item.isResultOwner && item.submission?.status === "rejected",
   );
@@ -390,7 +492,6 @@ const TeacherDashboard = () => {
 
             <div>
               <h1 className="text-lg font-bold text-slate-900">Tenneson</h1>
-
               <p className="text-xs text-slate-500">Teacher Portal</p>
             </div>
           </div>
@@ -588,71 +689,79 @@ const TeacherDashboard = () => {
           {!assignmentsLoading &&
             !assignmentError &&
             assignments.length > 0 && (
-              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {assignments.map((assignment) => {
-                  const allocation = assignment.allocation || {};
-                  const schoolClass = allocation.schoolClass || {};
-                  const department = allocation.department;
-                  const subject = allocation.subject || {};
-                  const academicSession = assignment.academicSession || {};
+              <>
+                <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {paginatedAssignments.map((assignment) => {
+                    const allocation = assignment.allocation || {};
+                    const schoolClass = allocation.schoolClass || {};
+                    const department = allocation.department;
+                    const subject = allocation.subject || {};
+                    const academicSession = assignment.academicSession || {};
 
-                  return (
-                    <div
-                      key={assignment._id}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-md"
-                    >
-                      <div className="mb-4 flex items-start justify-between gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-lg text-emerald-700">
-                          <FaBookOpen />
+                    return (
+                      <div
+                        key={assignment._id}
+                        className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-md"
+                      >
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-lg text-emerald-700">
+                            <FaBookOpen />
+                          </div>
+
+                          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                            Active
+                          </span>
                         </div>
 
-                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                          Active
-                        </span>
-                      </div>
+                        <h3 className="text-lg font-bold text-slate-900">
+                          {subject.name || "Subject not available"}
+                        </h3>
 
-                      <h3 className="text-lg font-bold text-slate-900">
-                        {subject.name || "Subject not available"}
-                      </h3>
-
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                            Class
-                          </p>
-
-                          <p className="mt-1 font-semibold text-slate-700">
-                            {schoolClass.name || "Class not available"}
-                          </p>
-                        </div>
-
-                        {department && (
+                        <div className="mt-4 space-y-3">
                           <div>
                             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                              Department
+                              Class
                             </p>
 
                             <p className="mt-1 font-semibold text-slate-700">
-                              {department.name}
+                              {schoolClass.name || "Class not available"}
                             </p>
                           </div>
-                        )}
 
-                        <div className="border-t border-slate-100 pt-3">
-                          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                            <FaCalendarAlt />
-                            Academic Session
-                          </p>
+                          {department && (
+                            <div>
+                              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                                Department
+                              </p>
 
-                          <p className="mt-1 font-semibold text-slate-700">
-                            {academicSession.name || "Session not available"}
-                          </p>
+                              <p className="mt-1 font-semibold text-slate-700">
+                                {department.name}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="border-t border-slate-100 pt-3">
+                            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                              <FaCalendarAlt />
+                              Academic Session
+                            </p>
+
+                            <p className="mt-1 font-semibold text-slate-700">
+                              {academicSession.name || "Session not available"}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                <PaginationControls
+                  totalItems={assignments.length}
+                  currentPage={safeAssignmentsPage}
+                  onPageChange={setAssignmentsPage}
+                />
+              </>
             )}
         </section>
 
@@ -750,8 +859,6 @@ const TeacherDashboard = () => {
               </div>
             )}
 
-          {/* SUMMARY */}
-
           {/* REJECTED RESULT NOTIFICATIONS */}
           {!resultsLoading &&
             !resultsError &&
@@ -833,6 +940,8 @@ const TeacherDashboard = () => {
                 })}
               </div>
             )}
+
+          {/* SUMMARY */}
           {!resultsLoading && !resultsError && resultAssignments.length > 0 && (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -925,203 +1034,211 @@ const TeacherDashboard = () => {
 
           {/* RESPONSIBILITY CARDS */}
           {!resultsLoading && !resultsError && resultAssignments.length > 0 && (
-            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {resultAssignments.map((item) => {
-                const allocation = item.allocation || {};
-                const schoolClass = allocation.schoolClass || {};
-                const department = allocation.department;
-                const subject = allocation.subject || {};
-                const submission = item.submission || {};
+            <>
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {paginatedResultAssignments.map((item) => {
+                  const allocation = item.allocation || {};
+                  const schoolClass = allocation.schoolClass || {};
+                  const department = allocation.department;
+                  const subject = allocation.subject || {};
+                  const submission = item.submission || {};
 
-                const status = getSubmissionStatus(submission.status);
+                  const status = getSubmissionStatus(submission.status);
 
-                const eligibleStudents = submission.eligibleStudents || 0;
+                  const eligibleStudents = submission.eligibleStudents || 0;
 
-                const completedScores = submission.studentsWithScores || 0;
+                  const completedScores = submission.studentsWithScores || 0;
 
-                const progress =
-                  eligibleStudents > 0
-                    ? Math.round((completedScores / eligibleStudents) * 100)
-                    : 0;
+                  const progress =
+                    eligibleStudents > 0
+                      ? Math.round((completedScores / eligibleStudents) * 100)
+                      : 0;
 
-                return (
-                  <div
-                    key={item.assignmentId}
-                    className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-md"
-                  >
-                    {/* CARD HEADER */}
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-700">
-                        <FaBookOpen />
+                  return (
+                    <div
+                      key={item.assignmentId}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-md"
+                    >
+                      {/* CARD HEADER */}
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-700">
+                          <FaBookOpen />
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}
+                        >
+                          {status.icon}
+                          {status.label}
+                        </span>
                       </div>
 
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}
-                      >
-                        {status.icon}
-                        {status.label}
-                      </span>
-                    </div>
+                      <h3 className="text-lg font-bold text-slate-900">
+                        {subject.name || "Subject not available"}
+                      </h3>
 
-                    <h3 className="text-lg font-bold text-slate-900">
-                      {subject.name || "Subject not available"}
-                    </h3>
-
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                          Class
-                        </p>
-
-                        <p className="mt-1 font-semibold text-slate-700">
-                          {schoolClass.name || "Class not available"}
-                        </p>
-                      </div>
-
-                      {department && (
+                      <div className="mt-4 space-y-3">
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                            Department
+                            Class
                           </p>
 
                           <p className="mt-1 font-semibold text-slate-700">
-                            {department.name}
+                            {schoolClass.name || "Class not available"}
                           </p>
                         </div>
-                      )}
-                    </div>
 
-                    {/* RESPONSIBILITY */}
-                    <div className="mt-5 border-t border-slate-100 pt-4">
-                      {item.isResultOwner ? (
-                        <div className="flex items-start gap-2 rounded-lg bg-emerald-50 p-3">
-                          <FaCheckCircle className="mt-0.5 shrink-0 text-emerald-600" />
-
+                        {department && (
                           <div>
-                            <p className="text-sm font-semibold text-emerald-800">
-                              You are responsible
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                              Department
                             </p>
 
-                            <p className="mt-1 text-xs leading-5 text-emerald-700">
-                              You are the designated teacher responsible for
-                              submitting this subject's results.
+                            <p className="mt-1 font-semibold text-slate-700">
+                              {department.name}
                             </p>
                           </div>
-                        </div>
-                      ) : item.responsibilityId ? (
-                        <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3">
-                          <FaLock className="mt-0.5 shrink-0 text-amber-600" />
+                        )}
+                      </div>
 
-                          <div>
-                            <p className="text-sm font-semibold text-amber-800">
-                              Another teacher is responsible
-                            </p>
+                      {/* RESPONSIBILITY */}
+                      <div className="mt-5 border-t border-slate-100 pt-4">
+                        {item.isResultOwner ? (
+                          <div className="flex items-start gap-2 rounded-lg bg-emerald-50 p-3">
+                            <FaCheckCircle className="mt-0.5 shrink-0 text-emerald-600" />
 
-                            <p className="mt-1 text-xs leading-5 text-amber-700">
-                              You can view this subject's result status, but you
-                              are not designated to submit its results.
-                            </p>
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-800">
+                                You are responsible
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-emerald-700">
+                                You are the designated teacher responsible for
+                                submitting this subject's results.
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-2 rounded-lg bg-slate-100 p-3">
-                          <FaExclamationCircle className="mt-0.5 shrink-0 text-slate-500" />
+                        ) : item.responsibilityId ? (
+                          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3">
+                            <FaLock className="mt-0.5 shrink-0 text-amber-600" />
 
-                          <div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              No result teacher designated
-                            </p>
+                            <div>
+                              <p className="text-sm font-semibold text-amber-800">
+                                Another teacher is responsible
+                              </p>
 
-                            <p className="mt-1 text-xs leading-5 text-slate-600">
-                              An administrator has not yet designated a teacher
-                              for this subject's result submission.
-                            </p>
+                              <p className="mt-1 text-xs leading-5 text-amber-700">
+                                You can view this subject's result status, but
+                                you are not designated to submit its results.
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-lg bg-slate-100 p-3">
+                            <FaExclamationCircle className="mt-0.5 shrink-0 text-slate-500" />
 
-                    {/* STUDENT SCORE PROGRESS */}
-                    <div className="mt-5">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Student Score Progress
+                            <div>
+                              <p className="text-sm font-semibold text-slate-700">
+                                No result teacher designated
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-slate-600">
+                                An administrator has not yet designated a
+                                teacher for this subject's result submission.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* STUDENT SCORE PROGRESS */}
+                      <div className="mt-5">
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Student Score Progress
+                          </p>
+
+                          <span className="text-sm font-bold text-slate-700">
+                            {completedScores}/{eligibleStudents}
+                          </span>
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+
+                        <p className="mt-2 text-xs text-slate-500">
+                          {progress}% of students have complete CA1, CA2 and
+                          examination scores.
                         </p>
-
-                        <span className="text-sm font-bold text-slate-700">
-                          {completedScores}/{eligibleStudents}
-                        </span>
                       </div>
 
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-emerald-500 transition-all"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
+                      {/* SUBMISSION INFORMATION */}
+                      {submission.submittedAt && (
+                        <div className="mt-4 border-t border-slate-100 pt-3">
+                          <p className="text-xs text-slate-400">Submitted on</p>
 
-                      <p className="mt-2 text-xs text-slate-500">
-                        {progress}% of students have complete CA1, CA2 and
-                        examination scores.
-                      </p>
-                    </div>
-
-                    {/* SUBMISSION INFORMATION */}
-                    {submission.submittedAt && (
-                      <div className="mt-4 border-t border-slate-100 pt-3">
-                        <p className="text-xs text-slate-400">Submitted on</p>
-
-                        <p className="mt-1 text-sm font-medium text-slate-700">
-                          {new Date(submission.submittedAt).toLocaleDateString(
-                            "en-GB",
-                            {
+                          <p className="mt-1 text-sm font-medium text-slate-700">
+                            {new Date(
+                              submission.submittedAt,
+                            ).toLocaleDateString("en-GB", {
                               day: "numeric",
                               month: "long",
                               year: "numeric",
-                            },
-                          )}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* OWNERSHIP / EDITABILITY */}
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                      <span className="text-xs font-medium text-slate-500">
-                        {item.canEdit
-                          ? "Editing permitted"
-                          : item.isResultOwner
-                            ? "Submission locked"
-                            : "View status only"}
-                      </span>
-
-                      {item.canEdit ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                          <FaCheckCircle />
-                          Can submit
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
-                          <FaLock />
-                          Restricted
-                        </span>
+                            })}
+                          </p>
+                        </div>
                       )}
+
+                      {/* OWNERSHIP / EDITABILITY */}
+                      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                        <span className="text-xs font-medium text-slate-500">
+                          {item.canEdit
+                            ? "Editing permitted"
+                            : item.isResultOwner
+                              ? "Submission locked"
+                              : "View status only"}
+                        </span>
+
+                        {item.canEdit ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                            <FaCheckCircle />
+                            Can submit
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+                            <FaLock />
+                            Restricted
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/teacher/subject-results/${item.allocation._id}?academicSessionId=${selectedSessionId}&term=${selectedTerm}`,
+                          )
+                        }
+                        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        <FaClipboardCheck />
+                        Open Result Sheet
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          `/teacher/subject-results/${item.allocation._id}?academicSessionId=${selectedSessionId}&term=${selectedTerm}`,
-                        )
-                      }
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                    >
-                      <FaClipboardCheck />
-                      Open Result Sheet
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+
+              <PaginationControls
+                totalItems={resultAssignments.length}
+                currentPage={safeResultResponsibilitiesPage}
+                onPageChange={setResultResponsibilitiesPage}
+              />
+            </>
           )}
         </section>
       </main>
