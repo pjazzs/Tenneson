@@ -43,9 +43,21 @@ export default function InstallTennesonButton() {
       return;
     }
 
-    await installPrompt.prompt();
-    await installPrompt.userChoice;
-    setInstallPrompt(null);
+    try {
+      await installPrompt.prompt();
+
+      const { outcome } = await installPrompt.userChoice;
+
+      if (outcome === "accepted") {
+        console.log("User accepted the installation prompt.");
+      } else {
+        console.log("User dismissed the installation prompt.");
+      }
+    } catch (error) {
+      console.error("PWA installation failed:", error);
+    } finally {
+      setInstallPrompt(null);
+    }
   };
 
   if (isInstalled) return null;
