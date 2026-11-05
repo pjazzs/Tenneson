@@ -36,6 +36,7 @@ function BulkImportStudents({ onImportSuccess }) {
         dateOfBirth: "MM/DD/YYYY",
         admissionYear: "",
         currentClass: "",
+        department: "",
         session: "",
         parentName: "",
         parentPhone: "08012345678",
@@ -44,17 +45,14 @@ function BulkImportStudents({ onImportSuccess }) {
 
     const worksheet = XLSX.utils.json_to_sheet(template);
 
-    // Explicitly format the ParentPhone column as text.
-    // This helps preserve leading zeros when users enter phone numbers.
-    worksheet.J1 = {
+    // Preserve the parent phone number's leading zero.
+    worksheet.K1 = {
       t: "s",
       v: "08012345678",
       z: "@",
     };
 
-    // Format the parentPhone column cells as text.
-    // The template's first example row is row 2.
-    worksheet.J2 = {
+    worksheet.K2 = {
       t: "s",
       v: "08012345678",
       z: "@",
@@ -69,6 +67,7 @@ function BulkImportStudents({ onImportSuccess }) {
       { wch: 18 }, // dateOfBirth
       { wch: 16 }, // admissionYear
       { wch: 16 }, // currentClass
+      { wch: 18 }, // department
       { wch: 16 }, // session
       { wch: 24 }, // parentName
       { wch: 20 }, // parentPhone
@@ -204,12 +203,10 @@ function BulkImportStudents({ onImportSuccess }) {
   // ==========================================
 
   const closeModal = () => {
-    // Never close the modal while the backend import is running.
     if (importing) {
       return;
     }
 
-    // Keep the report token accessible until credentials are downloaded.
     if (importResult?.credentialReport?.reportToken && !credentialsDownloaded) {
       alert(
         "Please download the student credential report before closing this window. " +
@@ -340,15 +337,34 @@ function BulkImportStudents({ onImportSuccess }) {
               Download Excel Template
             </button>
 
-            <div className="text-gray-300 text-sm mb-5 space-y-1">
+            {/* Import Instructions */}
+
+            <div className="text-gray-300 text-sm mb-5 space-y-2">
+              <p>
+                <strong>Department:</strong> Required for SS1–SS3. Enter Arts,
+                Science, or Commercial. Leave blank for JSS1–JSS3.
+              </p>
+
               <p>
                 <strong>Parent phone:</strong> Enter exactly 11 digits,
                 including the leading zero (e.g. 08012345678).
               </p>
+
               <p>
                 Keep phone numbers as text in Excel. Do not remove the leading
                 zero.
               </p>
+
+              <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                <p className="font-semibold text-white mb-2">
+                  Department examples
+                </p>
+
+                <p>JSS1 – Leave department blank</p>
+                <p>SS1 – Science</p>
+                <p>SS2 – Arts</p>
+                <p>SS3 – Commercial</p>
+              </div>
             </div>
 
             {/* File Upload */}

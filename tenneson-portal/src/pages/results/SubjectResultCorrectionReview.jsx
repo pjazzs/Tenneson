@@ -270,7 +270,7 @@ const SubjectResultCorrectionReview = () => {
     <section className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 className="text-xl font-bold text-slate-900">
             Subject Correction Requests
           </h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -298,7 +298,7 @@ const SubjectResultCorrectionReview = () => {
               onClick={() => handleStatusChange(value)}
               className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                 status === value
-                  ? "border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                  ? "border-indigo-500 bg-indigo-500/20 text-slate-900"
                   : "border-white/10 bg-slate-900 text-slate-400 hover:bg-slate-800"
               }`}
             >

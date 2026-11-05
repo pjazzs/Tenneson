@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaUserPlus, FaArrowLeft } from "react-icons/fa";
 import api from "../../api/axios";
+
+const SENIOR_CLASSES = ["SS1", "SS2", "SS3"];
+const JUNIOR_CLASSES = ["JSS1", "JSS2", "JSS3"];
 
 function AddStudent() {
   const navigate = useNavigate();
@@ -14,92 +17,150 @@ function AddStudent() {
     gender: "",
     dateOfBirth: "",
     currentClass: "",
+    department: "",
     session: "",
     parentName: "",
     parentPhone: "",
     password: "",
   });
 
+  const [departments, setDepartments] = useState([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const isSeniorClass = SENIOR_CLASSES.includes(formData.currentClass);
+  const isJuniorClass = JUNIOR_CLASSES.includes(formData.currentClass);
+
+  // Fetch available departments
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchDepartments = async () => {
+      try {
+        const response = await api.get("/departments");
+
+        if (!ignore) {
+          setDepartments(response.data.departments || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setMessage(
+            error.response?.data?.message || "Failed to load departments.",
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setDepartmentsLoading(false);
+        }
+      }
+    };
+
+    fetchDepartments();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // Admission year: numbers only, maximum 4 digits
     if (name === "admissionYear") {
       const numericValue = value.replace(/\D/g, "").slice(0, 4);
 
-      setFormData({
-        ...formData,
-        [name]: numericValue,
-      });
+      setFormData((previous) => ({
+        ...previous,
+        admissionYear: numericValue,
+      }));
 
       return;
     }
 
-    // Parent phone: numbers only, maximum 11 digits
     if (name === "parentPhone") {
       const numericValue = value.replace(/\D/g, "").slice(0, 11);
 
-      setFormData({
-        ...formData,
-        [name]: numericValue,
-      });
+      setFormData((previous) => ({
+        ...previous,
+        parentPhone: numericValue,
+      }));
 
       return;
     }
 
-    // Session: numbers and slash only, maximum 9 characters
     if (name === "session") {
       const sessionValue = value.replace(/[^\d/]/g, "").slice(0, 9);
 
-      setFormData({
-        ...formData,
-        [name]: sessionValue,
-      });
+      setFormData((previous) => ({
+        ...previous,
+        session: sessionValue,
+      }));
 
       return;
     }
 
-    setFormData({
-      ...formData,
-      [name]: value,
+    setFormData((previous) => {
+      const updated = {
+        ...previous,
+        [name]: value,
+      };
+
+      // Clear department when changing to a junior class
+      if (name === "currentClass" && JUNIOR_CLASSES.includes(value)) {
+        updated.department = "";
+      }
+
+      return updated;
     });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    setLoading(true);
     setMessage("");
 
-    // Admission year validation
     if (!/^\d{4}$/.test(formData.admissionYear)) {
       setMessage("Admission year must be a valid 4-digit year.");
-
-      setLoading(false);
       return;
     }
 
-    // Session validation
     if (!/^\d{4}\/\d{4}$/.test(formData.session)) {
       setMessage("Session must be in the format YYYY/YYYY.");
-
-      setLoading(false);
       return;
     }
 
-    // Parent phone validation
     if (!/^\d{11}$/.test(formData.parentPhone)) {
       setMessage("Parent phone must contain exactly 11 digits.");
+      return;
+    }
 
-      setLoading(false);
+    if (isSeniorClass && !formData.department) {
+      setMessage("Please select a department for this senior student.");
+      return;
+    }
+
+    if (!isSeniorClass && !isJuniorClass) {
+      setMessage("Please select a valid class.");
+      return;
+    }
+
+    if (isSeniorClass && departments.length === 0) {
+      setMessage(
+        "No departments are available. Please check department settings.",
+      );
       return;
     }
 
     try {
-      await api.post("/students", formData);
+      setLoading(true);
+
+      const payload = {
+        ...formData,
+        department: isSeniorClass ? formData.department : null,
+      };
+
+      await api.post("/students", payload);
 
       setMessage("Student added successfully");
 
@@ -129,46 +190,19 @@ function AddStudent() {
   return (
     <div className="text-white">
       {/* Header */}
-      <div
-        className="
-        flex
-        justify-between
-        items-center
-        mb-8
-      "
-      >
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1
-            className="
-            text-3xl
-            font-bold
-            text-gray-900
-          "
-          >
-            Add Student
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Add Student</h1>
 
-          <p
-            className="
-            text-gray-600
-            mt-2
-          "
-          >
+          <p className="text-gray-600 mt-2">
             Register a new student into the portal
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() => navigate("/students")}
-          className="
-            flex
-            items-center
-            gap-2
-            bg-slate-800
-            px-4
-            py-2
-            rounded-xl
-          "
+          className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl"
         >
           <FaArrowLeft />
           Back
@@ -178,16 +212,11 @@ function AddStudent() {
       {/* Message */}
       {message && (
         <div
-          className={`
-            p-4
-            rounded-xl
-            mb-6
-            ${
-              message.includes("success")
-                ? "bg-green-600/20 text-green-400"
-                : "bg-red-600/20 text-red-400"
-            }
-          `}
+          className={`p-4 rounded-xl mb-6 ${
+            message.includes("success")
+              ? "bg-green-600/20 text-green-400"
+              : "bg-red-600/20 text-red-400"
+          }`}
         >
           {message}
         </div>
@@ -196,18 +225,7 @@ function AddStudent() {
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="
-          bg-slate-900
-          border
-          border-white/10
-          shadow-xl
-          rounded-2xl
-          p-8
-          grid
-          grid-cols-1
-          md:grid-cols-2
-          gap-6
-        "
+        className="bg-slate-900 border border-white/10 shadow-xl rounded-2xl p-8 grid grid-cols-1 md:grid-cols-2 gap-6"
       >
         {/* Admission Year */}
         <input
@@ -261,9 +279,7 @@ function AddStudent() {
           required
         >
           <option value="">Select Gender</option>
-
           <option value="Male">Male</option>
-
           <option value="Female">Female</option>
         </select>
 
@@ -286,19 +302,39 @@ function AddStudent() {
           required
         >
           <option value="">Select Current Class</option>
-
           <option value="JSS1">JSS1</option>
-
           <option value="JSS2">JSS2</option>
-
           <option value="JSS3">JSS3</option>
-
           <option value="SS1">SS1</option>
-
           <option value="SS2">SS2</option>
-
           <option value="SS3">SS3</option>
         </select>
+
+        {/* Department - Senior Classes Only */}
+        {isSeniorClass && (
+          <select
+            name="department"
+            value={formData.department}
+            onChange={handleChange}
+            className={inputStyle}
+            required
+            disabled={departmentsLoading || departments.length === 0}
+          >
+            <option value="">
+              {departmentsLoading
+                ? "Loading departments..."
+                : departments.length === 0
+                  ? "No departments available"
+                  : "Select Department"}
+            </option>
+
+            {departments.map((department) => (
+              <option key={department._id} value={department._id}>
+                {department.name}
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* Session */}
         <input
@@ -332,7 +368,7 @@ function AddStudent() {
           value={formData.parentPhone}
           onChange={handleChange}
           inputMode="numeric"
-          maxLength={12}
+          maxLength={11}
           pattern="\d{11}"
           className={inputStyle}
           required
@@ -352,24 +388,11 @@ function AddStudent() {
 
         {/* Submit */}
         <button
-          disabled={loading}
-          className="
-            md:col-span-2
-            flex
-            justify-center
-            items-center
-            gap-3
-            bg-green-600
-            hover:bg-green-700
-            py-3
-            rounded-xl
-            font-semibold
-            transition
-            disabled:opacity-50
-          "
+          type="submit"
+          disabled={loading || departmentsLoading}
+          className="md:col-span-2 flex justify-center items-center gap-3 bg-green-600 hover:bg-green-700 py-3 rounded-xl font-semibold transition disabled:opacity-50"
         >
           <FaUserPlus />
-
           {loading ? "Adding Student..." : "Add Student"}
         </button>
       </form>
