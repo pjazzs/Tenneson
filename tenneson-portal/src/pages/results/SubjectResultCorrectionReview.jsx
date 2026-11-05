@@ -140,55 +140,14 @@ const SubjectResultCorrectionReview = () => {
   }, [status, page]);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+
     const timer = setTimeout(() => {
       fetchRequests();
     }, 0);
 
     return () => clearTimeout(timer);
   }, [fetchRequests]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    const loadRequests = async () => {
-      try {
-        const response = await getSubjectResultCorrectionRequests({
-          status,
-          page,
-          limit: 10,
-        });
-
-        if (ignore) return;
-
-        setRequests(response.correctionRequests || []);
-        setPagination(
-          response.pagination || {
-            page: 1,
-            totalPages: 1,
-            total: 0,
-          },
-        );
-        setError("");
-      } catch (err) {
-        if (ignore) return;
-
-        setError(
-          err.response?.data?.message ||
-            "Failed to load subject correction requests.",
-        );
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadRequests();
-
-    return () => {
-      ignore = true;
-    };
-  }, [status, page]);
 
   const handleStatusChange = (value) => {
     setStatus(value);
@@ -311,7 +270,7 @@ const SubjectResultCorrectionReview = () => {
     <section className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">
+          <h2 className="text-xl font-bold text-white">
             Subject Correction Requests
           </h2>
           <p className="mt-1 text-sm text-slate-400">
