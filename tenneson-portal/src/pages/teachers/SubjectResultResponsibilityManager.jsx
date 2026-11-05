@@ -36,6 +36,12 @@ function SubjectResultResponsibilityManager() {
   const [responsibilities, setResponsibilities] = useState([]);
   const [teacherAssignments, setTeacherAssignments] = useState([]);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalResponsibilities, setTotalResponsibilities] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingResponsibilities, setLoadingResponsibilities] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
@@ -75,7 +81,6 @@ function SubjectResultResponsibilityManager() {
     : availableTerms[0]?.value || "first";
 
   // Only show active allocations with active related records
-  // Only show active allocations, grouped by class, department and subject
   const activeAllocations = useMemo(() => {
     return options.allocations
       .filter(
@@ -86,7 +91,7 @@ function SubjectResultResponsibilityManager() {
           (!allocation.department || allocation.department.isActive !== false),
       )
       .sort((a, b) => {
-        // 1. Sort by class: JSS1, JSS2, JSS3, SS1, SS2, SS3
+        // 1. Sort by class
         const classCompare = (a.schoolClass?.name || "").localeCompare(
           b.schoolClass?.name || "",
           undefined,
@@ -95,7 +100,7 @@ function SubjectResultResponsibilityManager() {
 
         if (classCompare !== 0) return classCompare;
 
-        // 2. Sort by department: Arts before Science
+        // 2. Sort by department
         const departmentCompare = (a.department?.name || "").localeCompare(
           b.department?.name || "",
           undefined,
@@ -104,7 +109,7 @@ function SubjectResultResponsibilityManager() {
 
         if (departmentCompare !== 0) return departmentCompare;
 
-        // 3. Sort subjects alphabetically within each class and department
+        // 3. Sort subjects alphabetically
         return (a.subject?.name || "").localeCompare(
           b.subject?.name || "",
           undefined,
@@ -112,6 +117,7 @@ function SubjectResultResponsibilityManager() {
         );
       });
   }, [options.allocations]);
+
   // Load academic sessions, teachers and subject allocations
   useEffect(() => {
     let cancelled = false;
@@ -186,59 +192,7 @@ function SubjectResultResponsibilityManager() {
       .join(" ");
   }, []);
 
-  // Load academic sessions, teachers and subject allocations
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchOptions = async () => {
-      try {
-        const response = await api.get("/teacher-assignments/options");
-
-        if (cancelled) return;
-
-        const loadedOptions = response.data.options || initialOptions;
-
-        const sessions = loadedOptions.academicSessions || [];
-
-        setOptions({
-          teachers: loadedOptions.teachers || [],
-          academicSessions: sessions,
-          allocations: loadedOptions.allocations || [],
-        });
-
-        const activeSession = sessions.find((session) => session.isActive);
-
-        const nextSessionId = activeSession?._id || sessions[0]?._id || "";
-
-        setAcademicSessionId(nextSessionId);
-        setLoadingResponsibilities(Boolean(nextSessionId));
-        setError("");
-      } catch (err) {
-        if (cancelled) return;
-
-        console.error(
-          "Result responsibility options error:",
-          err.response?.data || err.message,
-        );
-
-        setError(
-          getErrorMessage(err, "Failed to load responsibility options."),
-        );
-      } finally {
-        if (!cancelled) {
-          setLoadingOptions(false);
-        }
-      }
-    };
-
-    fetchOptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Load subject result responsibilities
+  // Load subject result responsibilities with pagination
   useEffect(() => {
     if (!academicSessionId || !effectiveTerm) return;
 
@@ -252,6 +206,8 @@ function SubjectResultResponsibilityManager() {
             params: {
               academicSessionId,
               term: effectiveTerm,
+              page: currentPage,
+              limit: pageSize,
             },
           },
         );
@@ -259,6 +215,11 @@ function SubjectResultResponsibilityManager() {
         if (cancelled) return;
 
         setResponsibilities(response.data.responsibilities || []);
+
+        setTotalResponsibilities(response.data.totalResponsibilities || 0);
+
+        setTotalPages(response.data.pagination?.totalPages || 0);
+
         setError("");
       } catch (err) {
         if (cancelled) return;
@@ -269,6 +230,8 @@ function SubjectResultResponsibilityManager() {
         );
 
         setResponsibilities([]);
+        setTotalResponsibilities(0);
+        setTotalPages(0);
 
         setError(
           getErrorMessage(
@@ -288,7 +251,7 @@ function SubjectResultResponsibilityManager() {
     return () => {
       cancelled = true;
     };
-  }, [academicSessionId, effectiveTerm, refreshKey]);
+  }, [academicSessionId, effectiveTerm, currentPage, pageSize, refreshKey]);
 
   // Load eligible teacher assignments for the selected allocation
   useEffect(() => {
@@ -360,6 +323,11 @@ function SubjectResultResponsibilityManager() {
     setTeacherAssignmentId("");
     setTeacherAssignments([]);
     setResponsibilities([]);
+
+    setCurrentPage(1);
+    setTotalResponsibilities(0);
+    setTotalPages(0);
+
     setReason("");
 
     setLoadingAssignments(false);
@@ -378,6 +346,11 @@ function SubjectResultResponsibilityManager() {
     setTeacherAssignmentId("");
     setTeacherAssignments([]);
     setResponsibilities([]);
+
+    setCurrentPage(1);
+    setTotalResponsibilities(0);
+    setTotalPages(0);
+
     setReason("");
 
     setLoadingAssignments(false);
@@ -496,7 +469,6 @@ function SubjectResultResponsibilityManager() {
 
   const getAssignmentLabel = (assignment) => {
     const teacherName = assignment.teacher?.fullName || "Unknown teacher";
-
     const employeeId = assignment.teacher?.employeeId;
 
     return employeeId ? `${teacherName} (${employeeId})` : teacherName;
@@ -779,7 +751,7 @@ function SubjectResultResponsibilityManager() {
               </div>
 
               <span className="rounded-full bg-green-500/10 px-3 py-1 text-sm font-semibold text-green-300">
-                {responsibilities.length} designated
+                {totalResponsibilities} designated
               </span>
             </div>
 
@@ -867,6 +839,76 @@ function SubjectResultResponsibilityManager() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* PAGINATION CONTROLS */}
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
+                <span>
+                  {totalResponsibilities === 0
+                    ? "Showing 0 results"
+                    : `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(
+                        currentPage * pageSize,
+                        totalResponsibilities,
+                      )} of ${totalResponsibilities}`}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <label htmlFor="responsibilityPageSize">Rows per page</label>
+
+                  <select
+                    id="responsibilityPageSize"
+                    value={pageSize}
+                    onChange={(event) => {
+                      setLoadingResponsibilities(true);
+                      setPageSize(Number(event.target.value));
+                      setCurrentPage(1);
+                    }}
+                    disabled={loadingResponsibilities}
+                    className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-white outline-none focus:border-green-500 disabled:opacity-50"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingResponsibilities(true);
+                    setCurrentPage((previous) => Math.max(1, previous - 1));
+                  }}
+                  disabled={loadingResponsibilities || currentPage <= 1}
+                  className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-gray-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Previous
+                </button>
+
+                <span className="min-w-24 text-center text-sm text-gray-400">
+                  Page {totalPages === 0 ? 0 : currentPage} of {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingResponsibilities(true);
+                    setCurrentPage((previous) =>
+                      Math.min(totalPages, previous + 1),
+                    );
+                  }}
+                  disabled={
+                    loadingResponsibilities ||
+                    totalPages === 0 ||
+                    currentPage >= totalPages
+                  }
+                  className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-gray-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </>

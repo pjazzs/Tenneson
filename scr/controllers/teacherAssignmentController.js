@@ -498,6 +498,27 @@ exports.updateTeacherAssignmentStatus = asyncHandler(async (req, res) => {
 exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
   const { academicSessionId, term } = req.query;
 
+  // Pagination parameters
+  const parsedPage = Number(req.query.page ?? 1);
+  const parsedLimit = Number(req.query.limit ?? 10);
+
+  if (
+    !Number.isInteger(parsedPage) ||
+    parsedPage < 1 ||
+    !Number.isInteger(parsedLimit) ||
+    parsedLimit < 1
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Page and limit must be positive integers.",
+    });
+  }
+
+  const page = parsedPage;
+  const limit = Math.min(parsedLimit, 50);
+  const skip = (page - 1) * limit;
+
+  // Validate academic session ID
   if (
     typeof academicSessionId !== "string" ||
     !validateObjectId(academicSessionId)
@@ -505,6 +526,7 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
     return sendInvalidId(res, "academic session");
   }
 
+  // Validate term
   if (!["first", "second", "third"].includes(term)) {
     return res.status(400).json({
       success: false,
@@ -512,6 +534,7 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
     });
   }
 
+  // Confirm academic session exists
   const session = await AcademicSession.findById(academicSessionId);
 
   if (!session) {
@@ -521,39 +544,50 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
     });
   }
 
-  const responsibilities = await SubjectResultResponsibility.find({
+  const filter = {
     academicSession: academicSessionId,
     term,
-  })
-    .populate("academicSession", "name")
-    .populate({
-      path: "allocation",
-      populate: [
-        {
-          path: "schoolClass",
-          select: "name level",
+  };
+
+  // Fetch current page and total count
+  const [responsibilities, totalResponsibilities] = await Promise.all([
+    SubjectResultResponsibility.find(filter)
+      .populate("academicSession", "name")
+      .populate({
+        path: "allocation",
+        populate: [
+          {
+            path: "schoolClass",
+            select: "name level",
+          },
+          {
+            path: "department",
+            select: "name code",
+          },
+          {
+            path: "subject",
+            select: "name code",
+          },
+        ],
+      })
+      .populate({
+        path: "teacherAssignment",
+        populate: {
+          path: "teacher",
+          select: "fullName email employeeId isActive",
         },
-        {
-          path: "department",
-          select: "name code",
-        },
-        {
-          path: "subject",
-          select: "name code",
-        },
-      ],
-    })
-    .populate({
-      path: "teacherAssignment",
-      populate: {
-        path: "teacher",
-        select: "fullName email employeeId isActive",
-      },
-    })
-    .populate("assignedBy", "fullName")
-    .populate("updatedBy", "fullName")
-    .sort({ createdAt: -1 })
-    .lean();
+      })
+      .populate("assignedBy", "fullName")
+      .populate("updatedBy", "fullName")
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    SubjectResultResponsibility.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(totalResponsibilities / limit);
 
   return res.status(200).json({
     success: true,
@@ -562,7 +596,12 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
       name: session.name,
     },
     term,
-    totalResponsibilities: responsibilities.length,
+    totalResponsibilities,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      pageSize: limit,
+    },
     responsibilities,
   });
 });

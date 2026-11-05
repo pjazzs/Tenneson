@@ -1220,11 +1220,8 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
   }
 
   const workbook = XLSX.readFile(req.file.path);
-
   const sheetName = workbook.SheetNames[0];
-
   const worksheet = workbook.Sheets[sheetName];
-
   const students = XLSX.utils.sheet_to_json(worksheet);
 
   /*
@@ -1240,7 +1237,6 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
   }
 
   const importedStudents = [];
-
   const skippedStudents = [];
 
   /*
@@ -1250,6 +1246,9 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
   */
 
   const allowedClasses = ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
+
+  const juniorClasses = ["JSS1", "JSS2", "JSS3"];
+  const seniorClasses = ["SS1", "SS2", "SS3"];
 
   /*
   |--------------------------------------------------------------------------
@@ -1265,9 +1264,15 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     const dateOfBirth = student.DateOfBirth ?? student.dateOfBirth;
     const admissionYear = student.AdmissionYear ?? student.admissionYear;
     const currentClass = student.CurrentClass ?? student.currentClass;
+
+    const departmentName = String(
+      student.Department ?? student.department ?? "",
+    ).trim();
+
     const session = student.Session ?? student.session;
     const parentName = student.ParentName ?? student.parentName;
     const parentPhone = student.ParentPhone ?? student.parentPhone;
+
     /*
     |--------------------------------------------------------------------------
     | Required Fields
@@ -1378,6 +1383,91 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
+    | Department Validation
+    |--------------------------------------------------------------------------
+    */
+
+    let departmentId = null;
+
+    // Junior students must not have a department.
+    if (juniorClasses.includes(currentClass) && departmentName) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          currentClass,
+          department: departmentName,
+        },
+        reason: "Junior classes cannot be assigned to a department.",
+      });
+
+      continue;
+    }
+
+    // Senior students must have a valid active department.
+    if (seniorClasses.includes(currentClass)) {
+      if (!departmentName) {
+        skippedStudents.push({
+          student: {
+            firstName,
+            lastName,
+            currentClass,
+          },
+          reason: "A department is required for senior classes.",
+        });
+
+        continue;
+      }
+
+      const matchedDepartment = await Department.findOne({
+        name: {
+          $regex: new RegExp(`^${escapeRegex(departmentName)}$`, "i"),
+        },
+        isActive: true,
+      });
+
+      if (!matchedDepartment) {
+        skippedStudents.push({
+          student: {
+            firstName,
+            lastName,
+            currentClass,
+            department: departmentName,
+          },
+          reason:
+            "Department must match an existing active department (Arts, Science, or Commercial).",
+        });
+
+        continue;
+      }
+
+      departmentId = matchedDepartment._id;
+    }
+
+    // Apply the existing department validation rules.
+    const departmentValidation = await validateStudentDepartment({
+      currentClass,
+      departmentId,
+    });
+
+    if (!departmentValidation.valid) {
+      skippedStudents.push({
+        student: {
+          firstName,
+          lastName,
+          currentClass,
+          department: departmentName,
+        },
+        reason: departmentValidation.error,
+      });
+
+      continue;
+    }
+
+    const validatedDepartment = departmentValidation.department;
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Validation
     |--------------------------------------------------------------------------
     */
@@ -1396,27 +1486,25 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     }
 
     /*
-|--------------------------------------------------------------------------
-| Parent Phone Validation
-|--------------------------------------------------------------------------
-| Excel may remove the leading zero when a phone number is stored
-| as a numeric cell.
-|
-| Examples:
-| 8012345678   -> 08012345678
-| "8012345678" -> 08012345678
-| "08012345678" remains unchanged.
-|
-| The normalized number must still contain exactly 11 digits.
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | Parent Phone Validation
+    |--------------------------------------------------------------------------
+    | Excel may remove the leading zero when a phone number is stored
+    | as a numeric cell.
+    |
+    | Examples:
+    | 8012345678   -> 08012345678
+    | "8012345678" -> 08012345678
+    | "08012345678" remains unchanged.
+    |
+    | The normalized number must still contain exactly 11 digits.
+    |--------------------------------------------------------------------------
+    */
 
     const rawParentPhone = parentPhone;
-
     let normalizedParentPhone = "";
 
     if (typeof rawParentPhone === "number" && Number.isFinite(rawParentPhone)) {
-      // Excel numeric cells may contain a phone number without its leading zero.
       normalizedParentPhone = String(rawParentPhone);
     } else if (typeof rawParentPhone === "string") {
       normalizedParentPhone = rawParentPhone.trim();
@@ -1424,7 +1512,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       normalizedParentPhone = String(rawParentPhone).trim();
     }
 
-    // Only restore the Nigerian leading zero for a 10-digit mobile number.
+    // Restore the Nigerian leading zero for a 10-digit mobile number.
     if (/^[1-9]\d{9}$/.test(normalizedParentPhone)) {
       normalizedParentPhone = `0${normalizedParentPhone}`;
     }
@@ -1442,7 +1530,6 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       continue;
     }
 
-    // Store the normalized phone number as a string.
     const validatedParentPhone = normalizedParentPhone;
 
     /*
@@ -1452,31 +1539,25 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     */
 
     const startOfDay = new Date(parsedDateOfBirth);
-
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date(parsedDateOfBirth);
-
     endOfDay.setHours(23, 59, 59, 999);
 
     const escapedFirstName = escapeRegex(firstName.trim());
-
     const escapedLastName = escapeRegex(lastName.trim());
 
     const existingStudent = await Student.findOne({
       firstName: {
         $regex: new RegExp(`^${escapedFirstName}$`, "i"),
       },
-
       lastName: {
         $regex: new RegExp(`^${escapedLastName}$`, "i"),
       },
-
       dateOfBirth: {
         $gte: startOfDay,
         $lte: endOfDay,
       },
-
       isActive: true,
     });
 
@@ -1487,9 +1568,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
           lastName,
           dateOfBirth,
         },
-
         existingStudentId: existingStudent.studentId,
-
         reason: "Student already exists.",
       });
 
@@ -1503,18 +1582,15 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     |
     | The global sequence remains unchanged.
     |
-    | Example:
-    |
     | Base ID:
     | TCC00071
     |
     | Official ID:
     | 2025/TCC00071
-    |
+    |--------------------------------------------------------------------------
     */
 
     const baseStudentId = await generateStudentId();
-
     const studentId = `${parsedAdmissionYear}/${baseStudentId}`;
 
     /*
@@ -1524,35 +1600,26 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
     */
 
     let newStudent;
-
     let newCredential;
 
     try {
       newStudent = await Student.create({
         studentId,
-
         admissionYear: parsedAdmissionYear,
-
         firstName,
-
         lastName,
-
         otherName,
-
         gender,
-
         dateOfBirth: parsedDateOfBirth,
-
         currentClass,
 
+        // Save the Department ObjectId for senior students.
+        department: validatedDepartment?._id || null,
+
         session,
-
         parentName,
-
         parentPhone: validatedParentPhone,
-
         createdBy: req.admin._id,
-
         updatedBy: req.admin._id,
       });
 
@@ -1564,7 +1631,6 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
       const credentialResult = await createBulkStudentCredential({
         student: newStudent,
-
         adminId: req.admin._id,
       });
 
@@ -1575,26 +1641,23 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
       | Store Imported Student
       |--------------------------------------------------------------------------
       |
-      | The temporary plaintext password is intentionally NOT returned.
-      |
+      | The temporary plaintext password is intentionally NOT returned
+      | in the normal JSON response.
+      |--------------------------------------------------------------------------
       */
 
       importedStudents.push({
         studentId: newStudent.studentId,
-
         admissionYear: newStudent.admissionYear,
-
         firstName: newStudent.firstName,
-
         lastName: newStudent.lastName,
-
         currentClass: newStudent.currentClass,
 
-        session: newStudent.session,
+        department: validatedDepartment?.name || null,
 
+        session: newStudent.session,
         username: credentialResult.credential.username,
         temporaryPassword: credentialResult.temporaryPassword,
-
         mustChangePassword: credentialResult.credential.mustChangePassword,
       });
     } catch (error) {
@@ -1643,9 +1706,9 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
           gender,
           admissionYear,
           currentClass,
+          department: departmentName,
           session,
         },
-
         reason: error.message || "Unable to create student account.",
       });
     }
@@ -1659,9 +1722,7 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
   await logActivity({
     adminId: req.admin._id,
-
     action: "BULK_IMPORT_STUDENTS",
-
     details: `${importedStudents.length} students imported`,
   });
 
@@ -1675,14 +1736,13 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
   }
 
   /*
-|--------------------------------------------------------------------------
-| Remove Plaintext Passwords From JSON Response
-|--------------------------------------------------------------------------
-*/
+  |--------------------------------------------------------------------------
+  | Remove Plaintext Passwords From JSON Response
+  |--------------------------------------------------------------------------
+  */
 
   const responseStudents = importedStudents.map((student) => {
     const { temporaryPassword, ...safeStudent } = student;
-
     return safeStudent;
   });
 
@@ -1694,19 +1754,13 @@ exports.bulkImportStudents = asyncHandler(async (req, res) => {
 
   return res.status(201).json({
     success: true,
-
     message: "Bulk import completed successfully.",
-
     summary: {
       totalRows: students.length,
-
       imported: importedStudents.length,
-
       skipped: skippedStudents.length,
     },
-
     importedStudents: responseStudents,
-
     skippedStudents,
     credentialReport,
   });
