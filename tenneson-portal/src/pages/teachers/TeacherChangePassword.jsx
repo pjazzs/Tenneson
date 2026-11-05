@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   FaLock,
   FaEye,
   FaEyeSlash,
   FaSpinner,
   FaCheckCircle,
+  FaCircle,
 } from "react-icons/fa";
 
 import teacherApi from "../../api/teacherApi";
@@ -28,29 +30,45 @@ function TeacherChangePassword() {
     "teacherPasswordChangeToken",
   );
 
-  const validatePassword = () => {
-    if (newPassword.length < 8 || newPassword.length > 128) {
-      return "Password must contain between 8 and 128 characters.";
-    }
+  const passwordRequirements = [
+    {
+      label: "At least 8 characters",
+      met: newPassword.length >= 8,
+    },
+    {
+      label: "No more than 128 characters",
+      met: newPassword.length <= 128,
+    },
+    {
+      label: "At least one uppercase letter (A–Z)",
+      met: /[A-Z]/.test(newPassword),
+    },
+    {
+      label: "At least one lowercase letter (a–z)",
+      met: /[a-z]/.test(newPassword),
+    },
+    {
+      label: "At least one number (0–9)",
+      met: /[0-9]/.test(newPassword),
+    },
+    {
+      label: "At least one special character (!@#$ etc.)",
+      met: /[^A-Za-z0-9]/.test(newPassword),
+    },
+  ];
 
-    if (!/[a-z]/.test(newPassword)) {
-      return "Password must contain at least one lowercase letter.";
-    }
+  const allRequirementsMet = passwordRequirements.every(
+    (requirement) => requirement.met,
+  );
 
-    if (!/[A-Z]/.test(newPassword)) {
-      return "Password must contain at least one uppercase letter.";
-    }
+  const passwordsMatch =
+    confirmPassword.length > 0 && newPassword === confirmPassword;
 
-    if (!/[0-9]/.test(newPassword)) {
-      return "Password must contain at least one number.";
-    }
-
-    if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      return "Password must contain at least one special character.";
-    }
-
-    return "";
-  };
+  const canSubmit =
+    allRequirementsMet &&
+    passwordsMatch &&
+    Boolean(passwordChangeToken) &&
+    !loading;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -63,20 +81,13 @@ function TeacherChangePassword() {
       return;
     }
 
-    if (!newPassword || !confirmPassword) {
-      setError("Please enter and confirm your new password.");
+    if (!allRequirementsMet) {
+      setError("Please satisfy all the password requirements.");
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (!passwordsMatch) {
       setError("The passwords do not match.");
-      return;
-    }
-
-    const passwordError = validatePassword();
-
-    if (passwordError) {
-      setError(passwordError);
       return;
     }
 
@@ -175,10 +186,14 @@ function TeacherChangePassword() {
               id="teacher-new-password"
               type={showNewPassword ? "text" : "password"}
               value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
+              onChange={(event) => {
+                setNewPassword(event.target.value);
+                setError("");
+              }}
               className={inputStyle}
               placeholder="Enter your new password"
               autoComplete="new-password"
+              maxLength={128}
               required
             />
 
@@ -193,7 +208,43 @@ function TeacherChangePassword() {
           </div>
         </div>
 
-        <div className="mb-5">
+        {/* Live password requirements */}
+        <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm">
+          <p className="mb-3 font-semibold text-slate-800">
+            Password requirements
+          </p>
+
+          <ul className="space-y-2">
+            {passwordRequirements.map((requirement) => (
+              <li
+                key={requirement.label}
+                className={`flex items-center gap-2 ${
+                  requirement.met ? "text-emerald-600" : "text-slate-400"
+                }`}
+              >
+                {requirement.met ? (
+                  <FaCheckCircle className="shrink-0" />
+                ) : (
+                  <FaCircle className="shrink-0 text-[10px]" />
+                )}
+
+                <span>{requirement.label}</span>
+              </li>
+            ))}
+          </ul>
+
+          <p
+            className={`mt-3 text-xs font-medium ${
+              allRequirementsMet ? "text-emerald-600" : "text-slate-400"
+            }`}
+          >
+            {allRequirementsMet
+              ? "All password requirements satisfied."
+              : "Complete all requirements to continue."}
+          </p>
+        </div>
+
+        <div className="mb-6">
           <label
             htmlFor="teacher-confirm-password"
             className="mb-2 block text-sm font-medium text-slate-700"
@@ -202,13 +253,20 @@ function TeacherChangePassword() {
           </label>
 
           <div className="relative">
-            <FaCheckCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            {passwordsMatch ? (
+              <FaCheckCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" />
+            ) : (
+              <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            )}
 
             <input
               id="teacher-confirm-password"
               type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                setError("");
+              }}
               className={inputStyle}
               placeholder="Confirm your new password"
               autoComplete="new-password"
@@ -226,26 +284,32 @@ function TeacherChangePassword() {
               {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
             </button>
           </div>
-        </div>
 
-        <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="mb-2 font-semibold text-slate-800">
-            Password requirements
-          </p>
-
-          <ul className="space-y-1">
-            <li>• 8–128 characters</li>
-            <li>• At least one uppercase letter</li>
-            <li>• At least one lowercase letter</li>
-            <li>• At least one number</li>
-            <li>• At least one special character</li>
-          </ul>
+          {confirmPassword && (
+            <p
+              className={`mt-2 flex items-center gap-2 text-xs ${
+                passwordsMatch ? "text-emerald-600" : "text-red-500"
+              }`}
+            >
+              {passwordsMatch ? (
+                <>
+                  <FaCheckCircle />
+                  Passwords match.
+                </>
+              ) : (
+                <>
+                  <FaCircle className="text-[8px]" />
+                  Passwords do not match.
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         <button
           type="submit"
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!canSubmit}
+          className="flex w-full items-center justify-center gap-3 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {loading ? (
             <>

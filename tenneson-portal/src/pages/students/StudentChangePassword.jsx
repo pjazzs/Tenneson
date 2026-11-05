@@ -7,6 +7,7 @@ import {
   FaEyeSlash,
   FaSpinner,
   FaCheckCircle,
+  FaCircle,
 } from "react-icons/fa";
 
 import studentApi from "../../api/studentApi";
@@ -30,6 +31,43 @@ function StudentChangePassword() {
     "studentPasswordChangeToken",
   );
 
+  // Live password requirements.
+  const passwordRequirements = [
+    {
+      label: "At least 8 characters",
+      valid: newPassword.length >= 8,
+    },
+    {
+      label: "At least one uppercase letter (A-Z)",
+      valid: /[A-Z]/.test(newPassword),
+    },
+    {
+      label: "At least one lowercase letter (a-z)",
+      valid: /[a-z]/.test(newPassword),
+    },
+    {
+      label: "At least one number (0-9)",
+      valid: /[0-9]/.test(newPassword),
+    },
+    {
+      label: "At least one special character (@, #, $, !)",
+      valid: /[^A-Za-z0-9]/.test(newPassword),
+    },
+  ];
+
+  const allRequirementsMet = passwordRequirements.every(
+    (requirement) => requirement.valid,
+  );
+
+  const passwordsMatch =
+    confirmPassword.length > 0 && newPassword === confirmPassword;
+
+  const canSubmit =
+    allRequirementsMet &&
+    passwordsMatch &&
+    Boolean(passwordChangeToken) &&
+    !loading;
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -42,38 +80,18 @@ function StudentChangePassword() {
       return;
     }
 
-    if (!newPassword || !confirmPassword) {
-      setError("Please enter and confirm your new password.");
+    if (!allRequirementsMet) {
+      setError("Please satisfy all password requirements.");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Please confirm your new password.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
       setError("The passwords do not match.");
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (!/[a-z]/.test(newPassword)) {
-      setError("Password must contain at least one lowercase letter.");
-      return;
-    }
-
-    if (!/[A-Z]/.test(newPassword)) {
-      setError("Password must contain at least one uppercase letter.");
-      return;
-    }
-
-    if (!/[0-9]/.test(newPassword)) {
-      setError("Password must contain at least one number.");
-      return;
-    }
-
-    if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      setError("Password must contain at least one special character.");
       return;
     }
 
@@ -102,15 +120,8 @@ function StudentChangePassword() {
         return;
       }
 
-      /*
-       * The temporary password-change token has now
-       * served its purpose. Remove it.
-       */
       sessionStorage.removeItem("studentPasswordChangeToken");
 
-      /*
-       * Store the normal student session.
-       */
       loginStudent({
         token,
         student,
@@ -160,6 +171,7 @@ function StudentChangePassword() {
         via-slate-900
         to-green-950
         px-4
+        py-8
       "
     >
       <form
@@ -206,6 +218,7 @@ function StudentChangePassword() {
 
         {error && (
           <div
+            role="alert"
             className="
               bg-red-600/20
               text-red-400
@@ -221,6 +234,7 @@ function StudentChangePassword() {
           </div>
         )}
 
+        {/* NEW PASSWORD */}
         <div className="mb-5">
           <label
             htmlFor="new-password"
@@ -244,7 +258,10 @@ function StudentChangePassword() {
               id="new-password"
               type={showNewPassword ? "text" : "password"}
               value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
+              onChange={(event) => {
+                setNewPassword(event.target.value);
+                setError("");
+              }}
               className={`${inputStyle} pl-11 pr-12`}
               autoComplete="new-password"
               placeholder="Enter your new password"
@@ -269,6 +286,50 @@ function StudentChangePassword() {
           </div>
         </div>
 
+        {/* LIVE PASSWORD CHECKLIST */}
+        <div
+          className="
+            bg-slate-800/70
+            border
+            border-white/5
+            rounded-xl
+            p-4
+            mb-5
+          "
+        >
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-gray-300 font-medium text-sm">
+              Password requirements
+            </p>
+
+            {allRequirementsMet && (
+              <span className="text-green-400 text-xs font-medium">
+                All satisfied
+              </span>
+            )}
+          </div>
+
+          <ul className="space-y-2">
+            {passwordRequirements.map((requirement) => (
+              <li
+                key={requirement.label}
+                className={`flex items-center gap-2 text-sm transition-colors ${
+                  requirement.valid ? "text-green-400" : "text-gray-400"
+                }`}
+              >
+                {requirement.valid ? (
+                  <FaCheckCircle className="shrink-0" />
+                ) : (
+                  <FaCircle className="shrink-0 text-gray-600 text-[10px]" />
+                )}
+
+                <span>{requirement.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* CONFIRM PASSWORD */}
         <div className="mb-6">
           <label
             htmlFor="confirm-password"
@@ -279,21 +340,30 @@ function StudentChangePassword() {
 
           <div className="relative">
             <FaCheckCircle
-              className="
+              className={`
                 absolute
                 left-4
                 top-1/2
                 -translate-y-1/2
-                text-gray-500
-              "
+                ${passwordsMatch ? "text-green-400" : "text-gray-500"}
+              `}
             />
 
             <input
               id="confirm-password"
               type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className={`${inputStyle} pl-11 pr-12`}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                setError("");
+              }}
+              className={`${inputStyle} pl-11 pr-12 ${
+                confirmPassword && !passwordsMatch
+                  ? "border-red-500/50"
+                  : passwordsMatch
+                    ? "border-green-500/50"
+                    : ""
+              }`}
               autoComplete="new-password"
               placeholder="Confirm your new password"
               required
@@ -317,36 +387,22 @@ function StudentChangePassword() {
               {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
             </button>
           </div>
+
+          {confirmPassword && (
+            <p
+              className={`text-xs mt-2 ${
+                passwordsMatch ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              {passwordsMatch ? "Passwords match." : "Passwords do not match."}
+            </p>
+          )}
         </div>
 
-        <div
-          className="
-            bg-slate-800/70
-            border
-            border-white/5
-            rounded-xl
-            p-4
-            mb-6
-            text-sm
-            text-gray-400
-          "
-        >
-          <p className="text-gray-300 font-medium mb-2">
-            Password requirements:
-          </p>
-
-          <ul className="space-y-1">
-            <li>• At least 8 characters</li>
-            <li>• At least one uppercase letter</li>
-            <li>• At least one lowercase letter</li>
-            <li>• At least one number</li>
-            <li>• At least one special character</li>
-          </ul>
-        </div>
-
+        {/* SUBMIT */}
         <button
           type="submit"
-          disabled={loading}
+          disabled={!canSubmit}
           className="
             w-full
             flex
@@ -360,8 +416,9 @@ function StudentChangePassword() {
             rounded-xl
             font-semibold
             transition
-            disabled:opacity-50
+            disabled:opacity-40
             disabled:cursor-not-allowed
+            disabled:hover:bg-green-600
           "
         >
           {loading ? (

@@ -35,7 +35,6 @@ function StudentDashboard() {
 
         const response = await studentApi.get("/student/me");
 
-        // Support the API's expected { student: ... } response.
         const freshStudent = response.data?.student;
 
         if (!freshStudent) {
@@ -47,7 +46,6 @@ function StudentDashboard() {
         setLatestStudent(freshStudent);
         setPhotoError(false);
 
-        // Synchronize React context and localStorage.
         if (typeof updateStudent === "function") {
           updateStudent(freshStudent);
         }
@@ -59,7 +57,6 @@ function StudentDashboard() {
           error?.response?.data?.message || error.message,
         );
 
-        // Keep the cached profile visible if the request fails.
         setProfileError(
           "Your latest profile details could not be loaded. Displayed information may be outdated.",
         );
@@ -79,6 +76,9 @@ function StudentDashboard() {
 
   // Prefer the freshly fetched profile.
   const currentStudent = latestStudent || student;
+
+  // Only SS1, SS2 and SS3 students have departments.
+  const isSeniorStudent = /^SS[1-3]$/.test(currentStudent?.currentClass || "");
 
   const handleLogout = () => {
     logoutStudent();
@@ -221,7 +221,11 @@ function StudentDashboard() {
             <h3 className="text-lg font-semibold">Student Information</h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 ${
+              isSeniorStudent ? "lg:grid-cols-5" : "lg:grid-cols-4"
+            } gap-4`}
+          >
             {/* STUDENT ID */}
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-5">
               <div className="flex items-center gap-3 mb-3">
@@ -250,11 +254,15 @@ function StudentDashboard() {
               </p>
             </div>
 
-            {String(currentStudent.currentClass || "").startsWith("SS") && (
-              <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
-                <div className="mb-3 flex items-center gap-2 text-gray-400">
-                  <FaBookOpen />
-                  <span className="text-sm">Department</span>
+            {/* DEPARTMENT - SENIOR STUDENTS ONLY */}
+            {isSeniorStudent && (
+              <div className="bg-slate-900 border border-white/10 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/10 text-green-400 flex items-center justify-center">
+                    <FaBookOpen />
+                  </div>
+
+                  <span className="text-sm text-gray-400">Department</span>
                 </div>
 
                 <p className="font-semibold text-white">
@@ -262,7 +270,7 @@ function StudentDashboard() {
                 </p>
 
                 {currentStudent.department?.code && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 mt-1">
                     {currentStudent.department.code}
                   </p>
                 )}
@@ -355,15 +363,15 @@ function StudentDashboard() {
               onClick={() => navigate("/student/academic-records")}
               className="text-left bg-slate-900 border border-white/10 hover:border-green-500/40 rounded-2xl p-6 transition group"
             >
+              <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl">
+                <FaGraduationCap />
+              </div>
+
               <div className="flex items-start justify-between">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl">
-                  <FaGraduationCap />
-                </div>
+                <h4 className="font-semibold mt-5 mb-2">Academic Records</h4>
 
                 <FaArrowRight className="text-gray-600 group-hover:text-green-400 group-hover:translate-x-1 transition" />
               </div>
-
-              <h4 className="font-semibold mt-5 mb-2">Academic Records</h4>
 
               <p className="text-sm text-gray-400">
                 Access your available academic records.
