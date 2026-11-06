@@ -34,6 +34,7 @@ function SubjectResultResponsibilityManager() {
   const [reason, setReason] = useState("");
 
   const [responsibilities, setResponsibilities] = useState([]);
+  const [currentResponsibility, setCurrentResponsibility] = useState(null);
   const [teacherAssignments, setTeacherAssignments] = useState([]);
 
   // Pagination
@@ -44,6 +45,8 @@ function SubjectResultResponsibilityManager() {
 
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingResponsibilities, setLoadingResponsibilities] = useState(false);
+  const [loadingCurrentResponsibility, setLoadingCurrentResponsibility] =
+    useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -91,7 +94,6 @@ function SubjectResultResponsibilityManager() {
           (!allocation.department || allocation.department.isActive !== false),
       )
       .sort((a, b) => {
-        // 1. Sort by class
         const classCompare = (a.schoolClass?.name || "").localeCompare(
           b.schoolClass?.name || "",
           undefined,
@@ -100,7 +102,6 @@ function SubjectResultResponsibilityManager() {
 
         if (classCompare !== 0) return classCompare;
 
-        // 2. Sort by department
         const departmentCompare = (a.department?.name || "").localeCompare(
           b.department?.name || "",
           undefined,
@@ -109,7 +110,6 @@ function SubjectResultResponsibilityManager() {
 
         if (departmentCompare !== 0) return departmentCompare;
 
-        // 3. Sort subjects alphabetically
         return (a.subject?.name || "").localeCompare(
           b.subject?.name || "",
           undefined,
@@ -117,6 +117,29 @@ function SubjectResultResponsibilityManager() {
         );
       });
   }, [options.allocations]);
+
+  // Current assignment ID comes from the independently fetched responsibility
+  const currentAssignmentId =
+    currentResponsibility?.teacherAssignment?._id || "";
+
+  const getAllocationLabel = useCallback((allocation) => {
+    if (!allocation) return "Unknown subject allocation";
+
+    const className = allocation.schoolClass?.name || "Unknown class";
+    const departmentName = allocation.department?.name;
+    const subjectName = allocation.subject?.name || "Unknown subject";
+    const subjectCode = allocation.subject?.code;
+
+    return [
+      className,
+      departmentName ? `(${departmentName})` : "",
+      "-",
+      subjectName,
+      subjectCode ? `(${subjectCode})` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }, []);
 
   // Load academic sessions, teachers and subject allocations
   useEffect(() => {
@@ -163,36 +186,7 @@ function SubjectResultResponsibilityManager() {
     };
   }, []);
 
-  // Current responsibility for the selected allocation
-  const currentResponsibility = useMemo(
-    () =>
-      responsibilities.find((item) => item.allocation?._id === allocationId),
-    [responsibilities, allocationId],
-  );
-
-  const currentAssignmentId =
-    currentResponsibility?.teacherAssignment?._id || "";
-
-  const getAllocationLabel = useCallback((allocation) => {
-    if (!allocation) return "Unknown subject allocation";
-
-    const className = allocation.schoolClass?.name || "Unknown class";
-    const departmentName = allocation.department?.name;
-    const subjectName = allocation.subject?.name || "Unknown subject";
-    const subjectCode = allocation.subject?.code;
-
-    return [
-      className,
-      departmentName ? `(${departmentName})` : "",
-      "-",
-      subjectName,
-      subjectCode ? `(${subjectCode})` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }, []);
-
-  // Load subject result responsibilities with pagination
+  // Load paginated subject result responsibilities
   useEffect(() => {
     if (!academicSessionId || !effectiveTerm) return;
 
@@ -252,6 +246,66 @@ function SubjectResultResponsibilityManager() {
       cancelled = true;
     };
   }, [academicSessionId, effectiveTerm, currentPage, pageSize, refreshKey]);
+
+  // Fetch the selected allocation's responsibility independently.
+  // This does not depend on the current pagination page.
+  useEffect(() => {
+    if (!allocationId || !academicSessionId || !effectiveTerm) return;
+
+    let cancelled = false;
+
+    const fetchCurrentResponsibility = async () => {
+      try {
+        const response = await api.get(
+          "/teacher-assignments/result-responsibilities",
+          {
+            params: {
+              academicSessionId,
+              term: effectiveTerm,
+              allocationId,
+              page: 1,
+              limit: 1,
+            },
+          },
+        );
+
+        if (cancelled) return;
+
+        const selectedResponsibility =
+          response.data.responsibilities?.find(
+            (item) => item.allocation?._id === allocationId,
+          ) || null;
+
+        setCurrentResponsibility(selectedResponsibility);
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error(
+          "Selected allocation responsibility error:",
+          err.response?.data || err.message,
+        );
+
+        setCurrentResponsibility(null);
+
+        setError(
+          getErrorMessage(
+            err,
+            "Failed to check the current responsible teacher.",
+          ),
+        );
+      } finally {
+        if (!cancelled) {
+          setLoadingCurrentResponsibility(false);
+        }
+      }
+    };
+
+    fetchCurrentResponsibility();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allocationId, academicSessionId, effectiveTerm, refreshKey]);
 
   // Load eligible teacher assignments for the selected allocation
   useEffect(() => {
@@ -322,6 +376,7 @@ function SubjectResultResponsibilityManager() {
     setAllocationId("");
     setTeacherAssignmentId("");
     setTeacherAssignments([]);
+    setCurrentResponsibility(null);
     setResponsibilities([]);
 
     setCurrentPage(1);
@@ -331,6 +386,7 @@ function SubjectResultResponsibilityManager() {
     setReason("");
 
     setLoadingAssignments(false);
+    setLoadingCurrentResponsibility(false);
     setLoadingResponsibilities(Boolean(nextSessionId));
 
     setSuccess("");
@@ -345,6 +401,7 @@ function SubjectResultResponsibilityManager() {
     setAllocationId("");
     setTeacherAssignmentId("");
     setTeacherAssignments([]);
+    setCurrentResponsibility(null);
     setResponsibilities([]);
 
     setCurrentPage(1);
@@ -354,6 +411,7 @@ function SubjectResultResponsibilityManager() {
     setReason("");
 
     setLoadingAssignments(false);
+    setLoadingCurrentResponsibility(false);
     setLoadingResponsibilities(Boolean(academicSessionId));
 
     setSuccess("");
@@ -367,9 +425,11 @@ function SubjectResultResponsibilityManager() {
     setAllocationId(nextAllocationId);
     setTeacherAssignmentId("");
     setTeacherAssignments([]);
+    setCurrentResponsibility(null);
     setReason("");
 
     setLoadingAssignments(Boolean(nextAllocationId));
+    setLoadingCurrentResponsibility(Boolean(nextAllocationId));
 
     setSuccess("");
     setError("");
@@ -383,6 +443,11 @@ function SubjectResultResponsibilityManager() {
 
     if (!academicSessionId || !effectiveTerm || !allocationId) {
       setError("Select an academic session, term and subject allocation.");
+      return;
+    }
+
+    if (loadingCurrentResponsibility) {
+      setError("Please wait while the current designation is being checked.");
       return;
     }
 
@@ -434,6 +499,7 @@ function SubjectResultResponsibilityManager() {
 
       setReason("");
       setLoadingResponsibilities(true);
+      setLoadingCurrentResponsibility(true);
       setRefreshKey((previous) => previous + 1);
     } catch (err) {
       console.error(
@@ -465,7 +531,7 @@ function SubjectResultResponsibilityManager() {
   };
 
   const getTeacherName = (responsibility) =>
-    responsibility.teacherAssignment?.teacher?.fullName || "Unknown teacher";
+    responsibility?.teacherAssignment?.teacher?.fullName || "Unknown teacher";
 
   const getAssignmentLabel = (assignment) => {
     const teacherName = assignment.teacher?.fullName || "Unknown teacher";
@@ -496,6 +562,11 @@ function SubjectResultResponsibilityManager() {
           type="button"
           onClick={() => {
             setLoadingResponsibilities(true);
+
+            if (allocationId) {
+              setLoadingCurrentResponsibility(true);
+            }
+
             setRefreshKey((previous) => previous + 1);
           }}
           disabled={loadingResponsibilities || loadingOptions}
@@ -643,17 +714,20 @@ function SubjectResultResponsibilityManager() {
                   disabled={
                     !allocationId ||
                     loadingAssignments ||
+                    loadingCurrentResponsibility ||
                     teacherAssignments.length === 0
                   }
                   required
                   className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-3 text-white outline-none focus:border-green-500 disabled:opacity-50"
                 >
                   <option value="">
-                    {loadingAssignments
-                      ? "Loading assigned teachers..."
-                      : teacherAssignments.length === 0
-                        ? "No active teacher assignments"
-                        : "Select responsible teacher"}
+                    {loadingCurrentResponsibility
+                      ? "Checking current designation..."
+                      : loadingAssignments
+                        ? "Loading assigned teachers..."
+                        : teacherAssignments.length === 0
+                          ? "No active teacher assignments"
+                          : "Select responsible teacher"}
                   </option>
 
                   {teacherAssignments.map((assignment) => (
@@ -667,6 +741,12 @@ function SubjectResultResponsibilityManager() {
                 </select>
               </div>
             </div>
+
+            {loadingCurrentResponsibility && allocationId && (
+              <p className="mt-3 text-xs text-gray-400">
+                Checking the existing responsibility for this allocation...
+              </p>
+            )}
 
             {currentResponsibility && (
               <div className="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-200">
@@ -717,6 +797,7 @@ function SubjectResultResponsibilityManager() {
                 disabled={
                   saving ||
                   loadingAssignments ||
+                  loadingCurrentResponsibility ||
                   !academicSessionId ||
                   !allocationId ||
                   !teacherAssignmentId ||
@@ -728,11 +809,13 @@ function SubjectResultResponsibilityManager() {
               >
                 {saving
                   ? "Saving..."
-                  : isReassignment
-                    ? "Change Responsible Teacher"
-                    : currentResponsibility
-                      ? "Teacher Already Designated"
-                      : "Designate Teacher"}
+                  : loadingCurrentResponsibility
+                    ? "Checking designation..."
+                    : isReassignment
+                      ? "Change Responsible Teacher"
+                      : currentResponsibility
+                        ? "Teacher Already Designated"
+                        : "Designate Teacher"}
               </button>
             </div>
           </form>

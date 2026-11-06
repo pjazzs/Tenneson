@@ -496,7 +496,7 @@ exports.updateTeacherAssignmentStatus = asyncHandler(async (req, res) => {
 */
 
 exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
-  const { academicSessionId, term } = req.query;
+  const { academicSessionId, term, allocationId } = req.query;
 
   // Pagination parameters
   const parsedPage = Number(req.query.page ?? 1);
@@ -526,6 +526,11 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
     return sendInvalidId(res, "academic session");
   }
 
+  // Validate optional allocation ID
+  if (allocationId && !validateObjectId(allocationId)) {
+    return sendInvalidId(res, "subject allocation");
+  }
+
   // Validate term
   if (!["first", "second", "third"].includes(term)) {
     return res.status(400).json({
@@ -544,12 +549,18 @@ exports.getSubjectResultResponsibilities = asyncHandler(async (req, res) => {
     });
   }
 
+  // Build query filter
   const filter = {
     academicSession: academicSessionId,
     term,
   };
 
-  // Fetch current page and total count
+  // When allocationId is supplied, retrieve only that allocation's record
+  if (allocationId) {
+    filter.allocation = allocationId;
+  }
+
+  // Fetch responsibilities and total count
   const [responsibilities, totalResponsibilities] = await Promise.all([
     SubjectResultResponsibility.find(filter)
       .populate("academicSession", "name")

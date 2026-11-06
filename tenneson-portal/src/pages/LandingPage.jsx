@@ -13,6 +13,7 @@ import {
   FaEnvelope,
   FaLightbulb,
   FaHeart,
+  FaTiktok,
   FaShieldAlt,
 } from "react-icons/fa";
 
@@ -844,13 +845,27 @@ function LandingPage() {
           </p>
 
           <div className="mt-8 flex justify-center gap-4">
-            <SocialButton icon={<FaFacebook />} label="Facebook" href="#" />
+            <SocialButton
+              icon={<FaFacebook />}
+              label="Facebook"
+              href="https://www.facebook.com/share/1GbGDBvCdF/"
+            />
 
             <SocialButton icon={<FaInstagram />} label="Instagram" href="#" />
+            <SocialButton
+              icon={<FaTiktok />}
+              label="TikTok"
+              href="https://www.tiktok.com/@tenneson.school?_r=1&_t=ZS-9BBCYgtZjiU
+"
+            />
 
             <SocialButton icon={<FaTwitter />} label="Twitter" href="#" />
 
-            <SocialButton icon={<FaWhatsapp />} label="WhatsApp" href="#" />
+            <SocialButton
+              icon={<FaWhatsapp />}
+              label="WhatsApp"
+              href="https://wa.me/2348151324708"
+            />
           </div>
         </div>
       </section>
