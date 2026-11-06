@@ -927,8 +927,15 @@ function LandingPage() {
               <SocialButton
                 icon={<FaFacebook />}
                 label="Facebook"
-                href="#"
+                href="https://www.facebook.com/share/1GbGDBvCdF/"
                 dark
+              />
+
+              <SocialButton
+                icon={<FaTiktok />}
+                label="TikTok"
+                href="https://www.tiktok.com/@tenneson.school?_r=1&_t=ZS-9BBCYgtZjiU
+"
               />
 
               <SocialButton
@@ -948,7 +955,7 @@ function LandingPage() {
               <SocialButton
                 icon={<FaWhatsapp />}
                 label="WhatsApp"
-                href="#"
+                href="https://wa.me/2348151324708"
                 dark
               />
             </div>
