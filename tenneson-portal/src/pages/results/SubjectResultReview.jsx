@@ -550,8 +550,10 @@ const SubjectResultReview = () => {
 
                     <button
                       type="button"
-                      disabled
-                      className="mt-4 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-green-600/30 px-4 py-2.5 text-sm font-semibold text-green-200 opacity-70"
+                      onClick={() =>
+                        navigate(`/subject-result-review/${submission._id}`)
+                      }
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800"
                     >
                       <FaEye />
                       Review Submission
