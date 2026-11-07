@@ -110,6 +110,33 @@ function AdminManagement() {
       },
     ],
 
+    Results: [
+      {
+        key: "results.create",
+        label: "Create Results",
+      },
+      {
+        key: "results.view",
+        label: "View Results",
+      },
+      {
+        key: "results.update",
+        label: "Update Results / Request Corrections",
+      },
+      {
+        key: "results.submit",
+        label: "Submit Results",
+      },
+      {
+        key: "results.approve",
+        label: "Approve / Reject Results",
+      },
+      {
+        key: "results.publish",
+        label: "Publish Results",
+      },
+    ],
+
     Promotions: [
       {
         key: "promotion.apply",
