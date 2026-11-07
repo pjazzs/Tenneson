@@ -337,13 +337,15 @@ function AddStudent() {
         )}
 
         {/* Session */}
+        {/* Session */}
         <input
           type="text"
           name="session"
           placeholder="Session e.g 2026/2027"
           value={formData.session}
           onChange={handleChange}
-          inputMode="numeric"
+          inputMode="text"
+          autoComplete="off"
           maxLength={9}
           pattern="\d{4}/\d{4}"
           className={inputStyle}
