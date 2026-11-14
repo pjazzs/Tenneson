@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tenneson.com.ng/sitemap.xml
+Sitemap: https://www.tenneson.com.ng/sitemap.xml
