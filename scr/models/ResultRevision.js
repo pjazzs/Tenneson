@@ -61,7 +61,6 @@ const resultRevisionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Result",
       required: true,
-      index: true,
     },
 
     student: {
@@ -249,9 +248,7 @@ resultRevisionSchema.index(
 
 // A result can have only one active correction at a time.
 resultRevisionSchema.index(
-  {
-    result: 1,
-  },
+  { result: 1 },
   {
     unique: true,
     partialFilterExpression: {

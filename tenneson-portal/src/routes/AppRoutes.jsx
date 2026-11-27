@@ -30,6 +30,7 @@ import Promotions from "../pages/promotions/Promotions";
 import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
 import VerifyStudent from "../pages/verify/VerifyStudent";
+import VerifyOfficialResult from "../pages/verify/VerifyOfficialResult";
 
 // Student management
 import AddStudent from "../pages/students/AddStudent";
@@ -87,6 +88,8 @@ function AppRoutes() {
 
       {/* Public student verification */}
       <Route path="/verify/:identifier" element={<VerifyStudent />} />
+
+      <Route path="/verify-result/:code" element={<VerifyOfficialResult />} />
 
       {/* =========================================
           PROTECTED STUDENT PORTAL

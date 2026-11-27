@@ -10,6 +10,8 @@ import {
   FiActivity,
   FiAward,
   FiClipboard,
+  FiDownload,
+  FiLoader,
 } from "react-icons/fi";
 
 import studentApi from "../../api/studentApi";
@@ -212,8 +214,64 @@ function StudentResultDetails() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const hasResultId = Boolean(resultId);
+
+  const handleDownloadOfficialResult = async () => {
+    if (!resultId || result?.status !== "published" || downloading) {
+      return;
+    }
+
+    try {
+      setDownloading(true);
+      setDownloadError("");
+
+      const response = await studentApi.get(
+        `/results/my/${resultId}/official-document`,
+        {
+          responseType: "blob",
+        },
+      );
+
+      const blob = new Blob([response.data], {
+        type: "application/pdf",
+      });
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = `official-result-${resultId}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error("Official result download failed:", err);
+
+      let message = "Unable to download the official result.";
+
+      if (err.response?.data instanceof Blob) {
+        try {
+          const errorData = JSON.parse(await err.response.data.text());
+
+          message = errorData.message || message;
+        } catch {
+          // Keep the default error message.
+        }
+      } else {
+        message = err.response?.data?.message || message;
+      }
+
+      setDownloadError(message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     if (!hasResultId) {
@@ -422,9 +480,35 @@ function StudentResultDetails() {
 
             <div className="lg:text-right">
               <p className="text-sm text-slate-400">Overall Percentage</p>
+
               <p className="text-4xl font-bold text-blue-400 mt-1">
                 {formatPercentage(result.overallPercentage)}
               </p>
+
+              {result.status === "published" && (
+                <button
+                  type="button"
+                  onClick={handleDownloadOfficialResult}
+                  disabled={downloading}
+                  className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {downloading ? (
+                    <>
+                      <FiLoader className="animate-spin" />
+                      Generating PDF...
+                    </>
+                  ) : (
+                    <>
+                      <FiDownload />
+                      Download Official Result
+                    </>
+                  )}
+                </button>
+              )}
+
+              {downloadError && (
+                <p className="mt-3 text-sm text-red-400">{downloadError}</p>
+              )}
             </div>
           </div>
         </section>
