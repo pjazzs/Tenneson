@@ -110,6 +110,14 @@ function VerifyOfficialResult() {
     });
   };
 
+  const formatScore = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+
+    return value;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white p-5">
@@ -166,12 +174,39 @@ function VerifyOfficialResult() {
   const student = verification.student || {};
   const result = verification.result || {};
   const document = verification.document || {};
+  const subjects = Array.isArray(result.subjects) ? result.subjects : [];
+  const attendance = result.attendance || {};
+  const comments = result.comments || {};
+
+  const summaryItems = [
+    ["Total Score", formatScore(result.totalScore)],
+    ["Total Obtainable", formatScore(result.totalObtainableMarks)],
+    [
+      "Overall Percentage",
+      result.overallPercentage !== null &&
+      result.overallPercentage !== undefined
+        ? `${Number(result.overallPercentage).toFixed(2)}%`
+        : "—",
+    ],
+    ["Performance", result.performanceComment || "—"],
+  ];
+
+  const attendanceItems = [
+    ["Days School Opened", attendance.daysSchoolOpened],
+    ["Days Present", attendance.daysPresent],
+    ["Days Absent", attendance.daysAbsent],
+  ];
+
+  const commentItems = [
+    ["Class Teacher", comments.classTeacher],
+    ["Principal", comments.principal],
+    ["Performance", comments.performance],
+  ].filter(([, value]) => Boolean(value));
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-5 text-white">
-      <div className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-5 text-white">
+      <div className="w-full max-w-5xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden">
         {/* HEADER */}
-
         <div className={`${colors.header} p-7 text-center`}>
           <div className="text-5xl mx-auto mb-4 flex justify-center">
             {config.icon}
@@ -184,9 +219,8 @@ function VerifyOfficialResult() {
           </p>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-5 sm:p-7 space-y-7">
           {/* STATUS MESSAGE */}
-
           <div
             className={`rounded-xl border ${colors.border} bg-slate-800 p-4`}
           >
@@ -198,13 +232,12 @@ function VerifyOfficialResult() {
           </div>
 
           {/* STUDENT DETAILS */}
-
-          <div>
+          <section>
             <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
               Student Information
             </h2>
 
-            <div className="bg-slate-800 rounded-xl p-4 space-y-3">
+            <div className="bg-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-gray-400 text-xs">Student Name</p>
                 <p className="font-semibold">
@@ -212,32 +245,36 @@ function VerifyOfficialResult() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-gray-400 text-xs">Student ID</p>
-                  <p className="font-semibold">
-                    {student.studentId || "Not available"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-gray-400 text-xs">Class at Issuance</p>
-                  <p className="font-semibold">
-                    {student.class || "Not available"}
-                  </p>
-                </div>
+              <div>
+                <p className="text-gray-400 text-xs">Student ID</p>
+                <p className="font-semibold">
+                  {student.studentId || "Not available"}
+                </p>
               </div>
+
+              <div>
+                <p className="text-gray-400 text-xs">Class at Issuance</p>
+                <p className="font-semibold">
+                  {student.class || "Not available"}
+                </p>
+              </div>
+
+              {student.department && (
+                <div>
+                  <p className="text-gray-400 text-xs">Department</p>
+                  <p className="font-semibold">{student.department}</p>
+                </div>
+              )}
             </div>
-          </div>
+          </section>
 
           {/* RESULT DETAILS */}
-
-          <div>
+          <section>
             <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
               Result Information
             </h2>
 
-            <div className="bg-slate-800 rounded-xl p-4 space-y-3">
+            <div className="bg-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-gray-400 text-xs">Academic Session</p>
                 <p className="font-semibold">
@@ -252,11 +289,133 @@ function VerifyOfficialResult() {
                 </p>
               </div>
             </div>
-          </div>
+          </section>
+
+          {/* SUBJECT RESULTS */}
+          <section>
+            <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+              Subject Results
+            </h2>
+
+            {subjects.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full min-w-162.5 text-sm">
+                  <thead className="bg-slate-800 text-gray-300">
+                    <tr>
+                      {[
+                        "Subject",
+                        "CA 1",
+                        "CA 2",
+                        "Exam",
+                        "Total",
+                        "Grade",
+                        "Remark",
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          className={`px-3 py-3 font-semibold ${
+                            heading === "Subject" || heading === "Remark"
+                              ? "text-left"
+                              : "text-center"
+                          }`}
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {subjects.map((subject, index) => (
+                      <tr
+                        key={`${subject.subject}-${index}`}
+                        className={
+                          index % 2 === 0 ? "bg-slate-800/70" : "bg-slate-900"
+                        }
+                      >
+                        <td className="px-3 py-3 font-medium">
+                          {subject.subject || "—"}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {formatScore(subject.ca1)}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {formatScore(subject.ca2)}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {formatScore(subject.exam)}
+                        </td>
+                        <td className="px-3 py-3 text-center font-semibold">
+                          {formatScore(subject.total)}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {subject.grade || "—"}
+                        </td>
+                        <td className="px-3 py-3">{subject.remark || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="bg-slate-800 rounded-xl p-5 text-gray-400 text-sm">
+                No subject results are available in this document.
+              </div>
+            )}
+          </section>
+
+          {/* RESULT SUMMARY */}
+          <section>
+            <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+              Result Summary
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {summaryItems.map(([label, value]) => (
+                <div key={label} className="bg-slate-800 rounded-xl p-4">
+                  <p className="text-gray-400 text-xs mb-2">{label}</p>
+                  <p className="font-semibold wrap-break-word">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ATTENDANCE */}
+          <section>
+            <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+              Attendance
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {attendanceItems.map(([label, value]) => (
+                <div key={label} className="bg-slate-800 rounded-xl p-4">
+                  <p className="text-gray-400 text-xs mb-2">{label}</p>
+                  <p className="font-semibold">{formatScore(value)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* SCHOOL COMMENTS */}
+          {commentItems.length > 0 && (
+            <section>
+              <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+                School Comments
+              </h2>
+
+              <div className="bg-slate-800 rounded-xl p-4 space-y-4">
+                {commentItems.map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-gray-400 text-xs mb-1">{label}</p>
+                    <p className="text-sm leading-relaxed">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* DOCUMENT DETAILS */}
-
-          <div>
+          <section>
             <h2 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
               Document Information
             </h2>
@@ -314,23 +473,22 @@ function VerifyOfficialResult() {
                 </>
               )}
             </div>
-          </div>
+          </section>
 
           {/* AUTHENTICITY NOTICE */}
-
           <div className="flex items-start gap-3 text-gray-400 text-xs">
             <FaShieldAlt className="text-green-500 text-lg shrink-0 mt-0.5" />
 
             <p>
-              Verification is based on the official document records maintained
-              by Tenneson Comprehensive College. This page confirms document
-              status; it does not disclose the student's academic scores.
+              Verification is based on the exact official document snapshot
+              maintained by Tenneson Comprehensive College at the time of
+              issuance. The displayed academic information corresponds to that
+              issued document.
             </p>
           </div>
         </div>
 
         {/* FOOTER */}
-
         <div className="border-t border-white/10 p-4 text-center text-xs text-gray-500">
           TENNESON COMPREHENSIVE COLLEGE
           <p className="mt-1">Obantoko, Abeokuta, Ogun State</p>

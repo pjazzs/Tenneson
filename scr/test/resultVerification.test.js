@@ -64,9 +64,18 @@ describe("Public Official Result Verification", () => {
     expect(response.body.result.academicSession).toBe("2025/2026");
     expect(response.body.result.term).toBe("first");
 
-    // Public verification must not expose individual subject scores.
-    expect(response.body.result.subjectResults).toBeUndefined();
-    expect(JSON.stringify(response.body)).not.toContain('"total":95');
+    // Public verification must expose the issued subject snapshot.
+    expect(response.body.result.subjects).toHaveLength(1);
+    expect(response.body.result.subjects[0]).toEqual({
+      subject: "Mathematics",
+      ca1: null,
+      ca2: null,
+      exam: null,
+      total: 95,
+      grade: "—",
+      remark: "—",
+      weightedAverage: null,
+    });
   });
 
   test("should identify a superseded document", async () => {

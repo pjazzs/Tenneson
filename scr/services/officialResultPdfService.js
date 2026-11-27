@@ -449,7 +449,10 @@ const generateOfficialResultPdf = async ({
         .fillColor("#FFFFFF")
         .text(column.label, x + 3, headerY + 6, {
           width: column.width - 6,
-          align: column.align || "left",
+          align:
+            column.key === "subject" || column.key === "remark"
+              ? "left"
+              : "center",
           height: 9,
           lineBreak: false,
           ellipsis: true,
@@ -781,7 +784,7 @@ const generateOfficialResultPdf = async ({
 
   // QR code.
   doc.image(qrBuffer, qrX, approvalY + 10, {
-    fit: [50, 50],
+    fit: [65, 65],
   });
 
   // Verification instruction.
