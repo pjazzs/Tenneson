@@ -160,7 +160,7 @@ function OfficialResultAssets() {
 
           <div>
             <h3 className="font-semibold text-lg">{label}</h3>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-900 text-sm">
               {asset?.url ? "Asset currently configured" : "No asset uploaded"}
             </p>
           </div>
@@ -233,11 +233,11 @@ function OfficialResultAssets() {
   };
 
   return (
-    <div className="text-white">
+    <div className="text-white px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Official Result Assets</h1>
 
-        <p className="text-gray-400 mt-2">
+        <p className="text-gray-900 mt-2">
           Manage the school's official stamp and signature used on downloadable
           student results.
         </p>
@@ -250,13 +250,13 @@ function OfficialResultAssets() {
       )}
 
       {success && (
-        <div className="bg-green-900/30 border border-green-700 text-green-300 p-4 rounded-lg mb-5">
+        <div className="bg-green-100 border border-green-400 text-green-900 font-semibold p-4 rounded-lg mb-5">
           {success}
         </div>
       )}
 
       {loading ? (
-        <div className="text-gray-400 py-12 text-center">
+        <div className="text-gray-900 py-12 text-center">
           Loading official result assets...
         </div>
       ) : (

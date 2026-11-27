@@ -1,10 +1,17 @@
 const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 const SCHOOL_NAME = "TENNESON COMPREHENSIVE COLLEGE";
 const SCHOOL_ADDRESS = "Obantoko, Abeokuta, Ogun State";
 const SCHOOL_MOTTO = "Excellence in Learning and Character";
+
+const PAGE_LEFT = 30;
+const PAGE_RIGHT = 30;
+const PAGE_TOP = 22;
+const PAGE_BOTTOM = 30;
 
 const formatTerm = (term) => {
   const terms = {
@@ -46,7 +53,11 @@ const fetchImageBuffer = async (url) => {
   try {
     const parsedUrl = new URL(url);
 
-    if (parsedUrl.protocol !== "https:") {
+    // Only accept HTTPS images delivered by Cloudinary.
+    if (
+      parsedUrl.protocol !== "https:" ||
+      parsedUrl.hostname !== "res.cloudinary.com"
+    ) {
       return null;
     }
 
@@ -85,6 +96,7 @@ const generateOfficialResultPdf = async ({
 
   const student = result.student;
   const academicSession = result.academicSession || {};
+
   const subjects = Array.isArray(result.subjectResults)
     ? result.subjectResults.filter((item) => item.offered !== false)
     : [];
@@ -95,33 +107,65 @@ const generateOfficialResultPdf = async ({
 
   const isThirdTerm = result.term === "third";
 
-  const [qrBuffer, stampBuffer, signatureBuffer] = await Promise.all([
-    QRCode.toBuffer(verificationUrl, {
-      type: "png",
-      width: 220,
-      margin: 1,
-      errorCorrectionLevel: "H",
-    }),
+  const isSeniorClass = /^SS[123]$/i.test(
+    String(result.currentClass || student.currentClass || "").trim(),
+  );
 
-    fetchImageBuffer(assetSnapshot.stampUrl),
+  const department = isSeniorClass
+    ? student.department?.name
+      ? `${student.department.name} (${student.department.code || ""})`
+      : "—"
+    : null;
 
-    fetchImageBuffer(assetSnapshot.signatureUrl),
-  ]);
+  // --------------------------------------------------
+  // LOAD SCHOOL AND STUDENT IMAGES
+  // --------------------------------------------------
+
+  const logoPath = path.join(__dirname, "../assets/logo.jpeg");
+
+  let logoBuffer = null;
+
+  try {
+    if (fs.existsSync(logoPath)) {
+      logoBuffer = fs.readFileSync(logoPath);
+    }
+  } catch (error) {
+    console.error("Unable to load school logo:", error.message);
+  }
+
+  const [qrBuffer, stampBuffer, signatureBuffer, studentPhotoBuffer] =
+    await Promise.all([
+      QRCode.toBuffer(verificationUrl, {
+        type: "png",
+        width: 220,
+        margin: 1,
+        errorCorrectionLevel: "H",
+      }),
+
+      fetchImageBuffer(assetSnapshot.stampUrl),
+      fetchImageBuffer(assetSnapshot.signatureUrl),
+      fetchImageBuffer(student.photo?.url),
+    ]);
+
+  // --------------------------------------------------
+  // INITIALIZE PDF
+  // --------------------------------------------------
 
   const doc = new PDFDocument({
     size: "A4",
     layout: "landscape",
     margins: {
-      top: 35,
-      bottom: 40,
-      left: 35,
-      right: 35,
+      top: PAGE_TOP,
+      bottom: PAGE_BOTTOM,
+      left: PAGE_LEFT,
+      right: PAGE_RIGHT,
     },
     bufferPages: true,
     info: {
       Title: `Official Result - ${studentName}`,
       Author: SCHOOL_NAME,
-      Subject: `${formatTerm(result.term)} Result`,
+      Subject: "Official Student Academic Result",
+      Creator: "Tenneson School Management System",
     },
   });
 
@@ -134,124 +178,226 @@ const generateOfficialResultPdf = async ({
   });
 
   const pageWidth = doc.page.width;
-  const contentWidth = pageWidth - 70;
+  const pageHeight = doc.page.height;
+
+  const contentWidth = pageWidth - PAGE_LEFT - PAGE_RIGHT;
+  const bottomLimit = pageHeight - PAGE_BOTTOM - 12;
+
+  // --------------------------------------------------
+  // PAGE SPACE MANAGEMENT
+  // --------------------------------------------------
+
+  const addContentPage = () => {
+    doc.addPage();
+    doc.y = PAGE_TOP;
+  };
 
   const ensureSpace = (height) => {
-    if (doc.y + height > doc.page.height - 55) {
-      doc.addPage();
-      doc.y = 35;
+    if (doc.y + height > bottomLimit) {
+      addContentPage();
+      return true;
     }
+
+    return false;
   };
 
-  const sectionTitle = (title) => {
-    ensureSpace(35);
+  // --------------------------------------------------
+  // SECTION TITLE
+  // --------------------------------------------------
+
+  const drawSectionTitle = (title) => {
+    ensureSpace(21);
+
+    // Capture the starting position before drawing.
+    const sectionY = doc.y;
 
     doc
-      .moveDown(0.5)
       .font("Helvetica-Bold")
-      .fontSize(11)
+      .fontSize(9)
       .fillColor("#17365D")
-      .text(title.toUpperCase());
+      .text(title.toUpperCase(), PAGE_LEFT, sectionY, {
+        lineBreak: false,
+      });
+
+    const lineY = sectionY + 13;
 
     doc
-      .moveDown(0.3)
-      .strokeColor("#B8C7D9")
-      .moveTo(35, doc.y)
-      .lineTo(pageWidth - 35, doc.y)
+      .moveTo(PAGE_LEFT, lineY)
+      .lineTo(pageWidth - PAGE_RIGHT, lineY)
+      .lineWidth(0.7)
+      .strokeColor("#AAB7C4")
       .stroke();
 
-    doc.moveDown(0.5);
+    // Explicitly control the next content position.
+    doc.y = sectionY + 18;
   };
 
-  const detail = (label, value, x, y, width = 150) => {
+  // --------------------------------------------------
+  // FIXED-POSITION DETAIL FIELD
+  // --------------------------------------------------
+
+  const drawDetail = (label, value, x, y, width) => {
+    const previousY = doc.y;
+
     doc
       .font("Helvetica")
-      .fontSize(8)
-      .fillColor("#555555")
-      .text(label.toUpperCase(), x, y, { width });
+      .fontSize(7)
+      .fillColor("#657080")
+      .text(String(label || ""), x, y, {
+        width,
+        height: 9,
+        lineBreak: false,
+        ellipsis: true,
+      });
 
     doc
       .font("Helvetica-Bold")
-      .fontSize(10)
+      .fontSize(8)
       .fillColor("#172033")
-      .text(String(value ?? "—"), x, y + 12, { width });
+      .text(String(value ?? "—"), x, y + 10, {
+        width,
+        height: 11,
+        lineBreak: false,
+        ellipsis: true,
+      });
+
+    // Prevent fixed-position text from moving the document cursor.
+    doc.y = previousY;
   };
 
   // --------------------------------------------------
-  // SCHOOL HEADING
+  // SCHOOL HEADER
   // --------------------------------------------------
 
+  const headerY = PAGE_TOP;
+
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, PAGE_LEFT, headerY, {
+        fit: [58, 58],
+        align: "center",
+        valign: "center",
+      });
+    } catch (error) {
+      console.error("Unable to embed school logo:", error.message);
+    }
+  }
+
+  if (studentPhotoBuffer) {
+    try {
+      doc.image(studentPhotoBuffer, pageWidth - PAGE_RIGHT - 65, headerY, {
+        fit: [62, 62],
+        align: "center",
+        valign: "center",
+      });
+    } catch (error) {
+      console.error("Unable to embed student photograph:", error.message);
+    }
+  }
+
+  const headerTextX = PAGE_LEFT + 70;
+  const headerTextWidth = contentWidth - 140;
+
   doc
     .font("Helvetica-Bold")
-    .fontSize(19)
+    .fontSize(17)
     .fillColor("#17365D")
-    .text(SCHOOL_NAME, 35, 35, {
-      width: contentWidth,
+    .text(SCHOOL_NAME, headerTextX, headerY + 3, {
+      width: headerTextWidth,
       align: "center",
     });
 
-  doc.font("Helvetica").fontSize(9).fillColor("#555555").text(SCHOOL_ADDRESS, {
-    align: "center",
-  });
+  doc
+    .font("Helvetica")
+    .fontSize(8)
+    .fillColor("#333333")
+    .text(SCHOOL_ADDRESS, headerTextX, headerY + 26, {
+      width: headerTextWidth,
+      align: "center",
+    });
 
-  doc.font("Helvetica-Oblique").fontSize(8).text(SCHOOL_MOTTO, {
-    align: "center",
-  });
-
-  doc.moveDown(0.8);
+  doc
+    .font("Helvetica-Oblique")
+    .fontSize(8)
+    .fillColor("#555555")
+    .text(SCHOOL_MOTTO, headerTextX, headerY + 38, {
+      width: headerTextWidth,
+      align: "center",
+    });
 
   doc
     .font("Helvetica-Bold")
-    .fontSize(14)
-    .fillColor("#111827")
-    .text("OFFICIAL STUDENT RESULT", {
+    .fontSize(11)
+    .fillColor("#17365D")
+    .text("OFFICIAL STUDENT RESULT", headerTextX, headerY + 51, {
+      width: headerTextWidth,
       align: "center",
     });
 
-  doc.moveDown(0.8);
+  doc.y = headerY + 77;
 
   // --------------------------------------------------
   // STUDENT INFORMATION
   // --------------------------------------------------
 
-  sectionTitle("Student Information");
+  drawSectionTitle("Student Information");
 
-  const infoY = doc.y;
-  const colWidth = contentWidth / 4;
+  const columns = isSeniorClass ? 5 : 4;
+  const infoColumnWidth = contentWidth / columns;
+  const firstInfoY = doc.y;
 
-  detail("Student Name", studentName, 35, infoY, colWidth - 10);
-  detail("Student ID", student.studentId, 35 + colWidth, infoY, colWidth - 10);
-  detail("Class", result.currentClass, 35 + colWidth * 2, infoY, colWidth - 10);
-  detail("Gender", student.gender, 35 + colWidth * 3, infoY, colWidth - 10);
+  const infoItems = [
+    ["Student Name", studentName],
+    ["Student ID", student.studentId],
+    ["Class", result.currentClass || student.currentClass],
+    ["Gender", student.gender],
+  ];
 
-  doc.y = infoY + 38;
+  if (isSeniorClass) {
+    infoItems.push(["Department", department]);
+  }
 
-  detail("Academic Session", academicSession.name, 35, doc.y, colWidth - 10);
-  detail("Term", formatTerm(result.term), 35 + colWidth, doc.y, colWidth - 10);
-  detail(
-    "Closing Date",
-    formatDate(result.termDates?.closingDate),
-    35 + colWidth * 2,
-    doc.y,
-    colWidth - 10,
-  );
-  detail(
-    "Resumption Date",
-    formatDate(result.termDates?.resumptionDate),
-    35 + colWidth * 3,
-    doc.y,
-    colWidth - 10,
-  );
+  infoItems.forEach(([label, value], index) => {
+    drawDetail(
+      label,
+      value,
+      PAGE_LEFT + index * infoColumnWidth,
+      firstInfoY,
+      infoColumnWidth - 8,
+    );
+  });
 
-  doc.y += 40;
+  doc.y = firstInfoY + 27;
+
+  const secondInfoY = doc.y;
+  const dateColumnWidth = contentWidth / 4;
+
+  const academicInfo = [
+    ["Academic Session", academicSession.name],
+    ["Term", formatTerm(result.term)],
+    ["Closing Date", formatDate(result.termDates?.closingDate)],
+    ["Resumption Date", formatDate(result.termDates?.resumptionDate)],
+  ];
+
+  academicInfo.forEach(([label, value], index) => {
+    drawDetail(
+      label,
+      value,
+      PAGE_LEFT + index * dateColumnWidth,
+      secondInfoY,
+      dateColumnWidth - 8,
+    );
+  });
+
+  doc.y = secondInfoY + 27;
 
   // --------------------------------------------------
-  // SUBJECT RESULTS
+  // ACADEMIC PERFORMANCE TABLE
   // --------------------------------------------------
 
-  sectionTitle("Academic Performance");
+  drawSectionTitle("Academic Performance");
 
-  const columns = isThirdTerm
+  const tableColumns = isThirdTerm
     ? [
         { label: "SUBJECT", width: 150, key: "subject" },
         { label: "1ST TERM", width: 65, key: "firstTerm" },
@@ -260,8 +406,8 @@ const generateOfficialResultPdf = async ({
         { label: "CA 2", width: 45, key: "ca2" },
         { label: "EXAM", width: 50, key: "exam" },
         { label: "TOTAL", width: 55, key: "total" },
-        { label: "CUMULATIVE", width: 65, key: "cumulativeScore" },
-        { label: "AVERAGE", width: 55, key: "weightedAverage" },
+        { label: "CUMULATIVE", width: 65, key: "cumulative" },
+        { label: "AVERAGE", width: 55, key: "average" },
         { label: "GRADE", width: 45, key: "grade" },
         { label: "REMARK", width: 85, key: "remark" },
       ]
@@ -275,94 +421,99 @@ const generateOfficialResultPdf = async ({
         { label: "REMARK", width: 100, key: "remark" },
       ];
 
-  const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
-  const scale = contentWidth / tableWidth;
+  const originalTableWidth = tableColumns.reduce(
+    (sum, column) => sum + column.width,
+    0,
+  );
+
+  const tableScale = contentWidth / originalTableWidth;
+
+  const scaledColumns = tableColumns.map((column) => ({
+    ...column,
+    width: column.width * tableScale,
+  }));
+
+  const rowHeight = 18;
+  const headerHeight = 19;
 
   const drawTableHeader = () => {
-    const y = doc.y;
-    let x = 35;
+    const headerY = doc.y;
+    let x = PAGE_LEFT;
 
-    doc.rect(35, y, contentWidth, 23).fill("#17365D");
+    doc.rect(PAGE_LEFT, headerY, contentWidth, headerHeight).fill("#17365D");
 
-    columns.forEach((column) => {
-      const width = column.width * scale;
-
+    scaledColumns.forEach((column) => {
       doc
         .font("Helvetica-Bold")
-        .fontSize(7)
+        .fontSize(6)
         .fillColor("#FFFFFF")
-        .text(column.label, x + 3, y + 8, {
-          width: width - 6,
-          align:
-            column.key === "subject" || column.key === "remark"
-              ? "left"
-              : "center",
+        .text(column.label, x + 3, headerY + 6, {
+          width: column.width - 6,
+          align: column.align || "left",
+          height: 9,
+          lineBreak: false,
+          ellipsis: true,
         });
 
-      x += width;
+      x += column.width;
     });
 
-    doc.y = y + 23;
+    doc.y = headerY + headerHeight;
   };
 
   const drawSubjectRow = (subject, index) => {
-    const rowHeight = 23;
-    ensureSpace(rowHeight + 5);
-
-    if (doc.y < 60) {
+    if (doc.y + rowHeight > bottomLimit) {
+      addContentPage();
       drawTableHeader();
     }
 
-    const y = doc.y;
-    let x = 35;
+    const rowY = doc.y;
 
     if (index % 2 === 0) {
-      doc.rect(35, y, contentWidth, rowHeight).fill("#F1F5F9");
+      doc.rect(PAGE_LEFT, rowY, contentWidth, rowHeight).fill("#F0F4F8");
     }
 
     const values = {
-      subject:
-        subject.subjectName || subject.subject?.name || "Unnamed Subject",
-
+      subject: subject.subject?.name || subject.subjectName || "—",
       firstTerm: formatScore(subject.firstTerm?.total),
       secondTerm: formatScore(subject.secondTerm?.total),
       ca1: formatScore(subject.ca1),
       ca2: formatScore(subject.ca2),
       exam: formatScore(subject.exam),
       total: formatScore(subject.total),
-      cumulativeScore: formatScore(subject.cumulativeScore),
-      weightedAverage: formatScore(subject.weightedAverage),
+      cumulative: formatScore(subject.cumulativeScore),
+      average: formatScore(subject.weightedAverage),
       grade: subject.grade || "—",
       remark: subject.remark || "—",
     };
 
-    columns.forEach((column) => {
-      const width = column.width * scale;
-      const alignment =
-        column.key === "subject" || column.key === "remark" ? "left" : "center";
+    let x = PAGE_LEFT;
 
+    scaledColumns.forEach((column) => {
       doc
         .font("Helvetica")
-        .fontSize(7.5)
+        .fontSize(7)
         .fillColor("#172033")
-        .text(String(values[column.key]), x + 3, y + 7, {
-          width: width - 6,
-          height: 12,
+        .text(String(values[column.key] ?? "—"), x + 3, rowY + 5, {
+          width: column.width - 6,
+          align:
+            column.key === "subject" || column.key === "remark"
+              ? "left"
+              : "center",
+          lineBreak: false,
           ellipsis: true,
-          align: alignment,
         });
 
-      x += width;
+      x += column.width;
     });
 
-    doc
-      .strokeColor("#D8E0EA")
-      .moveTo(35, y + rowHeight)
-      .lineTo(pageWidth - 35, y + rowHeight)
-      .stroke();
-
-    doc.y = y + rowHeight;
+    doc.y = rowY + rowHeight;
   };
+
+  // Ensure the table heading and at least one row stay together.
+  if (doc.y + headerHeight + rowHeight > bottomLimit) {
+    addContentPage();
+  }
 
   drawTableHeader();
 
@@ -370,56 +521,82 @@ const generateOfficialResultPdf = async ({
     drawSubjectRow(subject, index);
   });
 
-  doc.moveDown(0.8);
+  if (subjects.length === 0) {
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor("#555555")
+      .text("No subject results are available.", PAGE_LEFT, doc.y + 4);
+
+    doc.y += 20;
+  }
+
+  doc.y += 3;
 
   // --------------------------------------------------
-  // OVERALL SUMMARY
+  // RESULT SUMMARY
   // --------------------------------------------------
 
-  sectionTitle("Result Summary");
+  drawSectionTitle("Result Summary");
 
   const summaryY = doc.y;
+  const summaryColumnWidth = contentWidth / 4;
 
-  detail("Total Score", result.totalScore, 35, summaryY, 120);
-  detail("Total Obtainable", result.totalObtainableMarks, 190, summaryY, 140);
-  detail(
-    "Overall Percentage",
-    `${Number(result.overallPercentage || 0).toFixed(2)}%`,
-    365,
-    summaryY,
-    140,
-  );
+  const summaryItems = [
+    ["Total Score", result.totalScore],
+    ["Total Obtainable", result.totalObtainableMarks],
+    [
+      "Overall Percentage",
+      result.overallPercentage !== undefined &&
+      result.overallPercentage !== null
+        ? `${Number(result.overallPercentage).toFixed(2)}%`
+        : "—",
+    ],
+    ["Performance", result.performanceComment],
+  ];
 
-  detail("Performance", result.performanceComment || "—", 540, summaryY, 180);
+  summaryItems.forEach(([label, value], index) => {
+    drawDetail(
+      label,
+      value,
+      PAGE_LEFT + index * summaryColumnWidth,
+      summaryY,
+      summaryColumnWidth - 8,
+    );
+  });
 
-  doc.y = summaryY + 42;
+  doc.y = summaryY + 25;
 
   // --------------------------------------------------
   // ATTENDANCE
   // --------------------------------------------------
 
-  sectionTitle("Attendance");
-
   const attendance = result.attendance || {};
+
+  drawSectionTitle("Attendance");
+
   const attendanceY = doc.y;
+  const attendanceColumnWidth = contentWidth / 3;
 
-  detail(
-    "Days School Opened",
-    attendance.daysSchoolOpened,
-    35,
-    attendanceY,
-    150,
-  );
-  detail("Days Present", attendance.daysPresent, 230, attendanceY, 120);
-  detail("Days Absent", attendance.daysAbsent, 410, attendanceY, 120);
+  [
+    ["Days School Opened", attendance.daysSchoolOpened],
+    ["Days Present", attendance.daysPresent],
+    ["Days Absent", attendance.daysAbsent],
+  ].forEach(([label, value], index) => {
+    drawDetail(
+      label,
+      value,
+      PAGE_LEFT + index * attendanceColumnWidth,
+      attendanceY,
+      attendanceColumnWidth - 8,
+    );
+  });
 
-  doc.y = attendanceY + 40;
+  doc.y = attendanceY + 25;
 
   // --------------------------------------------------
-  // COMMENTS
+  // SCHOOL COMMENTS
   // --------------------------------------------------
-
-  sectionTitle("School Comments");
 
   const comments = result.comments || {};
 
@@ -427,32 +604,50 @@ const generateOfficialResultPdf = async ({
     ["Class Teacher", comments.classTeacher],
     ["Principal", comments.principal],
     ["Performance", comments.performance],
-  ];
+  ].filter(([, value]) => Boolean(value));
 
-  commentEntries.forEach(([label, value]) => {
-    if (!value) return;
+  if (commentEntries.length > 0) {
+    drawSectionTitle("School Comments");
 
-    ensureSpace(35);
+    commentEntries.forEach(([label, value]) => {
+      const commentText = `${label}: ${value}`;
 
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(8)
-      .fillColor("#17365D")
-      .text(`${label}:`);
+      doc.font("Helvetica").fontSize(8);
 
-    doc.font("Helvetica").fontSize(9).fillColor("#172033").text(value, {
-      width: contentWidth,
+      const estimatedHeight =
+        doc.heightOfString(commentText, {
+          width: contentWidth,
+          lineGap: 1,
+        }) + 4;
+
+      ensureSpace(estimatedHeight);
+
+      const commentY = doc.y;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor("#17365D")
+        .text(`${label}:`, PAGE_LEFT, commentY, {
+          continued: true,
+        });
+
+      doc.font("Helvetica").fontSize(8).fillColor("#172033").text(` ${value}`, {
+        width: contentWidth,
+        lineGap: 1,
+      });
+
+      // Use the measured height instead of automatic cursor spacing.
+      doc.y = commentY + estimatedHeight;
     });
-
-    doc.moveDown(0.4);
-  });
+  }
 
   // --------------------------------------------------
   // PROMOTION
   // --------------------------------------------------
 
   if (isThirdTerm) {
-    sectionTitle("Promotion");
+    drawSectionTitle("Promotion");
 
     const recommendationLabels = {
       recommended_promoted: "Recommended for Promotion",
@@ -468,105 +663,139 @@ const generateOfficialResultPdf = async ({
 
     const actualDecision = result.promotion?.decision;
 
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#172033")
-      .text(
-        `System Recommendation: ${
-          recommendationLabels[result.promotionStatus] || "Not Available"
-        }`,
-      );
-
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#172033")
-      .text(
-        `Principal's Final Decision: ${
-          principalDecisionLabels[actualDecision] ||
-          principalDecisionLabels[result.principalDecision] ||
-          "Pending"
-        }`,
-      );
+    const promotionLines = [
+      `System Recommendation: ${
+        recommendationLabels[result.promotionStatus] || "Not Available"
+      }`,
+      `Principal's Final Decision: ${
+        principalDecisionLabels[actualDecision] ||
+        principalDecisionLabels[result.principalDecision] ||
+        "Pending"
+      }`,
+    ];
 
     if (result.promotion?.toClass) {
-      doc
-        .font("Helvetica")
-        .fontSize(9)
-        .text(`Next Class: ${result.promotion.toClass}`);
+      promotionLines.push(`Next Class: ${result.promotion.toClass}`);
     }
 
-    doc.moveDown(0.7);
+    promotionLines.forEach((line) => {
+      doc.font("Helvetica").fontSize(8);
+
+      const lineHeight =
+        doc.heightOfString(line, {
+          width: contentWidth,
+        }) + 3;
+
+      ensureSpace(lineHeight);
+
+      const lineY = doc.y;
+
+      doc
+        .font("Helvetica")
+        .fontSize(8)
+        .fillColor("#172033")
+        .text(line, PAGE_LEFT, lineY, {
+          width: contentWidth,
+        });
+
+      doc.y = lineY + lineHeight;
+    });
   }
+
   // --------------------------------------------------
   // SIGNATURE, STAMP AND VERIFICATION
   // --------------------------------------------------
 
-  ensureSpace(135);
+  // Compact approval block: approximately 75 points high.
+  const approvalHeight = 76;
 
-  const approvalY = doc.y + 5;
+  ensureSpace(approvalHeight);
 
+  const approvalY = doc.y + 2;
+
+  const signatureX = PAGE_LEFT;
+  const stampX = PAGE_LEFT + 205;
+
+  const qrLabelX = pageWidth - PAGE_RIGHT - 105;
+  const qrX = qrLabelX + 27;
+
+  // Proprietor signature heading.
   doc
-    .font("Helvetica")
-    .fontSize(8)
-    .fillColor("#555555")
-    .text("PROPRIETOR'S SIGNATURE", 35, approvalY);
+    .font("Helvetica-Bold")
+    .fontSize(7)
+    .fillColor("#17365D")
+    .text("PROPRIETOR'S SIGNATURE", signatureX, approvalY, {
+      lineBreak: false,
+    });
 
+  // Signature image.
   if (signatureBuffer) {
     try {
-      doc.image(signatureBuffer, 35, approvalY + 12, {
-        fit: [145, 55],
+      doc.image(signatureBuffer, signatureX, approvalY + 10, {
+        fit: [125, 24],
       });
     } catch (error) {
       console.error("Unable to embed signature:", error.message);
     }
   }
 
+  // Signature line.
   doc
     .strokeColor("#333333")
-    .moveTo(35, approvalY + 72)
-    .lineTo(180, approvalY + 72)
+    .lineWidth(0.6)
+    .moveTo(signatureX, approvalY + 39)
+    .lineTo(signatureX + 135, approvalY + 39)
     .stroke();
 
   doc
     .font("Helvetica")
-    .fontSize(8)
-    .text("Proprietor", 35, approvalY + 77);
+    .fontSize(7)
+    .fillColor("#555555")
+    .text("Proprietor", signatureX, approvalY + 43, {
+      lineBreak: false,
+    });
 
+  // School stamp.
   if (stampBuffer) {
     try {
-      doc.image(stampBuffer, 230, approvalY + 5, {
-        fit: [105, 95],
+      doc.image(stampBuffer, stampX, approvalY + 5, {
+        fit: [65, 52],
         align: "center",
+        valign: "center",
       });
     } catch (error) {
       console.error("Unable to embed stamp:", error.message);
     }
   }
 
+  // QR verification heading.
   doc
     .font("Helvetica-Bold")
-    .fontSize(8)
+    .fontSize(7)
     .fillColor("#17365D")
-    .text("SCAN TO VERIFY THIS RESULT", 490, approvalY + 5, {
-      width: 180,
+    .text("SCAN TO VERIFY", qrLabelX, approvalY, {
+      width: 105,
       align: "center",
+      lineBreak: false,
     });
 
-  doc.image(qrBuffer, 535, approvalY + 20, {
-    fit: [85, 85],
-    align: "center",
+  // QR code.
+  doc.image(qrBuffer, qrX, approvalY + 10, {
+    fit: [50, 50],
   });
 
+  // Verification instruction.
   doc
     .font("Helvetica")
-    .fontSize(7)
+    .fontSize(6.5)
     .fillColor("#555555")
-    .text("This document can be verified online.", 490, approvalY + 110, {
-      width: 180,
+    .text("Verify this result online.", qrLabelX, approvalY + 61, {
+      width: 105,
       align: "center",
+      lineBreak: false,
     });
+
+  doc.y = approvalY + approvalHeight;
 
   // --------------------------------------------------
   // PAGE FOOTERS
@@ -579,15 +808,19 @@ const generateOfficialResultPdf = async ({
 
     doc
       .font("Helvetica")
-      .fontSize(7)
+      .fontSize(6.5)
       .fillColor("#777777")
       .text(
-        `Official Result | ${student.studentId || ""} | Page ${i + 1} of ${pages.count}`,
-        35,
-        doc.page.height - 25,
+        `Official Result | ${student.studentId || ""} | Page ${
+          i + 1
+        } of ${pages.count}`,
+        PAGE_LEFT,
+        pageHeight - PAGE_BOTTOM - 9,
         {
           width: contentWidth,
+          height: 8,
           align: "center",
+          lineBreak: false,
         },
       );
   }

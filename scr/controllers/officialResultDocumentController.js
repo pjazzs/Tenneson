@@ -38,7 +38,11 @@ const downloadOfficialResult = asyncHandler(async (req, res) => {
     .populate({
       path: "student",
       select:
-        "studentId firstName lastName otherName gender dateOfBirth currentClass session",
+        "studentId firstName lastName otherName gender dateOfBirth currentClass session photo department",
+      populate: {
+        path: "department",
+        select: "name code",
+      },
     })
     .populate({
       path: "academicSession",
