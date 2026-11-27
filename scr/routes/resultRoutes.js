@@ -27,6 +27,10 @@ const {
   createSubjectResultCorrectionRequest,
 } = require("../controllers/resultController");
 
+const {
+  downloadOfficialResult,
+} = require("../controllers/officialResultDocumentController");
+
 const { protect } = require("../middleware/authMiddleware");
 const { authorizePermission } = require("../middleware/permissionMiddleware");
 
@@ -124,6 +128,15 @@ router.post(
   protect,
   authorizePermission("results.create"),
   compileStudentResult,
+);
+
+/*
+ * Download an official PDF of the student's published result.
+ */
+router.get(
+  "/results/my/:id/official-document",
+  requireStudentPasswordChanged,
+  downloadOfficialResult,
 );
 
 /*
