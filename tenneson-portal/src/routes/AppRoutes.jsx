@@ -31,6 +31,7 @@ import Results from "../pages/results/Results";
 import Students from "../pages/students/Students";
 import VerifyStudent from "../pages/verify/VerifyStudent";
 import VerifyOfficialResult from "../pages/verify/VerifyOfficialResult";
+import OfficialResultAssets from "../pages/admin/admin/OfficialResultAssets";
 
 // Student management
 import AddStudent from "../pages/students/AddStudent";
@@ -142,6 +143,15 @@ function AppRoutes() {
           element={
             <PermissionRoute permission="teachers.view">
               <TeacherManagement />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="/official-result-assets"
+          element={
+            <PermissionRoute permission="results.documents.manage">
+              <OfficialResultAssets />
             </PermissionRoute>
           }
         />

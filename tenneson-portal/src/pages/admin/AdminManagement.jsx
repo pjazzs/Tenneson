@@ -135,6 +135,10 @@ function AdminManagement() {
         key: "results.publish",
         label: "Publish Results",
       },
+      {
+        key: "results.documents.manage",
+        label: "Manage Official Result Stamp & Signature",
+      },
     ],
 
     Promotions: [

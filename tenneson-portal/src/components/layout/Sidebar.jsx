@@ -138,6 +138,7 @@ function Sidebar({ isMobileOpen, onClose }) {
         hasPermission("academic-sessions.view") ||
         hasPermission("students.view") ||
         hasPermission("admins.manage") ||
+        hasPermission("results.documents.manage") ||
         isAdmin,
       items: [
         {
@@ -166,6 +167,13 @@ function Sidebar({ isMobileOpen, onClose }) {
           path: "/admins",
           icon: <FaUserShield />,
           visible: hasPermission("admins.manage"),
+          end: true,
+        },
+        {
+          name: "Official Result Assets",
+          path: "/official-result-assets",
+          icon: <FaFileAlt />,
+          visible: hasPermission("results.documents.manage"),
           end: true,
         },
       ],
