@@ -492,6 +492,7 @@ function VerifyOfficialResult() {
         <div className="border-t border-white/10 p-4 text-center text-xs text-gray-500">
           TENNESON COMPREHENSIVE COLLEGE
           <p className="mt-1">Obantoko, Abeokuta, Ogun State</p>
+          <p className="mt-1">Designed by PjazzDev.</p>
         </div>
       </div>
     </div>
