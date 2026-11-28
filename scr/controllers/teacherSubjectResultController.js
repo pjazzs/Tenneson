@@ -318,15 +318,17 @@ const updateStudentSnapshotRows = (existingRows = [], updates = []) => {
     const update = updateMap.get(id);
 
     return {
+      // Preserve the embedded document ID. Correction requests may
+      // reference this exact score row.
+      _id: row._id,
+
       student: row.student,
       studentId: row.studentId,
       studentName: row.studentName,
       offered: row.offered ?? true,
 
       ca1: update?.ca1 !== undefined ? update.ca1 : (row.ca1 ?? null),
-
       ca2: update?.ca2 !== undefined ? update.ca2 : (row.ca2 ?? null),
-
       exam: update?.exam !== undefined ? update.exam : (row.exam ?? null),
 
       teacherComment:
@@ -335,6 +337,28 @@ const updateStudentSnapshotRows = (existingRows = [], updates = []) => {
           : row.teacherComment || "",
     };
   });
+};
+
+const appendNewEligibleStudents = (
+  existingRows = [],
+  eligibleStudents = [],
+  updates = [],
+) => {
+  const existingIds = new Set(
+    existingRows.map((row) => row.student.toString()),
+  );
+
+  const newStudents = eligibleStudents.filter(
+    (student) => !existingIds.has(student._id.toString()),
+  );
+
+  if (newStudents.length === 0) {
+    return existingRows;
+  }
+
+  const newRows = buildStudentRows(newStudents, [], updates);
+
+  return [...existingRows, ...newRows];
 };
 
 const populateSubmission = (query) =>
@@ -587,16 +611,23 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
 
   if (submission) {
     /*
-     * An existing submission owns its original student roster.
-     *
-     * Do not rebuild this roster from current eligible students.
-     * This ensures that:
-     * - Students who become inactive remain in the draft.
-     * - Students who change class or department remain in the draft.
-     * - Newly eligible students are not silently added.
-     * - Previously entered scores and teacher comments are preserved.
+     * Submitted and approved results retain their exact saved roster.
+     * Editable drafts and rejected results may include newly eligible
+     * students, while preserving all existing rows and scores.
      */
     studentResults = submission.studentResults || [];
+
+    if (["draft", "rejected"].includes(submission.status)) {
+      const eligibleStudents = await getEligibleStudents({
+        allocation,
+        sessionName: context.session.name,
+      });
+
+      studentResults = appendNewEligibleStudents(
+        studentResults,
+        eligibleStudents,
+      );
+    }
   } else {
     /*
      * No submission exists yet.
@@ -609,7 +640,6 @@ exports.getTeacherSubjectResult = asyncHandler(async (req, res) => {
 
     studentResults = buildStudentRows(eligibleStudents);
   }
-
   // Determine whether this teacher owns result submission for this term
   const isOwner =
     !resultContext.error &&
@@ -937,28 +967,57 @@ exports.saveTeacherSubjectResultDraft = asyncHandler(async (req, res) => {
         });
       } else {
         // ---------------------------------------------------
-        // 8. EXISTING DRAFT: PRESERVE ITS ORIGINAL ROSTER
+        // 8. EXISTING DRAFT: PRESERVE AND EXTEND ITS ROSTER
         // ---------------------------------------------------
 
         const existingRows = submission.studentResults || [];
+
+        // Fetch students who are currently eligible for this
+        // allocation, including students who transferred into
+        // this department during the same academic term.
+        const eligibleStudents = await getEligibleStudents({
+          allocation,
+          sessionName: academicSession.name,
+          dbSession,
+        });
 
         const snapshotIds = new Set(
           existingRows.map((item) => item.student.toString()),
         );
 
+        const eligibleIds = new Set(
+          eligibleStudents.map((item) => item._id.toString()),
+        );
+
+        // Updates are allowed for either:
+        // 1. Students already in the saved roster.
+        // 2. Students who are newly eligible.
         const unknownStudent = updates.find(
-          (item) => !snapshotIds.has(item.student),
+          (item) =>
+            !snapshotIds.has(item.student) && !eligibleIds.has(item.student),
         );
 
         if (unknownStudent) {
           const error = new Error(
-            "One or more students are not in this draft's saved roster. The roster cannot be changed during a teacher draft update.",
+            "One or more students are not eligible for this subject allocation.",
           );
           error.statusCode = 400;
           throw error;
         }
 
-        rows = updateStudentSnapshotRows(existingRows, updates);
+        // Update existing rows without losing their embedded IDs.
+        const updatedExistingRows = updateStudentSnapshotRows(
+          existingRows,
+          updates,
+        );
+
+        // Append newly eligible students without duplicating
+        // students already in the saved roster.
+        rows = appendNewEligibleStudents(
+          updatedExistingRows,
+          eligibleStudents,
+          updates,
+        );
 
         submission.responsibility = responsibility._id;
         submission.studentResults = rows;

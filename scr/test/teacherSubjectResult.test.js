@@ -5,6 +5,7 @@ const app = require("../app");
 
 const Teacher = require("../models/Teacher");
 const SchoolClass = require("../models/SchoolClass");
+const Department = require("../models/Department");
 const Subject = require("../models/Subject");
 const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const AcademicSession = require("../models/AcademicSession");
@@ -324,6 +325,40 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(response.body.studentResults).toHaveLength(2);
     });
 
+    test("previews newly eligible students without changing the saved draft", async () => {
+      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+
+      const newStudent = await createStudent({
+        studentId: "TCC00003",
+        firstName: "New",
+        lastName: "Student",
+      });
+
+      const response = await getSubjectResults();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.totalEligibleStudents).toBe(3);
+      expect(response.body.studentResults).toHaveLength(3);
+
+      const previewedStudent = response.body.studentResults.find(
+        (row) => row.student.toString() === newStudent._id.toString(),
+      );
+
+      expect(previewedStudent).toBeDefined();
+      expect(previewedStudent.ca1).toBeNull();
+      expect(previewedStudent.ca2).toBeNull();
+      expect(previewedStudent.exam).toBeNull();
+
+      const savedSubmission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      // Opening the page must not persist the newly eligible student.
+      expect(savedSubmission.studentResults).toHaveLength(2);
+    });
+
     test("returns the student identity and empty score fields", async () => {
       const response = await getSubjectResults();
 
@@ -426,6 +461,183 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(submission).not.toBeNull();
       expect(submission.studentResults).toHaveLength(2);
       expect(submission.status).toBe("draft");
+    });
+
+    test("adds a student transferred into Science to an existing Science draft in the same term", async () => {
+      // Create the senior class and its departments.
+      const seniorClass = await SchoolClass.create({
+        name: "SS1",
+        level: "senior",
+        hasDepartments: true,
+        isActive: true,
+      });
+
+      const [arts, science] = await Department.create([
+        {
+          name: "Arts",
+          code: "ART",
+        },
+        {
+          name: "Science",
+          code: "SCI",
+        },
+      ]);
+
+      // Create the Science Mathematics allocation.
+      const scienceAllocation = await ClassSubjectAllocation.create({
+        schoolClass: seniorClass._id,
+        department: science._id,
+        subject: mathematics._id,
+        isActive: true,
+      });
+
+      // Assign the existing teacher to the Science allocation.
+      const scienceAssignment = await TeacherAssignment.create({
+        teacher: teacher._id,
+        allocation: scienceAllocation._id,
+        academicSession: session._id,
+        isActive: true,
+      });
+
+      const scienceResponsibility = await SubjectResultResponsibility.create({
+        allocation: scienceAllocation._id,
+        academicSession: session._id,
+        term: "first",
+        teacherAssignment: scienceAssignment._id,
+      });
+
+      // This student already belongs to Science.
+      const existingScienceStudent = await createStudent({
+        studentId: "SS100001",
+        firstName: "Existing",
+        lastName: "Science",
+        currentClass: "SS1",
+        department: science._id,
+      });
+
+      // This student initially belongs to Arts.
+      const transferredStudent = await createStudent({
+        studentId: "SS100002",
+        firstName: "Transferred",
+        lastName: "Student",
+        currentClass: "SS1",
+        department: arts._id,
+      });
+
+      // Create the Science draft before the transfer.
+      const initialSave = await request(app)
+        .put(`/api/v1/teacher/subject-results/${scienceAllocation._id}/draft`)
+        .set(auth())
+        .send({
+          academicSessionId: session._id.toString(),
+          term: "first",
+          studentResults: [
+            {
+              student: existingScienceStudent._id.toString(),
+              ca1: 14,
+              ca2: 8,
+              exam: 60,
+            },
+          ],
+        });
+
+      expect(initialSave.statusCode).toBe(200);
+
+      const originalSubmission = await SubjectResultSubmission.findOne({
+        allocation: scienceAllocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(originalSubmission.studentResults).toHaveLength(1);
+
+      const originalRowId = originalSubmission.studentResults[0]._id.toString();
+
+      // Transfer the Arts student into Science.
+      transferredStudent.department = science._id;
+      await transferredStudent.save();
+
+      // GET should preview the newly eligible student.
+      const preview = await request(app)
+        .get(`/api/v1/teacher/subject-results/${scienceAllocation._id}`)
+        .query({
+          academicSessionId: session._id.toString(),
+          term: "first",
+        })
+        .set(auth());
+
+      expect(preview.statusCode).toBe(200);
+      expect(preview.body.totalEligibleStudents).toBe(2);
+      expect(preview.body.studentResults).toHaveLength(2);
+
+      const previewedTransferredStudent = preview.body.studentResults.find(
+        (row) => row.student.toString() === transferredStudent._id.toString(),
+      );
+
+      expect(previewedTransferredStudent).toBeDefined();
+
+      // Previewing must not modify the saved database roster.
+      let savedSubmission = await SubjectResultSubmission.findOne({
+        allocation: scienceAllocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(savedSubmission.studentResults).toHaveLength(1);
+
+      // Save the draft with the transferred student included.
+      const updatedSave = await request(app)
+        .put(`/api/v1/teacher/subject-results/${scienceAllocation._id}/draft`)
+        .set(auth())
+        .send({
+          academicSessionId: session._id.toString(),
+          term: "first",
+          studentResults: [
+            {
+              student: existingScienceStudent._id.toString(),
+              ca1: 18,
+            },
+            {
+              student: transferredStudent._id.toString(),
+              ca1: 16,
+              ca2: 9,
+              exam: 65,
+            },
+          ],
+        });
+
+      expect(updatedSave.statusCode).toBe(200);
+
+      savedSubmission = await SubjectResultSubmission.findOne({
+        allocation: scienceAllocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      expect(savedSubmission.studentResults).toHaveLength(2);
+
+      const savedExistingStudent = savedSubmission.studentResults.find(
+        (row) =>
+          row.student.toString() === existingScienceStudent._id.toString(),
+      );
+
+      const savedTransferredStudent = savedSubmission.studentResults.find(
+        (row) => row.student.toString() === transferredStudent._id.toString(),
+      );
+
+      // Existing scores must remain intact except for the updated CA1.
+      expect(savedExistingStudent.ca1).toBe(18);
+      expect(savedExistingStudent.ca2).toBe(8);
+      expect(savedExistingStudent.exam).toBe(60);
+
+      // The transferred student must now be saved in the draft.
+      expect(savedTransferredStudent).toBeDefined();
+      expect(savedTransferredStudent.ca1).toBe(16);
+      expect(savedTransferredStudent.ca2).toBe(9);
+      expect(savedTransferredStudent.exam).toBe(65);
+
+      // Existing embedded row identity must remain unchanged.
+      expect(savedExistingStudent._id.toString()).toBe(originalRowId);
     });
 
     test("creates audit logs when a teacher creates and updates a draft", async () => {
@@ -578,8 +790,35 @@ describe("TEACHER SUBJECT RESULT API", () => {
       expect(savedStudent.teacherComment).toBe("");
     });
 
-    test("does not add newly eligible students to an existing draft", async () => {
-      await saveDraft([scoreFor(student), scoreFor(secondStudent)]);
+    test("appends newly eligible students to an existing draft while preserving existing scores and row IDs", async () => {
+      await saveDraft([
+        scoreFor(student, {
+          ca1: 15,
+          ca2: 8,
+          exam: 60,
+        }),
+        scoreFor(secondStudent, {
+          ca1: 12,
+          ca2: 7,
+          exam: 55,
+        }),
+      ]);
+
+      const originalSubmission = await SubjectResultSubmission.findOne({
+        allocation: allocation._id,
+        academicSession: session._id,
+        term: "first",
+      });
+
+      const originalStudentRow = findSavedStudent(originalSubmission, student);
+      const originalSecondStudentRow = findSavedStudent(
+        originalSubmission,
+        secondStudent,
+      );
+
+      const originalStudentRowId = originalStudentRow._id.toString();
+      const originalSecondStudentRowId =
+        originalSecondStudentRow._id.toString();
 
       const newStudent = await createStudent({
         studentId: "TCC00003",
@@ -592,6 +831,12 @@ describe("TEACHER SUBJECT RESULT API", () => {
           student: student._id.toString(),
           ca1: 18,
         },
+        {
+          student: newStudent._id.toString(),
+          ca1: 16,
+          ca2: 9,
+          exam: 65,
+        },
       ]);
 
       expect(response.statusCode).toBe(200);
@@ -602,10 +847,29 @@ describe("TEACHER SUBJECT RESULT API", () => {
         term: "first",
       });
 
-      expect(submission.studentResults).toHaveLength(2);
-      expect(findSavedStudent(submission, student).ca1).toBe(18);
-      expect(findSavedStudent(submission, secondStudent)).toBeDefined();
-      expect(findSavedStudent(submission, newStudent)).toBeUndefined();
+      expect(submission.studentResults).toHaveLength(3);
+
+      const savedStudent = findSavedStudent(submission, student);
+      const savedSecondStudent = findSavedStudent(submission, secondStudent);
+      const savedNewStudent = findSavedStudent(submission, newStudent);
+
+      expect(savedStudent.ca1).toBe(18);
+      expect(savedStudent.ca2).toBe(8);
+      expect(savedStudent.exam).toBe(60);
+
+      expect(savedSecondStudent.ca1).toBe(12);
+      expect(savedSecondStudent.ca2).toBe(7);
+      expect(savedSecondStudent.exam).toBe(55);
+
+      expect(savedNewStudent).toBeDefined();
+      expect(savedNewStudent.ca1).toBe(16);
+      expect(savedNewStudent.ca2).toBe(9);
+      expect(savedNewStudent.exam).toBe(65);
+
+      expect(savedStudent._id.toString()).toBe(originalStudentRowId);
+      expect(savedSecondStudent._id.toString()).toBe(
+        originalSecondStudentRowId,
+      );
     });
 
     test("preserves inactive students in the saved roster during draft updates", async () => {
